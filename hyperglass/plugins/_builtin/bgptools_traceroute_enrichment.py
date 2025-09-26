@@ -1,19 +1,25 @@
-"""BGP.tools enrichment for traceroute output."""
+"""BGP.tools traceroute enrichment plugin for hyperglass."""
 
 # Standard Library
 import re
+import time
 import typing as t
-import asyncio
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Third Party
+import requests
 from pydantic import PrivateAttr
 
 # Project
+from hyperglass.configuration import params
 from hyperglass.log import log
+from hyperglass.plugins._base import OutputPlugin
 from hyperglass.state import use_state
 
-# Local
-from .._output import OutputType, OutputPlugin
+if t.TYPE_CHECKING:
+    from hyperglass.models.data import Query
+
+OutputType = Union[str, Tuple[str, ...]]
 
 if t.TYPE_CHECKING:
     # Project
@@ -40,24 +46,30 @@ class BgpToolsTracerouteEnrichment(OutputPlugin):
             log.debug(f"Error checking BGP.tools configuration: {e}")
         return False
 
-    async def _enrich_ip_with_bgptools(self, ip: str) -> t.Dict[str, t.Any]:
-        """Get BGP.tools data for an IP address."""
+    def _enrich_ip_with_bgptools(self, ip: str) -> t.Dict[str, t.Any]:
+        """Query BGP.tools API for IP enrichment data.
+        
+        Args:
+            ip: IP address to enrich
+            
+        Returns:
+            Dictionary containing ASN and organization information
+        """
+        bgptools_url = f"https://bgp.tools/ip/{ip}"
+        
         try:
-            from hyperglass.external.bgptools import BGPTools
-            
-            bgptools = BGPTools()
-            result = await bgptools.query(ip)
-            
-            if result and hasattr(result, 'asn') and hasattr(result, 'org'):
+            response = requests.get(bgptools_url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
                 return {
-                    'asn': result.asn,
-                    'org': result.org,
-                    'enriched': True
+                    "asn": data.get("asn"),
+                    "org": data.get("org", "").strip(),
+                    "country": data.get("country")
                 }
         except Exception as e:
             log.debug(f"BGP.tools enrichment failed for {ip}: {e}")
         
-        return {'enriched': False}
+        return {"asn": None, "org": "", "country": None}
 
     def _extract_ips_from_traceroute(self, output: str) -> t.List[str]:
         """Extract IP addresses from traceroute output."""
@@ -73,7 +85,7 @@ class BgpToolsTracerouteEnrichment(OutputPlugin):
         
         return unique_ips
 
-    async def _enrich_traceroute_output(self, output: str) -> str:
+    def _enrich_traceroute_output(self, output: str) -> str:
         """Enrich traceroute output with BGP.tools data."""
         if not self._should_enrich():
             log.debug("BGP.tools enrichment not enabled")
@@ -93,10 +105,12 @@ class BgpToolsTracerouteEnrichment(OutputPlugin):
         # Get BGP.tools data for all IPs
         enrichment_data = {}
         for ip in ips:
-            data = await self._enrich_ip_with_bgptools(ip)
-            if data.get('enriched'):
+            data = self._enrich_ip_with_bgptools(ip)
+            if data.get('asn') or data.get('org'):
                 enrichment_data[ip] = data
                 log.debug(f"Enriched {ip}: AS{data['asn']} - {data['org']}")
+                # Add a small delay to be respectful to the API
+                time.sleep(0.1)
 
         if not enrichment_data:
             log.debug("No enrichment data obtained from BGP.tools")
@@ -117,14 +131,14 @@ class BgpToolsTracerouteEnrichment(OutputPlugin):
             processed_outputs = []
             for out in output:
                 if isinstance(out, str):
-                    enriched = asyncio.run(self._enrich_traceroute_output(out))
+                    enriched = self._enrich_traceroute_output(out)
                     processed_outputs.append(enriched)
                 else:
                     processed_outputs.append(out)
             return tuple(processed_outputs)
         elif isinstance(output, str):
             # Handle single output block
-            return asyncio.run(self._enrich_traceroute_output(output))
+            return self._enrich_traceroute_output(output)
         else:
             # Return unchanged if not string output
             return output
