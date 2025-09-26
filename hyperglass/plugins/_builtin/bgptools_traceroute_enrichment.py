@@ -7,7 +7,6 @@ import typing as t
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Third Party
-import requests
 from pydantic import PrivateAttr
 
 # Project
@@ -46,7 +45,7 @@ class BgpToolsTracerouteEnrichment(OutputPlugin):
             return False
 
     def _enrich_ip_with_bgptools(self, ip: str) -> t.Dict[str, t.Any]:
-        """Query BGP.tools API for IP enrichment data.
+        """Query BGP.tools whois interface for IP enrichment data.
         
         Args:
             ip: IP address to enrich
@@ -54,17 +53,47 @@ class BgpToolsTracerouteEnrichment(OutputPlugin):
         Returns:
             Dictionary containing ASN and organization information
         """
-        bgptools_url = f"https://bgp.tools/ip/{ip}"
+        import socket
         
         try:
-            response = requests.get(bgptools_url, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    "asn": data.get("asn"),
-                    "org": data.get("org", "").strip(),
-                    "country": data.get("country")
-                }
+            # Connect to BGP.tools whois interface
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect(('bgp.tools', 43))
+            
+            # Send whois query in bulk mode
+            query = f"begin\nverbose\n{ip}\nend\n"
+            sock.sendall(query.encode())
+            
+            # Read response
+            response = b""
+            while True:
+                data = sock.recv(4096)
+                if not data:
+                    break
+                response += data
+            sock.close()
+            
+            # Parse response
+            response_text = response.decode('utf-8', errors='ignore').strip()
+            log.debug(f"BGP.tools response for {ip}: {response_text}")
+            
+            if response_text and '|' in response_text:
+                # Parse format: ASN | IP | BGP Prefix | CC | Registry | Allocated | AS Name
+                lines = response_text.split('\n')
+                for line in lines:
+                    if '|' in line and ip in line:
+                        parts = [p.strip() for p in line.split('|')]
+                        if len(parts) >= 7:
+                            asn = parts[0]
+                            org = parts[6] if len(parts) > 6 else ""
+                            country = parts[3] if len(parts) > 3 else ""
+                            return {
+                                "asn": asn if asn and asn != "" else None,
+                                "org": org,
+                                "country": country
+                            }
+                        
         except Exception as e:
             log.debug(f"BGP.tools enrichment failed for {ip}: {e}")
         
@@ -115,13 +144,22 @@ class BgpToolsTracerouteEnrichment(OutputPlugin):
             log.debug("No enrichment data obtained from BGP.tools")
             return output
 
-        # Add enrichment information to output
-        enriched_output = output + "\n\n=== BGP.tools Enrichment ===\n"
+        # Add enrichment data as footer
+        footer = "\n\n=== BGP.tools Enrichment ===\n"
         for ip, data in enrichment_data.items():
-            enriched_output += f"{ip}: AS{data['asn']} - {data['org']}\n"
-        
-        log.info(f"Successfully enriched traceroute with {len(enrichment_data)} ASN lookups")
-        return enriched_output
+            asn = data.get('asn')
+            org = data.get('org', '')
+            country = data.get('country', '')
+            
+            if asn and asn != 'None':
+                footer += f"{ip}: AS{asn}"
+                if org:
+                    footer += f" - {org}"
+                if country:
+                    footer += f" ({country})"
+                footer += "\n"
+
+        return output + footer
 
     def process(self, output: OutputType, query: "Query") -> OutputType:
         """Process traceroute output and add BGP.tools enrichment."""
