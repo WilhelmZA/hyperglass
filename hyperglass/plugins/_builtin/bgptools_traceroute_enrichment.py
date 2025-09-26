@@ -12,7 +12,7 @@ from pydantic import PrivateAttr
 
 # Project
 from hyperglass.log import log
-from hyperglass.plugins._base import OutputPlugin
+from hyperglass.plugins._output import OutputPlugin
 from hyperglass.state import use_state
 
 if t.TYPE_CHECKING:
