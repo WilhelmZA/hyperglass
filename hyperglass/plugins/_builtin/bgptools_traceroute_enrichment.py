@@ -11,7 +11,6 @@ import requests
 from pydantic import PrivateAttr
 
 # Project
-from hyperglass.configuration import params
 from hyperglass.log import log
 from hyperglass.plugins._base import OutputPlugin
 from hyperglass.state import use_state
@@ -34,17 +33,17 @@ class BgpToolsTracerouteEnrichment(OutputPlugin):
     directives: t.Sequence[str] = ("traceroute", "MikroTik_Traceroute")
 
     def _should_enrich(self) -> bool:
-        """Check if BGP.tools enrichment is enabled."""
+        """Check if BGP.tools enrichment should be enabled."""
         try:
             state = use_state()
-            if (hasattr(state.params, 'structured') and 
-                hasattr(state.params.structured, 'bgp_tools') and 
-                state.params.structured.bgp_tools.enabled and
-                state.params.structured.bgp_tools.enrich_traceroute):
-                return True
+            # Get params from cache/state instead of direct import
+            params = state.cache.get("params")
+            if params and hasattr(params, 'structured') and hasattr(params.structured, 'bgp_tools'):
+                return bool(params.structured.bgp_tools)
+            return False
         except Exception as e:
-            log.debug(f"Error checking BGP.tools configuration: {e}")
-        return False
+            log.debug(f"Failed to check BGP.tools configuration: {e}")
+            return False
 
     def _enrich_ip_with_bgptools(self, ip: str) -> t.Dict[str, t.Any]:
         """Query BGP.tools API for IP enrichment data.
