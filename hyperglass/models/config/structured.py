@@ -38,8 +38,18 @@ class StructuredRpki(HyperglassModel):
     rpki_server_url: str = ""
 
 
+class StructuredBgpTools(HyperglassModel):
+    """Control BGP.tools enrichment for structured data responses."""
+
+    enabled: bool = True
+    cache_timeout: int = 86400  # 24 hours in seconds
+    enrich_next_hop: bool = True
+    enrich_traceroute: bool = True
+
+
 class Structured(HyperglassModel):
     """Control structured data responses."""
 
     communities: StructuredCommunities = StructuredCommunities()
     rpki: StructuredRpki = StructuredRpki()
+    bgp_tools: StructuredBgpTools = StructuredBgpTools()
