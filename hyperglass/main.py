@@ -140,15 +140,6 @@ def run(workers: int = None):
 
         init_user_config()
 
-        # Check if BGP.tools enhanced execution should be enabled
-        if (hasattr(state.params, 'structured') and 
-            hasattr(state.params.structured, 'bgp_tools') and 
-            state.params.structured.bgp_tools.enabled):
-            
-            from hyperglass.execution.enhanced import monkey_patch_execute
-            monkey_patch_execute()
-            log.info("Enhanced execution with BGP.tools enrichment enabled")
-
         enable_file_logging(
             directory=state.params.logging.directory,
             max_size=state.params.logging.max_size,
