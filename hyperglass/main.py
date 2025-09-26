@@ -12,6 +12,7 @@ import uvicorn
 # Local
 from .log import LibInterceptHandler, init_logger, enable_file_logging, enable_syslog_logging
 from .util import get_node_version
+from .state import use_state
 from .constants import MIN_NODE_VERSION, MIN_PYTHON_VERSION, __version__
 
 # Ensure the Python version meets the minimum requirements.
@@ -91,6 +92,16 @@ def start(*, log_level: t.Union[str, int], workers: int) -> None:
     """Start hyperglass via ASGI server."""
 
     register_all_plugins()
+
+    # Check if BGP.tools enhanced execution should be enabled
+    state = use_state()
+    if (hasattr(state.params, 'structured') and 
+        hasattr(state.params.structured, 'bgp_tools') and 
+        state.params.structured.bgp_tools.enabled):
+        
+        from hyperglass.execution.enhanced import monkey_patch_execute
+        monkey_patch_execute()
+        log.info("Enhanced execution with BGP.tools enrichment enabled")
 
     if not Settings.disable_ui:
         asyncio.run(build_ui())
