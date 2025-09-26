@@ -30,6 +30,8 @@ class ZBgpToolsTracerouteEnrichment(OutputPlugin):
     _hyperglass_builtin: bool = PrivateAttr(True)
     platforms: t.Sequence[str] = ("mikrotik_routeros", "mikrotik_switchos", "mikrotik", "cisco_ios", "juniper_junos")
     directives: t.Sequence[str] = ("traceroute", "MikroTik_Traceroute")
+    # Run in common phase after directive-specific plugins
+    common: bool = True
 
     def _should_enrich(self) -> bool:
         """Check if BGP.tools enrichment should be enabled."""
