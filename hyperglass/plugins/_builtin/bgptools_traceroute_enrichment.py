@@ -24,7 +24,7 @@ if t.TYPE_CHECKING:
     from hyperglass.models.api.query import Query
 
 
-class BgpToolsTracerouteEnrichment(OutputPlugin):
+class ZBgpToolsTracerouteEnrichment(OutputPlugin):
     """Enrich traceroute output with BGP.tools ASN/organization data."""
 
     _hyperglass_builtin: bool = PrivateAttr(True)
