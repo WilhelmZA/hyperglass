@@ -90,7 +90,7 @@ class TracerouteResult(HyperglassModel):
     hops: t.List[TracerouteHop]
     max_hops: int = 30
     packet_size: int = 60
-    raw_output: t.Optional[str] = None  # Store cleaned output for "Copy Raw" functionality
+    raw_output: t.Optional[str] = None  # Store cleaned/processed output for "Copy Raw" functionality (not original raw router output)
 
     @property
     def hop_count(self) -> int:
