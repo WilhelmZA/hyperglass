@@ -14,8 +14,13 @@ export const TracerouteCell = (props: TracerouteCellProps): JSX.Element => {
   // For IP address field, prefer display_ip if available (for truncated IPv6)
   const getIPValue = () => {
     if (cellId === 'ip_address') {
-      const hop = data.row.original as TracerouteHop;
-      return hop.display_ip || hop.ip_address || data.value;
+      const hop = data.row?.original as TracerouteHop | undefined;
+      if (hop && hop.display_ip) {
+        return hop.display_ip;
+      }
+      if (hop && hop.ip_address) {
+        return hop.ip_address;
+      }
     }
     return data.value;
   };
@@ -31,7 +36,7 @@ export const TracerouteCell = (props: TracerouteCellProps): JSX.Element => {
     avg_rtt: <LatencyField rtt={data.value} />,
     best_rtt: <LatencyField rtt={data.value} />,
     worst_rtt: <LatencyField rtt={data.value} />,
-    asn: <ASNField asn={data.value} org={data.row.values.org} />,
+    asn: <ASNField asn={data.value} org={data.row?.values?.org} />,
     org: null, // Hidden, displayed as part of ASN
     prefix: <MonoField v={data.value} />,
     country: <MonoField v={data.value} />,

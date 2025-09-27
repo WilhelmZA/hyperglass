@@ -93,6 +93,11 @@ export function useTableToString(
     let result = messages.noOutput;
     try {
       if (typeof data !== 'undefined' && isStructuredOutput(data)) {
+        // Check if this is BGP data with routes
+        if (!('routes' in data.output) || !Array.isArray(data.output.routes)) {
+          return messages.noOutput; // Not BGP data, return early
+        }
+        
         const tableStringParts = [
           `Routes For: ${target.join(', ')}`,
           `Timestamp: ${data.timestamp} UTC`,
