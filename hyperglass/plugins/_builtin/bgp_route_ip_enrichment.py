@@ -1,6 +1,7 @@
 """IP enrichment for structured BGP route data - show path functionality."""
 
 # Standard Library
+import asyncio
 import typing as t
 
 # Third Party
@@ -32,7 +33,11 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
     directives: t.Sequence[str] = ("bgp_route", "bgp_community")
     common: bool = True
 
-    async def process(self, *, output: "OutputDataModel", query: "Query") -> "OutputDataModel":
+    async def _enrich_async(self, output: BGPRouteTable) -> None:
+        """Async helper to enrich BGP route data."""
+        await output.enrich_with_ip_enrichment()
+
+    def process(self, *, output: "OutputDataModel", query: "Query") -> "OutputDataModel":
         """Enrich structured BGP route data with next-hop IP enrichment information."""
 
         if not isinstance(output, BGPRouteTable):
@@ -56,7 +61,21 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
 
         # Use the built-in enrichment method from BGPRouteTable
         try:
-            await output.enrich_with_ip_enrichment()
+            # Run async enrichment in sync context
+            loop = None
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If we're already in an event loop, create a new task
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self._enrich_async(output))
+                        future.result()
+                else:
+                    loop.run_until_complete(self._enrich_async(output))
+            except RuntimeError:
+                # No event loop, create one
+                asyncio.run(self._enrich_async(output))
             _log.debug("BGP route IP enrichment completed successfully")
         except Exception as e:
             _log.error(f"BGP route IP enrichment failed: {e}")
