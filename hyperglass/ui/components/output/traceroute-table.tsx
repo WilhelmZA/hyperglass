@@ -28,26 +28,27 @@ export const TracerouteTable = (props: TracerouteTableProps): JSX.Element => {
   const headerBg = useColorValue('gray.50', 'gray.800');
 
   return (
-    <Flex my={8} justify="center" maxW="100%" w="100%" {...rest}>
-      <Table variant="simple" size="sm" w="100%">
-        <Thead bg={headerBg}>
-          <Tr>
-            {columns.map((column) => (
-              <Th
-                key={column.key}
-                textAlign={column.align}
-                fontSize="xs"
-                fontWeight="semibold"
-                textTransform="uppercase"
-                letterSpacing="wide"
-                minW={column.width}
-                border="1px"
-                borderColor={borderColor}
-              >
-                {column.header}
-              </Th>
-            ))}
-          </Tr>
+    <Flex my={8} justify="center" w="100%" {...rest}>
+      <Box w="100%" overflowX="auto">
+        <Table variant="simple" size="sm" w="100%" minW="1200px">
+          <Thead bg={headerBg}>
+            <Tr>
+              {columns.map((column) => (
+                <Th
+                  key={column.key}
+                  textAlign={column.align}
+                  fontSize="xs"
+                  fontWeight="semibold"
+                  textTransform="uppercase"
+                  letterSpacing="wide"
+                  w={column.width}
+                  border="1px"
+                  borderColor={borderColor}
+                >
+                  {column.header}
+                </Th>
+              ))}
+            </Tr>
         </Thead>
         <Tbody>
           {data.hops.map((hop, index) => (
@@ -76,6 +77,7 @@ export const TracerouteTable = (props: TracerouteTableProps): JSX.Element => {
           ))}
         </Tbody>
       </Table>
+      </Box>
     </Flex>
   );
 };
