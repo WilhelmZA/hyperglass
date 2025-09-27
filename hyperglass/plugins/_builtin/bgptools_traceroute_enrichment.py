@@ -31,7 +31,7 @@ class ZBgpToolsTracerouteEnrichment(OutputPlugin):
     directives: t.Sequence[str] = ("traceroute", "MikroTik_Traceroute")
     common: bool = True
 
-    async def _enrich_ip_with_bgptools(self, ip: str) -> t.Dict[str, t.Any]:
+    def _enrich_ip_with_bgptools(self, ip: str) -> t.Dict[str, t.Any]:
         """Query BGP.tools whois interface for IP enrichment data."""
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -79,7 +79,7 @@ class ZBgpToolsTracerouteEnrichment(OutputPlugin):
             "allocated": None,
         }
 
-    async def _reverse_dns_lookup(self, ip: str) -> t.Optional[str]:
+    def _reverse_dns_lookup(self, ip: str) -> t.Optional[str]:
         """Perform reverse DNS lookup for IP address."""
         try:
             hostname = socket.gethostbyaddr(ip)[0]
@@ -89,7 +89,7 @@ class ZBgpToolsTracerouteEnrichment(OutputPlugin):
             log.debug(f"Reverse DNS lookup failed for {ip}: {e}")
             return None
 
-    async def process(self, *, output: "OutputDataModel", query: "Query") -> "OutputDataModel":
+    def process(self, *, output: "OutputDataModel", query: "Query") -> "OutputDataModel":
         """Enrich structured traceroute data with BGP.tools and reverse DNS information."""
 
         if not isinstance(output, TracerouteResult):
@@ -100,7 +100,7 @@ class ZBgpToolsTracerouteEnrichment(OutputPlugin):
 
         for hop in output.hops:
             if hop.ip_address and hop.asn is None:
-                bgp_data = await self._enrich_ip_with_bgptools(hop.ip_address)
+                bgp_data = self._enrich_ip_with_bgptools(hop.ip_address)
                 hop.asn = bgp_data.get("asn")
                 hop.org = bgp_data.get("org")
                 hop.prefix = bgp_data.get("prefix")
@@ -109,7 +109,7 @@ class ZBgpToolsTracerouteEnrichment(OutputPlugin):
                 hop.allocated = bgp_data.get("allocated")
 
                 if hop.hostname is None:
-                    hop.hostname = await self._reverse_dns_lookup(hop.ip_address)
+                    hop.hostname = self._reverse_dns_lookup(hop.ip_address)
 
         _log.debug(f"Completed enrichment for traceroute to {output.target}")
         return output

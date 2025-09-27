@@ -61,7 +61,7 @@ class TraceroutePluginMikrotik(OutputPlugin):
     platforms: t.Sequence[str] = ("mikrotik_routeros", "mikrotik_switchos", "mikrotik")
     directives: t.Sequence[str] = ("traceroute", "MikroTik_Traceroute")
 
-    async def process(self, *, output: "OutputType", query: "Query") -> "OutputDataModel":
+    def process(self, *, output: "OutputType", query: "Query") -> "OutputDataModel":
         """Process the MikroTik traceroute output."""
         # Extract target from query
         target = getattr(query, "target", "unknown")
