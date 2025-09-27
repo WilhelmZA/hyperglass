@@ -81,23 +81,43 @@ def parse_whois(output: str, targets: t.List[str]) -> TargetDetail:
 
     data = {}
 
-    for line in lines(output):
+    # DEBUG: Log all lines for inspection
+    log.bind(raw_output=output).info("BGP.tools raw output lines")
+    
+    for line_num, line in enumerate(lines(output)):
         # Unpack each line's parsed values.
-        asn, ip, prefix, country, rir, allocated, org = line
+        line_data = list(line)
+        log.bind(line_number=line_num, line_data=line_data).info("Parsing BGP.tools line")
+        
+        if len(line_data) >= 7:
+            asn, ip, prefix, country, rir, allocated, org = line_data[:7]
+            
+            # DEBUG: Log what we extracted for this IP
+            log.bind(
+                ip=ip, 
+                asn=asn, 
+                org=org, 
+                prefix=prefix,
+                targets=targets
+            ).info("Extracted data for IP")
 
-        # Match the line to the item in the list of resources to query.
-        if ip in targets:
-            i = targets.index(ip)
-            data[targets[i]] = {
-                "asn": asn,
-                "ip": ip,
-                "prefix": prefix,
-                "country": country,
-                "rir": rir,
-                "allocated": allocated,
-                "org": org,
-            }
-    log.bind(data=data).debug("Parsed bgp.tools data")
+            # Match the line to the item in the list of resources to query.
+            if ip in targets:
+                i = targets.index(ip)
+                data[targets[i]] = {
+                    "asn": asn,
+                    "ip": ip,
+                    "prefix": prefix,
+                    "country": country,
+                    "rir": rir,
+                    "allocated": allocated,
+                    "org": org,
+                }
+                log.bind(ip=ip, data=data[targets[i]]).info("Matched IP to target")
+        else:
+            log.bind(line_data=line_data, expected_fields=7, actual_fields=len(line_data)).warning("BGP.tools line has unexpected number of fields")
+            
+    log.bind(data=data).debug("Final parsed bgp.tools data")
     return data
 
 
@@ -159,13 +179,21 @@ async def network_info(*targets: str) -> TargetData:
             whoisdata = await run_whois(targets)
 
             if whoisdata:
+                # DEBUG: Log the raw response from bgp.tools
+                log.bind(raw_response=whoisdata, targets=targets).info("Raw BGP.tools response")
+                
                 # If the response is not empty, parse it.
-                query_data.update(parse_whois(whoisdata, targets))
+                parsed_data = parse_whois(whoisdata, targets)
+                
+                # DEBUG: Log the parsed data
+                log.bind(parsed_data=parsed_data).info("Parsed BGP.tools data")
+                
+                query_data.update(parsed_data)
 
                 # Cache the response
                 for target in targets:
                     cache.set_map_item(CACHE_KEY, target, query_data[target])
-                    log.bind(target=t).debug("Cached network info")
+                    log.bind(target=target).debug("Cached network info")
 
     except Exception as err:
         log.error(err)

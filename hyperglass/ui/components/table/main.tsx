@@ -61,7 +61,10 @@ export const Table = <T = Route>(props: TableProps<T>): JSX.Element => {
     columns,
     defaultColumn,
     data,
-    initialState: { hiddenColumns },
+    initialState: { 
+      hiddenColumns,
+      pageSize: 50  // Default to 50 rows instead of default 10
+    },
   } as TableOptions<T>;
 
   const plugins = [useSortBy, usePagination] as PluginHook<T>[];
