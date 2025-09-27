@@ -36,13 +36,29 @@ def parse_mikrotik_traceroute(
 
     _log = log.bind(plugin=TraceroutePluginMikrotik.__name__)
     combined_output = "\n".join(out_list)
-    _log.debug(f"Combined traceroute output length: {len(combined_output)}")
+    
+    # DEBUG: Log the raw output we're about to parse
+    _log.debug(f"=== MIKROTIK TRACEROUTE PLUGIN RAW INPUT ===")
+    _log.debug(f"Target: {target}, Source: {source}")
+    _log.debug(f"Output pieces: {len(out_list)}")
+    for i, piece in enumerate(out_list):
+        _log.debug(f"Output piece {i}: {repr(piece)}")
+    _log.debug(f"Combined output length: {len(combined_output)}")
+    _log.debug(f"Combined output: {repr(combined_output)}")
+    _log.debug(f"=== END PLUGIN RAW INPUT ===")
 
     try:
         # Pass the entire combined output to the parser at once
         validated = MikrotikTracerouteTable.parse_text(combined_output, target, source)
         result = validated.traceroute_result()
+        
+        # DEBUG: Log the final structured result
+        _log.debug(f"=== FINAL STRUCTURED TRACEROUTE RESULT ===")
         _log.debug(f"Successfully parsed {len(validated.hops)} traceroute hops")
+        _log.debug(f"Target: {result.target}, Source: {result.source}")
+        for hop in result.hops:
+            _log.debug(f"Hop {hop.hop_number}: {hop.ip_address} - Loss: {hop.loss_pct}% - Sent: {hop.sent_count}")
+        _log.debug(f"=== END STRUCTURED RESULT ===")
 
     except ValidationError as err:
         _log.critical(err)

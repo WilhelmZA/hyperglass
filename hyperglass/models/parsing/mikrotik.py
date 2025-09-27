@@ -341,6 +341,210 @@ class MikrotikTracerouteTable(MikrotikBase):
         """
         _log = log.bind(parser="MikrotikTracerouteTable")
 
+        # DEBUG: Log the raw input
+        _log.debug(f"=== RAW MIKROTIK TRACEROUTE INPUT ===")
+        _log.debug(f"Target: {target}, Source: {source}")
+        _log.debug(f"Raw text length: {len(text)} characters")
+        _log.debug(f"Raw text:\n{repr(text)}")
+        _log.debug(f"=== END RAW INPUT ===")
+
+        lines = text.strip().split("\n")
+        _log.debug(f"Split into {len(lines)} lines")
+
+        # DEBUG: Log each line with line numbers
+        for i, line in enumerate(lines):
+            _log.debug(f"Line {i:2d}: {repr(line)}")
+
+        # Find all table starts - handle both formats:
+        # Format 1: "Columns: ADDRESS, LOSS, SENT..." (newer format with hop numbers)
+        # Format 2: "ADDRESS                          LOSS SENT..." (older format, no hop numbers)
+        table_starts = []
+        for i, line in enumerate(lines):
+            if ("Columns:" in line and "ADDRESS" in line) or (
+                "ADDRESS" in line and "LOSS" in line and "SENT" in line and not line.strip().startswith(("1", "2", "3", "4", "5", "6", "7", "8", "9"))
+            ):
+                table_starts.append(i)
+                _log.debug(f"Found table start at line {i}: {repr(line)}")
+
+        if not table_starts:
+            _log.warning("No traceroute table headers found in output")
+            return MikrotikTracerouteTable(target=target, source=source, hops=[])
+
+        # Take the LAST table (newest/final results)
+        last_table_start = table_starts[-1]
+        _log.debug(
+            f"Found {len(table_starts)} tables, using the last one starting at line {last_table_start}"
+        )
+
+        # Determine format by checking the header line
+        header_line = lines[last_table_start].strip()
+        is_columnar_format = "Columns:" in header_line
+        _log.debug(f"Header line: {repr(header_line)}")
+        _log.debug(f"Is columnar format: {is_columnar_format}")
+        
+        # Parse only the last table
+        hops = []
+        in_data_section = False
+        hop_counter = 1  # For old format without hop numbers
+
+        # Start from the last table header
+        for i in range(last_table_start, len(lines)):
+            line = lines[i].strip()
+
+            # Skip empty lines
+            if not line:
+                _log.debug(f"Line {i}: EMPTY - skipping")
+                continue
+
+            # Skip the column header lines
+            if ("Columns:" in line) or ("ADDRESS" in line and "LOSS" in line and "SENT" in line) or line.startswith("#"):
+                in_data_section = True
+                _log.debug(f"Line {i}: HEADER - entering data section: {repr(line)}")
+                continue
+
+            # Skip paging prompts
+            if "-- [Q quit|C-z pause]" in line:
+                _log.debug(f"Line {i}: PAGING PROMPT - breaking: {repr(line)}")
+                break  # End of this table
+
+            if in_data_section and line:
+                _log.debug(f"Line {i}: PROCESSING DATA LINE: {repr(line)}")
+                try:
+                    if is_columnar_format:
+                        # New format: "1  10.0.0.41         0%     1  0.5ms   0.5   0.5   0.5      0"
+                        parts = line.split()
+                        _log.debug(f"Line {i}: Columnar format, parts: {parts}")
+                        if len(parts) < 3:
+                            _log.debug(f"Line {i}: Too few parts ({len(parts)}), skipping")
+                            continue
+
+                        hop_number = int(parts[0])
+
+                        # Check if there's an IP address or if it's empty (timeout hop)
+                        if len(parts) >= 8 and not parts[1].endswith("%"):
+                            # Normal hop with IP address
+                            ip_address = parts[1] if parts[1] else None
+                            loss_pct = int(parts[2].rstrip("%"))
+                            sent_count = int(parts[3])
+                            last_rtt_str = parts[4]
+                            avg_rtt_str = parts[5]
+                            best_rtt_str = parts[6]
+                            worst_rtt_str = parts[7]
+                        elif len(parts) >= 4 and parts[1].endswith("%"):
+                            # Timeout hop without IP address
+                            ip_address = None
+                            loss_pct = int(parts[1].rstrip("%"))
+                            sent_count = int(parts[2])
+                            last_rtt_str = parts[3] if len(parts) > 3 else "timeout"
+                            avg_rtt_str = "timeout"
+                            best_rtt_str = "timeout"
+                            worst_rtt_str = "timeout"
+                        else:
+                            _log.debug(f"Line {i}: Doesn't match columnar patterns, skipping")
+                            continue
+                    else:
+                        # Old format: "196.60.8.198                       0%    1  17.1ms    17.1    17.1    17.1       0"
+                        # We need to deduplicate by taking the LAST occurrence of each IP
+                        parts = line.split()
+                        _log.debug(f"Line {i}: Old format, parts: {parts}")
+                        if len(parts) < 6:
+                            _log.debug(f"Line {i}: Too few parts ({len(parts)}), skipping")
+                            continue
+                            
+                        ip_address = parts[0] if not parts[0].endswith("%") else None
+                        if ip_address:
+                            loss_pct = int(parts[1].rstrip("%"))
+                            sent_count = int(parts[2])
+                            last_rtt_str = parts[3]
+                            avg_rtt_str = parts[4]
+                            best_rtt_str = parts[5]
+                            worst_rtt_str = parts[6] if len(parts) > 6 else parts[5]
+                        else:
+                            # Timeout line
+                            loss_pct = int(parts[0].rstrip("%"))
+                            sent_count = int(parts[1])
+                            last_rtt_str = "timeout"
+                            avg_rtt_str = "timeout"
+                            best_rtt_str = "timeout"
+                            worst_rtt_str = "timeout"
+
+                    # Convert timing values
+                    def parse_rtt(rtt_str: str) -> t.Optional[float]:
+                        if rtt_str in ("timeout", "-", "0ms"):
+                            return None
+                        # Remove 'ms' suffix and convert to float
+                        rtt_clean = re.sub(r"ms$", "", rtt_str)
+                        try:
+                            return float(rtt_clean)
+                        except ValueError:
+                            return None
+
+                    if is_columnar_format:
+                        # Use hop number from the data
+                        final_hop_number = hop_number
+                    else:
+                        # Use sequential numbering for old format
+                        final_hop_number = hop_counter
+                        hop_counter += 1
+
+                    hop_obj = MikrotikTracerouteHop(
+                        hop_number=final_hop_number,
+                        ip_address=ip_address,
+                        hostname=None,  # MikroTik doesn't do reverse DNS by default
+                        loss_pct=loss_pct,
+                        sent_count=sent_count,
+                        last_rtt=parse_rtt(last_rtt_str),
+                        avg_rtt=parse_rtt(avg_rtt_str),
+                        best_rtt=parse_rtt(best_rtt_str),
+                        worst_rtt=parse_rtt(worst_rtt_str),
+                    )
+                    
+                    hops.append(hop_obj)
+                    _log.debug(f"Line {i}: Created hop {final_hop_number}: {ip_address} - {loss_pct}% - {sent_count} sent")
+
+                except (ValueError, IndexError) as e:
+                    _log.debug(f"Failed to parse line '{line}': {e}")
+                    continue
+        
+        _log.debug(f"Before deduplication: {len(hops)} hops")
+        
+        # For old format, we need to deduplicate by IP and take only final stats
+        if not is_columnar_format and hops:
+            # Group by IP address and take the last occurrence (final stats)
+            ip_to_final_hop = {}
+            hop_order = []
+            
+            for hop in hops:
+                ip_key = hop.ip_address or f"timeout_{hop.hop_number}"
+                if ip_key not in hop_order:
+                    hop_order.append(ip_key)
+                    _log.debug(f"New IP discovered: {ip_key}")
+                else:
+                    _log.debug(f"Updating final stats for IP: {ip_key}")
+                ip_to_final_hop[ip_key] = hop
+            
+            _log.debug(f"IP order: {hop_order}")
+            _log.debug(f"Final IP stats: {list(ip_to_final_hop.keys())}")
+            
+            # Rebuild hops list with final stats and correct hop numbers
+            final_hops = []
+            for i, ip_key in enumerate(hop_order, 1):
+                final_hop = ip_to_final_hop[ip_key]
+                final_hop.hop_number = i  # Correct hop numbering
+                final_hops.append(final_hop)
+                _log.debug(f"Final hop {i}: {ip_key} - Loss: {final_hop.loss_pct}% - Sent: {final_hop.sent_count}")
+            
+            hops = final_hops
+
+        _log.debug(f"After processing: {len(hops)} final hops")
+        for hop in hops:
+            _log.debug(f"Final hop {hop.hop_number}: {hop.ip_address} - {hop.loss_pct}% loss - {hop.sent_count} sent")
+
+        result = MikrotikTracerouteTable(target=target, source=source, hops=hops)
+        _log.info(f"Parsed {len(hops)} hops from MikroTik traceroute final table")
+        return result
+        _log = log.bind(parser="MikrotikTracerouteTable")
+
         lines = text.strip().split("\n")
 
         # Find all table starts - handle both formats:
