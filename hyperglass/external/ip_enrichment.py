@@ -101,7 +101,7 @@ class IPEnrichmentService:
 
     async def ensure_data_loaded(self) -> bool:
         """Ensure data is loaded and fresh."""
-        state = use_state()
+        state = use_state("cache")
 
         # Check if we have cached data that's still fresh
         cached_time = state.get(CACHE_KEY_LAST_UPDATE)
