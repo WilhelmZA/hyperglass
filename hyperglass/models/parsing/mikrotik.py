@@ -530,19 +530,12 @@ class MikrotikTracerouteTable(MikrotikBase):
             hop_order = []
             
             for hop in hops:
-                # Use IP address if available, otherwise use hop position for truncated addresses
+                # Use IP address if available, otherwise use hop position for timeouts
                 if hop.ip_address:
                     ip_key = hop.ip_address
-                elif hop.ip_address is None:
-                    ip_key = f"truncated_hop_{hop.hop_number}"
                 else:
+                    # No IP address means timeout hop
                     ip_key = f"timeout_{hop.hop_number}"
-                
-                # For truncated addresses, use a unique key based on hop position
-                if ip_key.startswith("timeout_") and hop.ip_address is None:
-                    # Check if this is a timeout vs a truncated address by looking at loss
-                    if hop.loss_pct == 0:  # Truncated addresses usually have 0% loss
-                        ip_key = f"truncated_{len(hop_order)}"  # Use position-based key
                 
                 # Track first appearance order
                 if ip_key not in hop_order:
