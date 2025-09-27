@@ -1,4 +1,4 @@
-"""Enhanced execution with BGP.tools enrichment."""
+"""Enhanced execution with IP enrichment."""
 
 # Standard Library
 import typing as t
@@ -9,31 +9,31 @@ from hyperglass.state import use_state
 from hyperglass.models.data import BGPRouteTable, TracerouteResult, OutputDataModel
 
 
-async def enrich_output_with_bgptools(output: OutputDataModel) -> OutputDataModel:
-    """Enrich output data with BGP.tools information."""
+async def enrich_output_with_ip_enrichment(output: OutputDataModel) -> OutputDataModel:
+    """Enrich output data with IP enrichment information."""
     params = use_state("params")
 
-    # Check if BGP.tools enrichment is enabled in configuration
-    if not params.structured.bgp_tools.enabled:
-        log.debug("BGP.tools enrichment disabled in configuration, skipping")
+    # Check if IP enrichment is enabled in configuration
+    if not params.structured.ip_enrichment.enabled:
+        log.debug("IP enrichment disabled in configuration, skipping")
         return output
 
-    _log = log.bind(enrichment="bgptools")
-    _log.debug("Starting BGP.tools enrichment")
+    _log = log.bind(enrichment="ip_enrichment")
+    _log.debug("Starting IP enrichment")
 
     try:
         if isinstance(output, BGPRouteTable):
-            if params.structured.bgp_tools.enrich_next_hop:
+            if params.structured.ip_enrichment.enrich_next_hop:
                 _log.debug("Enriching BGP route table with next-hop information")
-                await output.enrich_with_bgptools()
+                await output.enrich_with_ip_enrichment()
                 _log.info(f"Enriched {len(output.routes)} BGP routes with next-hop data")
             else:
                 _log.debug("Next-hop enrichment disabled, skipping BGP enrichment")
 
         elif isinstance(output, TracerouteResult):
-            if params.structured.bgp_tools.enrich_traceroute:
+            if params.structured.ip_enrichment.enrich_traceroute:
                 _log.debug("Enriching traceroute hops with ASN information")
-                await output.enrich_with_bgptools()
+                await output.enrich_with_ip_enrichment()
 
                 # Count enriched hops
                 enriched_hops = sum(1 for hop in output.hops if hop.asn and hop.asn != "None")
@@ -43,10 +43,10 @@ async def enrich_output_with_bgptools(output: OutputDataModel) -> OutputDataMode
             else:
                 _log.debug("Traceroute enrichment disabled, skipping traceroute enrichment")
 
-        _log.debug("BGP.tools enrichment completed successfully")
+        _log.debug("IP enrichment completed successfully")
 
     except Exception as err:
-        _log.error(f"BGP.tools enrichment failed: {err}")
+        _log.error(f"IP enrichment failed: {err}")
         # Don't fail the entire request if enrichment fails
 
     return output
@@ -125,13 +125,13 @@ def format_enriched_traceroute_output(traceroute: TracerouteResult) -> str:
 
 
 async def execute_with_enrichment(query, original_execute_func) -> t.Union[OutputDataModel, str]:
-    """Execute query and enrich results with BGP.tools data."""
+    """Execute query and enrich results with IP enrichment data."""
     # Execute the original query
     output = await original_execute_func(query)
 
     # If output is structured data, enrich it
     if isinstance(output, (BGPRouteTable, TracerouteResult)):
-        enriched_output = await enrich_output_with_bgptools(output)
+        enriched_output = await enrich_output_with_ip_enrichment(output)
 
         # Format for display if needed
         if isinstance(enriched_output, BGPRouteTable):

@@ -8,7 +8,7 @@ from ipaddress import ip_address, AddressValueError
 from pydantic import field_validator
 
 # Project
-from hyperglass.external.bgptools import TargetDetail
+from hyperglass.external.ip_enrichment import TargetDetail
 
 # Local
 from ..main import HyperglassModel
@@ -33,7 +33,7 @@ class TracerouteHop(HyperglassModel):
     best_rtt: t.Optional[float] = None
     worst_rtt: t.Optional[float] = None
 
-    # BGP.tools enriched data
+    # IP enrichment data
     asn: t.Optional[str] = None
     org: t.Optional[str] = None
     prefix: t.Optional[str] = None
@@ -121,9 +121,29 @@ class TracerouteResult(HyperglassModel):
 
         return " -> ".join([f"AS{asn}" for asn in as_path]) if as_path else "Unknown"
 
-    async def enrich_with_bgptools(self):
-        """Enrich traceroute hops with BGP.tools data."""
-        from hyperglass.external.bgptools import network_info
+    @property
+    def as_path_detailed(self) -> str:
+        """Detailed AS path with organization names."""
+        as_path = []
+        current_asn = None
+        current_org = None
+
+        for hop in self.hops:
+            if hop.asn and hop.asn != "None" and hop.asn != current_asn:
+                current_asn = hop.asn
+                current_org = hop.org
+                
+                # Format as "AS15169 (Google LLC)" if we have org name
+                if current_org and current_org != "None":
+                    as_path.append(f"AS{current_asn} ({current_org})")
+                else:
+                    as_path.append(f"AS{current_asn}")
+
+        return " -> ".join(as_path) if as_path else "Unknown"
+
+    async def enrich_with_ip_enrichment(self):
+        """Enrich traceroute hops with IP enrichment data."""
+        from hyperglass.external.ip_enrichment import network_info
 
         # Extract all IP addresses that need enrichment
         ips_to_lookup = []

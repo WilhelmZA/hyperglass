@@ -38,13 +38,20 @@ class StructuredRpki(HyperglassModel):
     rpki_server_url: str = ""
 
 
-class StructuredBgpTools(HyperglassModel):
-    """Control BGP.tools enrichment for structured data responses."""
+class StructuredIpEnrichment(HyperglassModel):
+    """Control IP enrichment for structured data responses."""
 
     enabled: bool = True
-    cache_timeout: int = 86400  # 24 hours in seconds
+    cache_timeout: int = 86400  # 24 hours in seconds (minimum)
     enrich_next_hop: bool = True
     enrich_traceroute: bool = True
+
+    @field_validator("cache_timeout")
+    def validate_cache_timeout(cls, value: int) -> int:
+        """Ensure cache timeout is at least 24 hours (86400 seconds)."""
+        if value < 86400:
+            return 86400
+        return value
 
 
 class Structured(HyperglassModel):
@@ -52,4 +59,4 @@ class Structured(HyperglassModel):
 
     communities: StructuredCommunities = StructuredCommunities()
     rpki: StructuredRpki = StructuredRpki()
-    bgp_tools: StructuredBgpTools = StructuredBgpTools()
+    ip_enrichment: StructuredIpEnrichment = StructuredIpEnrichment()

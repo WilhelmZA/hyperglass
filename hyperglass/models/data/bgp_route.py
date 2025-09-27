@@ -11,7 +11,7 @@ from pydantic import ValidationInfo, field_validator
 # Project
 from hyperglass.state import use_state
 from hyperglass.external.rpki import rpki_state
-from hyperglass.external.bgptools import TargetDetail
+from hyperglass.external.ip_enrichment import TargetDetail
 
 # Local
 from ..main import HyperglassModel
@@ -36,7 +36,7 @@ class BGPRoute(HyperglassModel):
     peer_rid: str
     rpki_state: int
 
-    # BGP.tools enriched data (optional)
+    # IP enrichment data (optional)
     next_hop_asn: t.Optional[str] = None
     next_hop_org: t.Optional[str] = None
     next_hop_country: t.Optional[str] = None
@@ -122,6 +122,36 @@ class BGPRoute(HyperglassModel):
 
         return value
 
+    @property
+    def as_path_summary(self) -> str:
+        """Summary of AS path."""
+        if not self.as_path:
+            return "Unknown"
+        return " -> ".join([f"AS{asn}" for asn in self.as_path])
+
+    async def get_as_path_detailed(self) -> str:
+        """Detailed AS path with organization names using IP enrichment."""
+        if not self.as_path:
+            return "Unknown"
+            
+        try:
+            from hyperglass.external.ip_enrichment import lookup_asn_name
+            
+            detailed_path = []
+            for asn in self.as_path:
+                try:
+                    org_name = await lookup_asn_name(asn)
+                    if org_name and org_name != f"AS{asn}":
+                        detailed_path.append(f"AS{asn} ({org_name})")
+                    else:
+                        detailed_path.append(f"AS{asn}")
+                except Exception:
+                    detailed_path.append(f"AS{asn}")
+            
+            return " -> ".join(detailed_path)
+        except Exception:
+            return self.as_path_summary
+
 
 class BGPRouteTable(HyperglassModel):
     """Post-parsed BGP route table."""
@@ -143,9 +173,9 @@ class BGPRouteTable(HyperglassModel):
             self.count = len(self.routes)
         return self
 
-    async def enrich_with_bgptools(self):
-        """Enrich BGP routes with next-hop information from BGP.tools."""
-        from hyperglass.external.bgptools import network_info
+    async def enrich_with_ip_enrichment(self):
+        """Enrich BGP routes with next-hop information from IP enrichment."""
+        from hyperglass.external.ip_enrichment import network_info
 
         # Extract unique next-hop IPs that need enrichment
         next_hops_to_lookup = set()

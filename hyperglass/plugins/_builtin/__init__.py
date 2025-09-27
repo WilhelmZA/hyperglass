@@ -10,7 +10,8 @@ from .bgp_route_juniper import BGPRoutePluginJuniper
 from .mikrotik_garbage_output import MikrotikGarbageOutput
 from .bgp_routestr_mikrotik import BGPSTRRoutePluginMikrotik
 from .mikrotik_normalize_input import MikrotikTargetNormalizerInput
-from .bgptools_traceroute_enrichment import ZBgpToolsTracerouteEnrichment
+from .traceroute_ip_enrichment import ZTracerouteIpEnrichment
+from .bgp_route_ip_enrichment import ZBgpRouteIpEnrichment
 from .trace_route_mikrotik import TraceroutePluginMikrotik
 
 __all__ = (
@@ -22,7 +23,8 @@ __all__ = (
     "MikrotikGarbageOutput",
     "BGPSTRRoutePluginMikrotik",
     "MikrotikTargetNormalizerInput",
-    "ZBgpToolsTracerouteEnrichment",
+    "ZTracerouteIpEnrichment",
+    "ZBgpRouteIpEnrichment",
     "TraceroutePluginMikrotik",
     "RemoveCommand",
 )
