@@ -35,7 +35,7 @@ class BGPRoute(HyperglassModel):
     source_rid: str
     peer_rid: str
     rpki_state: int
-    
+
     # BGP.tools enriched data (optional)
     next_hop_asn: t.Optional[str] = None
     next_hop_org: t.Optional[str] = None
@@ -142,27 +142,27 @@ class BGPRouteTable(HyperglassModel):
             self.routes = sorted([*self.routes, *other.routes], key=lambda r: r.prefix)
             self.count = len(self.routes)
         return self
-    
+
     async def enrich_with_bgptools(self):
         """Enrich BGP routes with next-hop information from BGP.tools."""
         from hyperglass.external.bgptools import network_info
-        
+
         # Extract unique next-hop IPs that need enrichment
         next_hops_to_lookup = set()
         for route in self.routes:
             if route.next_hop and not route.next_hop_asn:  # Only lookup if not already enriched
                 next_hops_to_lookup.add(route.next_hop)
-        
+
         if not next_hops_to_lookup:
             return
-        
+
         # Bulk lookup next-hop information
         network_data = await network_info(*list(next_hops_to_lookup))
-        
+
         # Enrich routes with the retrieved data
         for route in self.routes:
             if route.next_hop in network_data:
                 data: TargetDetail = network_data[route.next_hop]
                 route.next_hop_asn = data.get("asn", "None")
-                route.next_hop_org = data.get("org", "None") 
+                route.next_hop_org = data.get("org", "None")
                 route.next_hop_country = data.get("country", "None")

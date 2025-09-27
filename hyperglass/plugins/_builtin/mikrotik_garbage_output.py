@@ -29,11 +29,11 @@ class MikrotikGarbageOutput(OutputPlugin):
 
     def _clean_traceroute_output(self, raw_output: str) -> str:
         """Clean MikroTik traceroute output specifically.
-        
+
         Important: Traceroute hops are sequential - each line represents a unique hop position.
         We should NOT deduplicate by IP address as the same IP can appear at different hops.
         Order matters for traceroute results.
-        
+
         However, we can aggregate consecutive timeout lines at the END of the traceroute
         to avoid showing 10+ meaningless timeout entries.
         """
@@ -75,21 +75,27 @@ class MikrotikGarbageOutput(OutputPlugin):
         if data_lines:
             processed_lines = []
             trailing_timeout_count = 0
-            
+
             # Work backwards to count trailing timeouts
             for i in range(len(data_lines) - 1, -1, -1):
                 line = data_lines[i]
-                if "100%" in line.strip() and "timeout" in line.strip() and not line.strip().startswith(("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")):
+                if (
+                    "100%" in line.strip()
+                    and "timeout" in line.strip()
+                    and not line.strip().startswith(
+                        ("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+                    )
+                ):
                     # This is a timeout line (no IP address at start)
                     trailing_timeout_count += 1
                 else:
                     # Found a non-timeout line, stop counting
                     break
-            
+
             # Add non-trailing lines as-is
             non_trailing_count = len(data_lines) - trailing_timeout_count
             processed_lines.extend(data_lines[:non_trailing_count])
-            
+
             # Handle trailing timeouts
             if trailing_timeout_count > 0:
                 if trailing_timeout_count <= 3:
@@ -97,11 +103,13 @@ class MikrotikGarbageOutput(OutputPlugin):
                     processed_lines.extend(data_lines[non_trailing_count:])
                 else:
                     # If more than 3 trailing timeouts, show first 2 and aggregate the rest
-                    processed_lines.extend(data_lines[non_trailing_count:non_trailing_count + 2])
+                    processed_lines.extend(data_lines[non_trailing_count : non_trailing_count + 2])
                     remaining_timeouts = trailing_timeout_count - 2
                     # Add an aggregation line
-                    processed_lines.append(f"                                 ... ({remaining_timeouts} more timeout hops)")
-            
+                    processed_lines.append(
+                        f"                                 ... ({remaining_timeouts} more timeout hops)"
+                    )
+
             cleaned_lines.extend(processed_lines)
 
         return "\n".join(cleaned_lines)

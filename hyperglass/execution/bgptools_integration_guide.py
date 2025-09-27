@@ -22,21 +22,22 @@ structured:
       "65001:300": "Transit Routes"
 """
 
+
 # Example Usage 1: Automatic Enrichment via Monkey Patching
 def enable_bgptools_enrichment():
     """Enable BGP.tools enrichment automatically for all queries."""
     from hyperglass.execution.enhanced import monkey_patch_execute
-    
+
     # This will automatically enrich all query results
     monkey_patch_execute()
 
 
-# Example Usage 2: Manual Enrichment for Specific Queries  
+# Example Usage 2: Manual Enrichment for Specific Queries
 async def enrich_bgp_route_example():
     """Example of manually enriching BGP route results."""
     from hyperglass.models.data.bgp_route import BGPRouteTable, BGPRoute
     from hyperglass.execution.enrichment import enrich_output_with_bgptools
-    
+
     # Create sample BGP route table
     routes = [
         BGPRoute(
@@ -50,22 +51,17 @@ async def enrich_bgp_route_example():
             communities=["65001:100"],
             next_hop="192.0.2.1",  # This will be enriched with ASN info
             source_as=13335,
-            source_rid="192.0.2.1", 
+            source_rid="192.0.2.1",
             peer_rid="192.0.2.2",
-            rpki_state=1
+            rpki_state=1,
         )
     ]
-    
-    route_table = BGPRouteTable(
-        vrf="default",
-        count=1,
-        routes=routes,
-        winning_weight="high"
-    )
-    
+
+    route_table = BGPRouteTable(vrf="default", count=1, routes=routes, winning_weight="high")
+
     # Enrich with BGP.tools data
     enriched_table = await enrich_output_with_bgptools(route_table)
-    
+
     # Access enriched data
     for route in enriched_table.routes:
         print(f"Next-hop {route.next_hop} is AS{route.next_hop_asn} ({route.next_hop_org})")
@@ -76,8 +72,8 @@ async def enrich_traceroute_example():
     """Example of parsing and enriching traceroute results."""
     from hyperglass.models.parsing.traceroute import get_traceroute_parser
     from hyperglass.execution.enrichment import enrich_output_with_bgptools
-    
-    # Sample traceroute output  
+
+    # Sample traceroute output
     traceroute_output = """
     traceroute to 8.8.8.8 (8.8.8.8), 30 hops max, 60 byte packets
      1  192.168.1.1 (192.168.1.1)  1.234 ms  1.456 ms  1.678 ms
@@ -85,18 +81,16 @@ async def enrich_traceroute_example():
      3  198.51.100.1 (198.51.100.1)  15.123 ms  15.234 ms  15.345 ms
      4  8.8.8.8 (8.8.8.8)  25.123 ms  25.234 ms  25.345 ms
     """
-    
+
     # Parse traceroute output
     parser = get_traceroute_parser("juniper")
     traceroute_result = parser.parse_text(
-        text=traceroute_output,
-        target="8.8.8.8",
-        source="192.168.1.100"
+        text=traceroute_output, target="8.8.8.8", source="192.168.1.100"
     )
-    
-    # Enrich with BGP.tools data  
+
+    # Enrich with BGP.tools data
     enriched_traceroute = await enrich_output_with_bgptools(traceroute_result)
-    
+
     # Access enriched data
     print(f"AS Path: {enriched_traceroute.as_path_summary}")
     for hop in enriched_traceroute.hops:
@@ -107,8 +101,11 @@ async def enrich_traceroute_example():
 # Example Usage 4: Custom Output Formatting
 def format_enriched_results():
     """Example of custom formatting for enriched results."""
-    from hyperglass.execution.enrichment import format_enriched_bgp_output, format_enriched_traceroute_output
-    
+    from hyperglass.execution.enrichment import (
+        format_enriched_bgp_output,
+        format_enriched_traceroute_output,
+    )
+
     # These functions provide formatted output that includes BGP.tools data
     # They can be used in custom UI components or API responses
     pass

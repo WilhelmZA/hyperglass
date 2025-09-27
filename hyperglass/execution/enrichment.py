@@ -12,15 +12,15 @@ from hyperglass.models.data import BGPRouteTable, TracerouteResult, OutputDataMo
 async def enrich_output_with_bgptools(output: OutputDataModel) -> OutputDataModel:
     """Enrich output data with BGP.tools information."""
     params = use_state("params")
-    
+
     # Check if BGP.tools enrichment is enabled in configuration
     if not params.structured.bgp_tools.enabled:
         log.debug("BGP.tools enrichment disabled in configuration, skipping")
         return output
-    
+
     _log = log.bind(enrichment="bgptools")
     _log.debug("Starting BGP.tools enrichment")
-    
+
     try:
         if isinstance(output, BGPRouteTable):
             if params.structured.bgp_tools.enrich_next_hop:
@@ -29,24 +29,26 @@ async def enrich_output_with_bgptools(output: OutputDataModel) -> OutputDataMode
                 _log.info(f"Enriched {len(output.routes)} BGP routes with next-hop data")
             else:
                 _log.debug("Next-hop enrichment disabled, skipping BGP enrichment")
-            
+
         elif isinstance(output, TracerouteResult):
             if params.structured.bgp_tools.enrich_traceroute:
                 _log.debug("Enriching traceroute hops with ASN information")
                 await output.enrich_with_bgptools()
-                
+
                 # Count enriched hops
                 enriched_hops = sum(1 for hop in output.hops if hop.asn and hop.asn != "None")
-                _log.info(f"Enriched {enriched_hops}/{len(output.hops)} traceroute hops with ASN data")
+                _log.info(
+                    f"Enriched {enriched_hops}/{len(output.hops)} traceroute hops with ASN data"
+                )
             else:
                 _log.debug("Traceroute enrichment disabled, skipping traceroute enrichment")
-        
+
         _log.debug("BGP.tools enrichment completed successfully")
-        
+
     except Exception as err:
         _log.error(f"BGP.tools enrichment failed: {err}")
         # Don't fail the entire request if enrichment fails
-        
+
     return output
 
 
@@ -54,17 +56,17 @@ def format_enriched_bgp_output(route_table: BGPRouteTable) -> str:
     """Format enriched BGP route table for display."""
     if not route_table.routes:
         return "No routes found."
-    
+
     lines = []
     lines.append(f"BGP Route Table (VRF: {route_table.vrf})")
     lines.append(f"Total Routes: {route_table.count}")
     lines.append("-" * 80)
-    
+
     for route in route_table.routes:
         lines.append(f"Prefix: {route.prefix}")
         lines.append(f"  Active: {'Yes' if route.active else 'No'}")
         lines.append(f"  Next Hop: {route.next_hop}")
-        
+
         # Include enriched next-hop information if available
         if route.next_hop_asn and route.next_hop_asn != "None":
             next_hop_info = f"AS{route.next_hop_asn}"
@@ -73,11 +75,11 @@ def format_enriched_bgp_output(route_table: BGPRouteTable) -> str:
             if route.next_hop_country and route.next_hop_country != "None":
                 next_hop_info += f" [{route.next_hop_country}]"
             lines.append(f"  Next Hop Info: {next_hop_info}")
-        
+
         lines.append(f"  AS Path: {' '.join(map(str, route.as_path))}")
         lines.append(f"  Source AS: AS{route.source_as}")
         lines.append("")
-    
+
     return "\n".join(lines)
 
 
@@ -88,10 +90,10 @@ def format_enriched_traceroute_output(traceroute: TracerouteResult) -> str:
     lines.append(f"AS Path Summary: {traceroute.as_path_summary}")
     lines.append(f"Unique ASNs: {', '.join([f'AS{asn}' for asn in traceroute.unique_asns])}")
     lines.append("-" * 80)
-    
+
     for hop in traceroute.hops:
         hop_line = f"{hop.hop_number:2d}. "
-        
+
         if hop.is_timeout:
             hop_line += "* * * Request timed out"
         else:
@@ -101,7 +103,7 @@ def format_enriched_traceroute_output(traceroute: TracerouteResult) -> str:
                     hop_line += f" ({hop.hostname})"
             else:
                 hop_line += "Unknown"
-            
+
             # Add RTT information
             rtts = []
             for rtt in [hop.rtt1, hop.rtt2, hop.rtt3]:
@@ -110,15 +112,15 @@ def format_enriched_traceroute_output(traceroute: TracerouteResult) -> str:
                 else:
                     rtts.append("*")
             hop_line += f"  {' '.join(rtts)}"
-            
+
             # Add enriched ASN information if available
             if hop.asn and hop.asn != "None":
                 hop_line += f"  [{hop.asn_display}]"
                 if hop.country and hop.country != "None":
                     hop_line += f" {hop.country}"
-        
+
         lines.append(hop_line)
-    
+
     return "\n".join(lines)
 
 
@@ -126,15 +128,15 @@ async def execute_with_enrichment(query, original_execute_func) -> t.Union[Outpu
     """Execute query and enrich results with BGP.tools data."""
     # Execute the original query
     output = await original_execute_func(query)
-    
+
     # If output is structured data, enrich it
     if isinstance(output, (BGPRouteTable, TracerouteResult)):
         enriched_output = await enrich_output_with_bgptools(output)
-        
+
         # Format for display if needed
         if isinstance(enriched_output, BGPRouteTable):
             return format_enriched_bgp_output(enriched_output)
         elif isinstance(enriched_output, TracerouteResult):
             return format_enriched_traceroute_output(enriched_output)
-    
+
     return output

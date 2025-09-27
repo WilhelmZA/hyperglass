@@ -11,6 +11,7 @@ from .mikrotik_garbage_output import MikrotikGarbageOutput
 from .bgp_routestr_mikrotik import BGPSTRRoutePluginMikrotik
 from .mikrotik_normalize_input import MikrotikTargetNormalizerInput
 from .bgptools_traceroute_enrichment import ZBgpToolsTracerouteEnrichment
+from .trace_route_mikrotik import TraceroutePluginMikrotik
 
 __all__ = (
     "BGPRoutePluginArista",
@@ -22,5 +23,6 @@ __all__ = (
     "BGPSTRRoutePluginMikrotik",
     "MikrotikTargetNormalizerInput",
     "ZBgpToolsTracerouteEnrichment",
+    "TraceroutePluginMikrotik",
     "RemoveCommand",
 )

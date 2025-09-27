@@ -12,6 +12,6 @@ OutputDataModel = Union[BGPRouteTable, TracerouteResult]
 __all__ = (
     "BGPRoute",
     "BGPRouteTable",
-    "TracerouteResult", 
+    "TracerouteResult",
     "OutputDataModel",
 )

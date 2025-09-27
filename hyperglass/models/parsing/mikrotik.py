@@ -307,3 +307,206 @@ class MikrotikBGPTable(MikrotikBase):
             routes=routes,
             winning_weight="low",
         )
+
+
+class MikrotikTracerouteTable(MikrotikBase):
+    """MikroTik Traceroute Table."""
+
+    target: str
+    source: str
+    hops: t.List["MikrotikTracerouteHop"] = []
+    max_hops: int = 30
+    packet_size: int = 60
+
+    @classmethod
+    def parse_text(cls, text: str, target: str, source: str) -> "MikrotikTracerouteTable":
+        """Parse MikroTik traceroute output.
+
+        MikroTik traceroute format:
+        ADDRESS                          LOSS SENT    LAST     AVG    BEST   WORST STD-DEV STATUS
+        102.130.66.77                      0%    3   0.2ms     0.2     0.2     0.2       0
+                                         100%    3 timeout
+        80.81.193.70                       0%    1   182ms     182     182     182       0
+        """
+        _log = log.bind(parser="MikrotikTracerouteTable")
+
+        lines = text.strip().split("\n")
+        hops = []
+        hop_number = 0
+        found_header = False
+
+        for line in lines:
+            line_stripped = line.strip()
+
+            # Skip empty lines
+            if not line_stripped:
+                continue
+
+            # Look for header line
+            if "ADDRESS" in line_stripped and "LOSS" in line_stripped and "SENT" in line_stripped:
+                found_header = True
+                continue
+
+            # Process data lines after header
+            if found_header and line_stripped:
+                hop_number += 1
+
+                # Check if this is a timeout line (no IP address at start)
+                if line_stripped.startswith("100%") and "timeout" in line_stripped:
+                    hops.append(
+                        MikrotikTracerouteHop(
+                            hop_number=hop_number,
+                            ip_address=None,
+                            hostname=None,
+                            loss_pct=100,
+                            sent_count=3,  # Default MikroTik sends 3 probes
+                            last_rtt=None,
+                            avg_rtt=None,
+                            best_rtt=None,
+                            worst_rtt=None,
+                        )
+                    )
+                    continue
+
+                # Parse IP address and timing data
+                # Pattern: IP_ADDRESS   LOSS% SENT LAST AVG BEST WORST STD-DEV [STATUS]
+                mikrotik_pattern = re.compile(
+                    r"^([^\s]+)\s+(\d+)%\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+([^\s]+)\s+([^\s]+)"
+                )
+
+                match = mikrotik_pattern.match(line_stripped)
+                if match:
+                    ip_address = match.group(1)
+                    loss_pct = int(match.group(2))
+                    sent_count = int(match.group(3))
+                    last_rtt = match.group(4)
+                    avg_rtt = match.group(5)
+                    best_rtt = match.group(6)
+                    worst_rtt = match.group(7)
+
+                    # Convert timing values (handle 'timeout' and numeric values with units)
+                    def parse_rtt(rtt_str: str) -> t.Optional[float]:
+                        if rtt_str == "timeout" or rtt_str == "-":
+                            return None
+                        # Remove 'ms' suffix and convert to float
+                        rtt_clean = re.sub(r"ms$", "", rtt_str)
+                        try:
+                            return float(rtt_clean)
+                        except ValueError:
+                            return None
+
+                    hops.append(
+                        MikrotikTracerouteHop(
+                            hop_number=hop_number,
+                            ip_address=ip_address,
+                            hostname=None,  # MikroTik doesn't do reverse DNS in traceroute by default
+                            loss_pct=loss_pct,
+                            sent_count=sent_count,
+                            last_rtt=parse_rtt(last_rtt),
+                            avg_rtt=parse_rtt(avg_rtt),
+                            best_rtt=parse_rtt(best_rtt),
+                            worst_rtt=parse_rtt(worst_rtt),
+                        )
+                    )
+                else:
+                    # Handle malformed or aggregated lines like "... (N more timeout hops)"
+                    if "more timeout hops" in line_stripped:
+                        # Extract count from aggregation message
+                        count_match = re.search(r"\((\d+) more timeout hops\)", line_stripped)
+                        if count_match:
+                            timeout_count = int(count_match.group(1))
+                            for _ in range(timeout_count):
+                                hop_number += 1
+                                hops.append(
+                                    MikrotikTracerouteHop(
+                                        hop_number=hop_number,
+                                        ip_address=None,
+                                        hostname=None,
+                                        loss_pct=100,
+                                        sent_count=3,
+                                        last_rtt=None,
+                                        avg_rtt=None,
+                                        best_rtt=None,
+                                        worst_rtt=None,
+                                    )
+                                )
+                    else:
+                        # Unknown format, create a timeout hop
+                        hops.append(
+                            MikrotikTracerouteHop(
+                                hop_number=hop_number,
+                                ip_address=None,
+                                hostname=None,
+                                loss_pct=100,
+                                sent_count=3,
+                                last_rtt=None,
+                                avg_rtt=None,
+                                best_rtt=None,
+                                worst_rtt=None,
+                            )
+                        )
+
+        result = MikrotikTracerouteTable(target=target, source=source, hops=hops)
+
+        _log.info(f"Parsed {len(hops)} hops from MikroTik traceroute output")
+        return result
+
+    def traceroute_result(self):
+        """Convert to TracerouteResult format."""
+        from hyperglass.models.data.traceroute import TracerouteResult, TracerouteHop
+
+        converted_hops = []
+        for hop in self.hops:
+            converted_hops.append(
+                TracerouteHop(
+                    hop_number=hop.hop_number,
+                    ip_address=hop.ip_address,
+                    hostname=hop.hostname,
+                    rtt1=hop.best_rtt,
+                    rtt2=hop.avg_rtt,
+                    rtt3=hop.worst_rtt,
+                    # MikroTik-specific statistics
+                    loss_pct=hop.loss_pct,
+                    sent_count=hop.sent_count,
+                    last_rtt=hop.last_rtt,
+                    avg_rtt=hop.avg_rtt,
+                    best_rtt=hop.best_rtt,
+                    worst_rtt=hop.worst_rtt,
+                    # BGP enrichment fields will be populated by enrichment plugin
+                    asn=None,
+                    org=None,
+                    prefix=None,
+                    country=None,
+                    rir=None,
+                    allocated=None,
+                )
+            )
+
+        return TracerouteResult(
+            target=self.target,
+            source=self.source,
+            hops=converted_hops,
+            max_hops=self.max_hops,
+            packet_size=self.packet_size,
+        )
+
+
+class MikrotikTracerouteHop(MikrotikBase):
+    """Individual MikroTik traceroute hop."""
+
+    hop_number: int
+    ip_address: t.Optional[str] = None
+    hostname: t.Optional[str] = None
+
+    # MikroTik-specific statistics
+    loss_pct: t.Optional[int] = None
+    sent_count: t.Optional[int] = None
+    last_rtt: t.Optional[float] = None
+    avg_rtt: t.Optional[float] = None
+    best_rtt: t.Optional[float] = None
+    worst_rtt: t.Optional[float] = None
+
+    @property
+    def is_timeout(self) -> bool:
+        """Check if this hop is a timeout."""
+        return self.ip_address is None or self.loss_pct == 100
