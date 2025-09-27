@@ -390,7 +390,8 @@ class MikrotikTracerouteTable(MikrotikBase):
 
         # Start from the last table header
         for i in range(last_table_start, len(lines)):
-            line = lines[i].strip()
+            original_line = lines[i]  # Keep original line with whitespace
+            line = original_line.strip()  # Stripped version for most processing
 
             # Skip empty lines
             if not line:
@@ -423,12 +424,13 @@ class MikrotikTracerouteTable(MikrotikBase):
                             return None
                     
                     # Check if this is a timeout/continuation line (starts with whitespace, has % and numbers)
-                    if line.startswith(" ") and "%" in line and ("timeout" in line or line.endswith("0ms")):
+                    # Use original_line to check for leading whitespace
+                    if (original_line.startswith(" ") or original_line.startswith("\t")) and "%" in line and ("timeout" in line or "0ms" in line):
                         # This is a timeout/continuation hop
                         parts = line.split()
                         _log.debug(f"Line {i}: Timeout/continuation line, parts: {parts}")
                         
-                        if len(parts) >= 3:
+                        if len(parts) >= 2 and parts[0].endswith("%"):
                             ip_address = None
                             loss_pct = int(parts[0].rstrip("%"))
                             sent_count = int(parts[1])

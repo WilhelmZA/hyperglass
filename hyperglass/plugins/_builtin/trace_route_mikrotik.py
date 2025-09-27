@@ -42,9 +42,15 @@ def parse_mikrotik_traceroute(
     _log.debug(f"Target: {target}, Source: {source}")
     _log.debug(f"Output pieces: {len(out_list)}")
     for i, piece in enumerate(out_list):
-        _log.debug(f"Output piece {i}: {repr(piece)}")
+        _log.debug(f"Output piece {i}: {repr(piece[:200])}...")  # Truncate for readability
     _log.debug(f"Combined output length: {len(combined_output)}")
-    _log.debug(f"Combined output: {repr(combined_output)}")
+    
+    # Check if this looks like cleaned or raw output
+    contains_paging = "-- [Q quit|C-z pause]" in combined_output
+    contains_multiple_tables = combined_output.count("ADDRESS") > 1
+    _log.debug(f"Contains paging prompts: {contains_paging}")
+    _log.debug(f"Contains multiple ADDRESS headers: {contains_multiple_tables}")
+    _log.debug(f"First 500 chars: {repr(combined_output[:500])}")
     _log.debug(f"=== END PLUGIN RAW INPUT ===")
 
     try:
