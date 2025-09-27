@@ -153,15 +153,16 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
 
   let copyValue = data?.output as string;
 
-  // Always create formatData hook, but only use it for BGP outputs
+  // Always create formatData hook for both BGP and Traceroute outputs
   const formatData = useTableToString(form.queryTarget, data, [data?.format]);
   const isBGPData = isBGPStructuredOutput(data);
+  const isTracerouteData = isTracerouteStructuredOutput(data);
 
   if (data?.format === 'application/json' && isBGPData) {
     copyValue = formatData();
-  } else if (isTracerouteStructuredOutput(data) && data.output.raw_output) {
-    // For structured traceroute, use the cleaned raw output for copy functionality
-    copyValue = data.output.raw_output;
+  } else if (data?.format === 'application/json' && isTracerouteData) {
+    // For structured traceroute, use formatted table output for copy functionality
+    copyValue = formatData();
   }
 
   if (error) {

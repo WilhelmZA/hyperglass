@@ -24,9 +24,8 @@ class MikrotikGarbageOutput(OutputPlugin):
 
     _hyperglass_builtin: bool = PrivateAttr(True)
     platforms: t.Sequence[str] = ("mikrotik_routeros", "mikrotik_switchos", "mikrotik")
-    # Apply to ALL commands on MikroTik platforms AND specific traceroute directive
+    # Apply to ALL commands on MikroTik platforms
     common: bool = True
-    directives: t.Sequence[str] = ("__hyperglass_mikrotik_traceroute__",)
 
     def _clean_traceroute_output(self, raw_output: str) -> str:
         """Clean MikroTik traceroute output specifically.
