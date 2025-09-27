@@ -115,11 +115,11 @@ class TracerouteResult(HyperglassModel):
         current_asn = None
 
         for hop in self.hops:
-            if hop.asn and hop.asn != "None" and hop.asn != current_asn:
+            if hop.asn and hop.asn not in ["None", None] and hop.asn != current_asn:
                 current_asn = hop.asn
-                as_path.append(hop.asn)
+                as_path.append(hop.asn)  # hop.asn already has "AS" prefix or is "IXP"
 
-        return " -> ".join([f"AS{asn}" for asn in as_path]) if as_path else "Unknown"
+        return " -> ".join(as_path) if as_path else "Unknown"
 
     @property
     def as_path_detailed(self) -> str:
@@ -129,15 +129,18 @@ class TracerouteResult(HyperglassModel):
         current_org = None
 
         for hop in self.hops:
-            if hop.asn and hop.asn != "None" and hop.asn != current_asn:
-                current_asn = hop.asn
+            if hop.asn and hop.asn not in ["None", None] and hop.asn != current_asn:
+                current_asn = hop.asn  # Already has "AS" prefix or is "IXP"
                 current_org = hop.org
 
-                # Format as "AS15169 (Google LLC)" if we have org name
-                if current_org and current_org != "None":
-                    as_path.append(f"AS{current_asn} ({current_org})")
+                # Format with org name if we have it
+                if current_org and current_org not in ["None", None]:
+                    if current_asn == "IXP":
+                        as_path.append(f"IXP ({current_org})")
+                    else:
+                        as_path.append(f"{current_asn} ({current_org})")
                 else:
-                    as_path.append(f"AS{current_asn}")
+                    as_path.append(current_asn)
 
         return " -> ".join(as_path) if as_path else "Unknown"
 
@@ -161,10 +164,19 @@ class TracerouteResult(HyperglassModel):
         for hop in self.hops:
             if hop.ip_address in network_data:
                 data: TargetDetail = network_data[hop.ip_address]
-                # Handle ASN formatting
+                # Handle ASN formatting - avoid double "AS" prefix
                 asn_raw = data.get("asn")
                 if asn_raw and asn_raw != "None":
-                    hop.asn = f"AS{asn_raw}"
+                    # Special case for IXPs
+                    if asn_raw == "IXP":
+                        hop.asn = "IXP"
+                    else:
+                        # Remove any existing AS prefix and add our own
+                        asn_number = asn_raw.replace("AS", "").strip()
+                        if asn_number.isdigit():
+                            hop.asn = f"AS{asn_number}"
+                        else:
+                            hop.asn = None
                 else:
                     hop.asn = None
 

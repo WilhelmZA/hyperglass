@@ -147,7 +147,7 @@ class IPInfo:
 
 
 class IPEnrichmentService:
-    """Main IP enrichment service."""
+    """Main IP enrichment service with optimized lookups."""
 
     def __init__(self):
         self.cidr_networks: t.List[t.Tuple[t.Union[IPv4Address, IPv6Address], int, int, str]] = (
@@ -158,6 +158,45 @@ class IPEnrichmentService:
             []
         )  # (network, prefixlen, ixp_name)
         self.last_update: t.Optional[datetime] = None
+        
+        # Optimized lookup structures - populated after data load
+        self._ipv4_networks: t.List[t.Tuple[int, int, int, str]] = []  # (net_int, mask_bits, asn, cidr)
+        self._ipv6_networks: t.List[t.Tuple[int, int, int, str]] = []  # (net_int, mask_bits, asn, cidr)
+        self._lookup_optimized = False
+
+    def _optimize_lookups(self):
+        """Convert IP networks to integer format for faster lookups."""
+        if self._lookup_optimized:
+            return
+            
+        log.debug("Optimizing IP lookup structures...")
+        optimize_start = datetime.now()
+        
+        self._ipv4_networks = []
+        self._ipv6_networks = []
+        
+        for net_addr, prefixlen, asn, cidr_string in self.cidr_networks:
+            if isinstance(net_addr, IPv4Address):
+                # Convert IPv4 to integer for fast bitwise operations
+                net_int = int(net_addr)
+                mask_bits = 32 - prefixlen
+                self._ipv4_networks.append((net_int, mask_bits, asn, cidr_string))
+            else:
+                # Convert IPv6 to integer
+                net_int = int(net_addr)
+                mask_bits = 128 - prefixlen
+                self._ipv6_networks.append((net_int, mask_bits, asn, cidr_string))
+        
+        # Sort by mask bits (ascending) for longest-match-first
+        self._ipv4_networks.sort(key=lambda x: x[1])
+        self._ipv6_networks.sort(key=lambda x: x[1])
+        
+        optimize_time = (datetime.now() - optimize_start).total_seconds()
+        log.debug(
+            f"Optimized lookups: {len(self._ipv4_networks)} IPv4, {len(self._ipv6_networks)} IPv6 "
+            f"networks in {optimize_time:.2f}s"
+        )
+        self._lookup_optimized = True
 
     async def ensure_data_loaded(self, force_refresh: bool = False) -> bool:
         """Ensure data is loaded and fresh from persistent files."""
@@ -199,6 +238,10 @@ class IPEnrichmentService:
                 self.asn_info = {int(k): v for k, v in asn_data.items()}
                 self.ixp_networks = [(ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data]
                 self.last_update = cached_time
+                
+                # Reset optimization flag so it gets rebuilt with new data
+                self._lookup_optimized = False
+                
                 return True
                 
             except Exception as e:
@@ -245,6 +288,10 @@ class IPEnrichmentService:
             cache_duration_actual = (datetime.now() - cache_start).total_seconds()
 
             self.last_update = datetime.now()
+            
+            # Reset optimization flag so it gets rebuilt with new data
+            self._lookup_optimized = False
+            
             log.info(f"✅ IP enrichment data loaded successfully!")
             log.info(
                 f"📊 Data summary: {len(self.cidr_networks)} CIDR entries, "
@@ -369,78 +416,112 @@ class IPEnrichmentService:
         )
 
     async def _download_ixp_data(self, client) -> None:
-        """Download PeeringDB IXP data with rate limiting."""
+        """Download PeeringDB IXP data with rate limiting and retry logic."""
         log.info("📥 Downloading PeeringDB IXP data from peeringdb.com...")
 
-        try:
-            # Get IXLANs (exchange point LANs) with retry
-            download_start = datetime.now()
-            response = await client.get(PEERINGDB_IXLAN_URL)
-            response.raise_for_status()
-            ixlans = response.json()["data"]
-            ixlan_time = (datetime.now() - download_start).total_seconds()
+        max_retries = 3
+        base_delay = 5  # Start with 5 second delay
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    delay = base_delay * (2 ** attempt)  # Exponential backoff
+                    log.info(f"Retry attempt {attempt + 1}/{max_retries} after {delay}s delay...")
+                    await asyncio.sleep(delay)
 
-            # Create mapping of ixlan_id -> ixp_name
-            ixlan_to_name = {}
-            for ixlan in ixlans:
-                ixlan_id = ixlan.get("id")
-                ixp_name = ixlan.get("name", "")
-                if ixlan_id and ixp_name:
-                    ixlan_to_name[ixlan_id] = ixp_name
+                # Get IXLANs (exchange point LANs) with retry
+                log.debug("Downloading IXP LANs...")
+                download_start = datetime.now()
+                response = await client.get(PEERINGDB_IXLAN_URL)
+                response.raise_for_status()
+                ixlans = response.json()["data"]
+                ixlan_time = (datetime.now() - download_start).total_seconds()
 
-            log.debug(f"Found {len(ixlan_to_name)} IXP LANs in {ixlan_time:.1f}s")
+                # Create mapping of ixlan_id -> ixp_name
+                ixlan_to_name = {}
+                for ixlan in ixlans:
+                    ixlan_id = ixlan.get("id")
+                    ixp_name = ixlan.get("name", "")
+                    if ixlan_id and ixp_name:
+                        ixlan_to_name[ixlan_id] = ixp_name
 
-            # Add delay to avoid rate limiting
-            await asyncio.sleep(1)
+                log.debug(f"Found {len(ixlan_to_name)} IXP LANs in {ixlan_time:.1f}s")
 
-            # Get IXP prefixes
-            download_start = datetime.now()
-            response = await client.get(PEERINGDB_IXPFX_URL)
-            response.raise_for_status()
-            ixpfxs = response.json()["data"]
-            prefix_time = (datetime.now() - download_start).total_seconds()
+                # Add delay between API calls to avoid rate limiting
+                log.debug("Waiting 3s before downloading IXP prefixes...")
+                await asyncio.sleep(3)
 
-            # Process IXP prefixes
-            process_start = datetime.now()
-            ixp_count = 0
-            total_prefixes = len(ixpfxs)
-            for ixpfx in ixpfxs:
-                try:
-                    prefix = ixpfx.get("prefix")
-                    ixlan_id = ixpfx.get("ixlan_id")
+                # Get IXP prefixes
+                log.debug("Downloading IXP prefixes...")
+                download_start = datetime.now()
+                response = await client.get(PEERINGDB_IXPFX_URL)
+                response.raise_for_status()
+                ixpfxs = response.json()["data"]
+                prefix_time = (datetime.now() - download_start).total_seconds()
 
-                    if prefix and ixlan_id in ixlan_to_name:
-                        network = ip_network(prefix, strict=False)
-                        ixp_name = ixlan_to_name[ixlan_id]
-                        self.ixp_networks.append((network.network_address, network.prefixlen, ixp_name))
-                        ixp_count += 1
-                except Exception:
-                    continue
+                # Process IXP prefixes
+                process_start = datetime.now()
+                ixp_count = 0
+                total_prefixes = len(ixpfxs)
+                failed_prefixes = 0
+                
+                for ixpfx in ixpfxs:
+                    try:
+                        prefix = ixpfx.get("prefix")
+                        ixlan_id = ixpfx.get("ixlan_id")
 
-            process_time = (datetime.now() - process_start).total_seconds()
+                        if prefix and ixlan_id in ixlan_to_name:
+                            network = ip_network(prefix, strict=False)
+                            ixp_name = ixlan_to_name[ixlan_id]
+                            self.ixp_networks.append((network.network_address, network.prefixlen, ixp_name))
+                            ixp_count += 1
+                        else:
+                            failed_prefixes += 1
+                    except Exception:
+                        failed_prefixes += 1
 
-            # Sort by prefix length (descending) for longest-match lookup
-            sort_start = datetime.now()
-            self.ixp_networks.sort(key=lambda x: x[1], reverse=True)
-            sort_time = (datetime.now() - sort_start).total_seconds()
+                process_time = (datetime.now() - process_start).total_seconds()
 
-            log.info(
-                f"✅ Downloaded {ixp_count}/{total_prefixes} IXP networks "
-                f"(IXLAN: {ixlan_time:.1f}s, prefixes: {prefix_time:.1f}s, "
-                f"process: {process_time:.1f}s, sort: {sort_time:.1f}s)"
-            )
-            
-        except Exception as e:
-            log.warning(f"Failed to download IXP data (rate limiting?): {e}")
-            log.info("Continuing without IXP data - ASN lookups will still work")
-            # Don't fail the entire process if IXP data fails
-            self.ixp_networks = []
+                # Sort by prefix length (descending) for longest-match lookup
+                sort_start = datetime.now()
+                self.ixp_networks.sort(key=lambda x: x[1], reverse=True)
+                sort_time = (datetime.now() - sort_start).total_seconds()
+
+                log.info(
+                    f"✅ Downloaded {ixp_count}/{total_prefixes} IXP networks "
+                    f"(IXLAN: {ixlan_time:.1f}s, prefixes: {prefix_time:.1f}s, "
+                    f"process: {process_time:.1f}s, sort: {sort_time:.1f}s, failed: {failed_prefixes})"
+                )
+                return  # Success - exit retry loop
+                
+            except Exception as e:
+                if "429" in str(e) or "Too Many Requests" in str(e):
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** (attempt + 1))
+                        log.warning(f"Rate limited by PeeringDB API (attempt {attempt + 1}/{max_retries}). Retrying in {delay}s...")
+                        continue
+                    else:
+                        log.error(f"Rate limited by PeeringDB API after {max_retries} attempts. Skipping IXP data.")
+                        break
+                else:
+                    log.warning(f"Failed to download IXP data (attempt {attempt + 1}/{max_retries}): {e}")
+                    if attempt < max_retries - 1:
+                        continue
+                    break
+
+        # If we get here, all retries failed
+        log.warning("Could not download IXP data after retries - continuing without IXP detection")
+        log.info("ASN lookups will still work, but IXP networks won't be identified")
+        self.ixp_networks = []
 
     async def lookup_ip(self, ip_str: str) -> IPInfo:
         """Lookup an IP address and return ASN or IXP information."""
         if not await self.ensure_data_loaded():
             log.warning("IP enrichment data not available")
             return IPInfo(ip_str)
+
+        # Ensure lookup optimization is done
+        self._optimize_lookups()
 
         log.debug(f"Looking up IP {ip_str} - have {len(self.cidr_networks)} CIDR entries, {len(self.asn_info)} ASN entries")
 
@@ -465,41 +546,27 @@ class IPEnrichmentService:
             except Exception:
                 continue
 
-        # Then check CIDR networks for ASN
-        # For debugging 1.1.1.1, let's check a few entries around it
-        if ip_str == "1.1.1.1":
-            log.debug(f"Debugging 1.1.1.1 lookup - checking first 10 CIDR entries:")
-            for i, (net_addr, prefixlen, asn, cidr_string) in enumerate(self.cidr_networks[:10]):
-                try:
-                    network = ip_network(f"{net_addr}/{prefixlen}", strict=False)
-                    log.debug(f"  Entry {i}: {cidr_string} (AS{asn}) - contains 1.1.1.1: {target_ip in network}")
-                except Exception as e:
-                    log.debug(f"  Entry {i}: Failed to create network from {net_addr}/{prefixlen}: {e}")
-            
-            # Also check if we have any 1.1.1.x entries
-            matching_entries = []
-            for net_addr, prefixlen, asn, cidr_string in self.cidr_networks:
-                if "1.1.1" in str(net_addr) or "1.1.1" in cidr_string:
-                    matching_entries.append((net_addr, prefixlen, asn, cidr_string))
-            log.debug(f"Found {len(matching_entries)} entries containing '1.1.1': {matching_entries[:5]}")
+        # Fast integer-based lookup for ASN
+        target_int = int(target_ip)
         
-        for net_addr, prefixlen, asn, cidr_string in self.cidr_networks:
-            try:
-                network = ip_network(f"{net_addr}/{prefixlen}", strict=False)
-                if target_ip in network:
+        if isinstance(target_ip, IPv4Address):
+            # Use optimized IPv4 lookup
+            for net_int, mask_bits, asn, cidr_string in self._ipv4_networks:
+                if (target_int >> mask_bits) == (net_int >> mask_bits):
                     asn_data = self.asn_info.get(asn, {})
                     asn_name = asn_data.get("name", f"AS{asn}")
                     country = asn_data.get("country", "")
-                    log.debug(
-                        f"Found ASN match for {ip_str}: AS{asn} ({asn_name}) in {cidr_string}"
-                    )
-                    return IPInfo(
-                        ip_str, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country
-                    )
-            except Exception as e:
-                if ip_str == "1.1.1.1":  # Only log for our test case
-                    log.debug(f"Failed to check network {net_addr}/{prefixlen}: {e}")
-                continue
+                    log.debug(f"Found ASN match for {ip_str}: AS{asn} ({asn_name}) in {cidr_string}")
+                    return IPInfo(ip_str, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country)
+        else:
+            # Use optimized IPv6 lookup
+            for net_int, mask_bits, asn, cidr_string in self._ipv6_networks:
+                if (target_int >> mask_bits) == (net_int >> mask_bits):
+                    asn_data = self.asn_info.get(asn, {})
+                    asn_name = asn_data.get("name", f"AS{asn}")
+                    country = asn_data.get("country", "")
+                    log.debug(f"Found ASN match for {ip_str}: AS{asn} ({asn_name}) in {cidr_string}")
+                    return IPInfo(ip_str, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country)
 
         log.debug(f"No enrichment data found for {ip_str}")
         return IPInfo(ip_str)
@@ -682,9 +749,9 @@ async def network_info(*targets: str) -> TargetData:
 
             # Convert to TargetDetail format
             if ip_info.is_ixp and ip_info.ixp_name:
-                # IXP case - put IXP name in org field
+                # IXP case - put "IXP" in ASN field and IXP name in org field
                 detail: TargetDetail = {
-                    "asn": "None",  # IXPs don't have ASNs in this context
+                    "asn": "IXP",  # Show "IXP" as the ASN for IXPs
                     "ip": target,
                     "prefix": "None",
                     "country": "None",

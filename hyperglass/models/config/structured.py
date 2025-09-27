@@ -41,9 +41,9 @@ class StructuredRpki(HyperglassModel):
 class StructuredIpEnrichment(HyperglassModel):
     """Control IP enrichment for structured data responses."""
 
-    enabled: bool = True
+    enabled: bool = False
     cache_timeout: int = 86400  # 24 hours in seconds (minimum)
-    enrich_next_hop: bool = True
+    enrich_next_hop: bool = False
     enrich_traceroute: bool = True
 
     @field_validator("cache_timeout")
