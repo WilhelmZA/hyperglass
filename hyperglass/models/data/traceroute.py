@@ -44,6 +44,9 @@ class TracerouteHop(HyperglassModel):
     def validate_ip_address(cls, value):
         """Validate IP address format."""
         if value is not None:
+            # Handle truncated addresses (MikroTik sometimes truncates long IPv6 addresses with ...)
+            if value.endswith('...') or value.endswith('..'):
+                return None
             try:
                 ip_address(value)
             except AddressValueError:
@@ -81,6 +84,7 @@ class TracerouteResult(HyperglassModel):
     hops: t.List[TracerouteHop]
     max_hops: int = 30
     packet_size: int = 60
+    raw_output: t.Optional[str] = None  # Store cleaned output for "Copy Raw" functionality
 
     @property
     def hop_count(self) -> int:

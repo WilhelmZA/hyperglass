@@ -157,6 +157,9 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
 
   if (data?.format === 'application/json') {
     copyValue = formatData();
+  } else if (isTracerouteStructuredOutput(data) && data.output.raw_output) {
+    // For structured traceroute, use the cleaned raw output for copy functionality
+    copyValue = data.output.raw_output;
   }
 
   if (error) {

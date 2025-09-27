@@ -61,6 +61,7 @@ export declare global {
     hops: TracerouteHop[];
     max_hops: number;
     packet_size: number;
+    raw_output: string | null;
   };
 
   type RouteField = { [K in keyof Route]: Route[K] };

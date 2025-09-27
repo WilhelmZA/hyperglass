@@ -52,12 +52,17 @@ def parse_mikrotik_traceroute(
         validated = MikrotikTracerouteTable.parse_text(combined_output, target, source)
         result = validated.traceroute_result()
         
+        # Store the cleaned output for "Copy Raw" functionality
+        result.raw_output = combined_output
+        
         # DEBUG: Log the final structured result
         _log.debug(f"=== FINAL STRUCTURED TRACEROUTE RESULT ===")
         _log.debug(f"Successfully parsed {len(validated.hops)} traceroute hops")
         _log.debug(f"Target: {result.target}, Source: {result.source}")
         for hop in result.hops:
             _log.debug(f"Hop {hop.hop_number}: {hop.ip_address} - Loss: {hop.loss_pct}% - Sent: {hop.sent_count}")
+        _log.debug(f"AS Path: {result.as_path_summary}")
+        _log.debug(f"Raw output length: {len(result.raw_output) if result.raw_output else 0} characters")
         _log.debug(f"=== END STRUCTURED RESULT ===")
 
     except ValidationError as err:

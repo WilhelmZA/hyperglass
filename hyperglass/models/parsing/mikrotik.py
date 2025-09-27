@@ -452,6 +452,12 @@ class MikrotikTracerouteTable(MikrotikBase):
                             continue
                             
                         ip_address = parts[0] if not parts[0].endswith("%") else None
+                        
+                        # Check for truncated IPv6 addresses
+                        if ip_address and (ip_address.endswith('...') or ip_address.endswith('..')):
+                            _log.warning(f"Line {i}: Truncated IP address detected: {ip_address} - setting to None")
+                            ip_address = None
+                        
                         if ip_address:
                             loss_pct = int(parts[1].rstrip("%"))
                             sent_count = int(parts[2])
@@ -460,9 +466,15 @@ class MikrotikTracerouteTable(MikrotikBase):
                             best_rtt_str = parts[5]
                             worst_rtt_str = parts[6] if len(parts) > 6 else parts[5]
                         else:
-                            # Timeout line
-                            loss_pct = int(parts[0].rstrip("%"))
-                            sent_count = int(parts[1])
+                            # Timeout line or truncated address
+                            if parts[0].endswith("%"):
+                                # Normal timeout line
+                                loss_pct = int(parts[0].rstrip("%"))
+                                sent_count = int(parts[1])
+                            else:
+                                # Truncated address - extract stats from remaining parts
+                                loss_pct = int(parts[1].rstrip("%"))
+                                sent_count = int(parts[2])
                             last_rtt_str = "timeout"
                             avg_rtt_str = "timeout"
                             best_rtt_str = "timeout"
@@ -518,7 +530,19 @@ class MikrotikTracerouteTable(MikrotikBase):
             hop_order = []
             
             for hop in hops:
-                ip_key = hop.ip_address or f"timeout_{hop.hop_number}"
+                # Use IP address if available, otherwise use hop position for truncated addresses
+                if hop.ip_address:
+                    ip_key = hop.ip_address
+                elif hop.ip_address is None:
+                    ip_key = f"truncated_hop_{hop.hop_number}"
+                else:
+                    ip_key = f"timeout_{hop.hop_number}"
+                
+                # For truncated addresses, use a unique key based on hop position
+                if ip_key.startswith("timeout_") and hop.ip_address is None:
+                    # Check if this is a timeout vs a truncated address by looking at loss
+                    if hop.loss_pct == 0:  # Truncated addresses usually have 0% loss
+                        ip_key = f"truncated_{len(hop_order)}"  # Use position-based key
                 
                 # Track first appearance order
                 if ip_key not in hop_order:
@@ -649,6 +673,12 @@ class MikrotikTracerouteTable(MikrotikBase):
                             continue
 
                         ip_address = parts[0] if not parts[0].endswith("%") else None
+                        
+                        # Handle truncated IPv6 addresses that end with "..."
+                        if ip_address and ip_address.endswith("..."):
+                            _log.debug(f"Line {i}: Truncated IPv6 address detected: {ip_address}, setting to None")
+                            ip_address = None
+                            
                         if ip_address:
                             loss_pct = int(parts[1].rstrip("%"))
                             sent_count = int(parts[2])
@@ -736,7 +766,7 @@ class MikrotikTracerouteTable(MikrotikBase):
             converted_hops.append(
                 TracerouteHop(
                     hop_number=hop.hop_number,
-                    ip_address=hop.ip_address,
+                    ip_address=hop.ip_address,  # Validator will handle truncated IPs automatically
                     hostname=hop.hostname,
                     rtt1=hop.best_rtt,
                     rtt2=hop.avg_rtt,
@@ -749,6 +779,7 @@ class MikrotikTracerouteTable(MikrotikBase):
                     best_rtt=hop.best_rtt,
                     worst_rtt=hop.worst_rtt,
                     # BGP enrichment fields will be populated by enrichment plugin
+                    # For truncated IPs, these will remain None/empty
                     asn=None,
                     org=None,
                     prefix=None,
@@ -764,6 +795,7 @@ class MikrotikTracerouteTable(MikrotikBase):
             hops=converted_hops,
             max_hops=self.max_hops,
             packet_size=self.packet_size,
+            raw_output=None,  # Will be set by the plugin
         )
 
 
