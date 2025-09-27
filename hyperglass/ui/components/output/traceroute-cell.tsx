@@ -11,9 +11,19 @@ export const TracerouteCell = (props: TracerouteCellProps): JSX.Element => {
   const { data, rawData } = props;
   const cellId = data.column.id as keyof TracerouteHop;
   
+  // For IP address field, prefer display_ip if available (for truncated IPv6)
+  const getIPValue = () => {
+    if (cellId === 'ip_address') {
+      const hop = data.row.original as TracerouteHop;
+      return hop.display_ip || hop.ip_address || data.value;
+    }
+    return data.value;
+  };
+  
   const component = {
     hop_number: <MonoField v={data.value} />,
-    ip_address: <MonoField v={data.value} />,
+    ip_address: <MonoField v={getIPValue()} />,
+    display_ip: <MonoField v={data.value} />, // For truncated IPv6 display
     hostname: <HostnameField hostname={data.value} />,
     loss_pct: <LossField loss={data.value} />,
     sent_count: <MonoField v={data.value} />,

@@ -16,7 +16,7 @@ import { useElements } from './use-elements';
 import type { NodeProps as ReactFlowNodeProps } from 'reactflow';
 
 interface ChartProps {
-  data: StructuredResponse;
+  data: AllStructuredResponses;
 }
 
 interface NodeProps<D extends unknown> extends Omit<ReactFlowNodeProps, 'data'> {

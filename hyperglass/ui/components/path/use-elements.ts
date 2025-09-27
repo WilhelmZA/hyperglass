@@ -15,10 +15,24 @@ type FlowElement<T> = Node<T> | Edge<T>;
 const NODE_WIDTH = 128;
 const NODE_HEIGHT = 48;
 
-export function useElements(base: BasePath, data: StructuredResponse): FlowElement<NodeData>[] {
+export function useElements(base: BasePath, data: AllStructuredResponses): FlowElement<NodeData>[] {
   return useMemo(() => {
     return [...buildElements(base, data)];
   }, [base, data]);
+}
+
+/**
+ * Check if data contains BGP routes
+ */
+function isBGPData(data: AllStructuredResponses): data is BGPStructuredOutput {
+  return 'routes' in data && Array.isArray(data.routes);
+}
+
+/**
+ * Check if data contains traceroute hops
+ */
+function isTracerouteData(data: AllStructuredResponses): data is TracerouteStructuredOutput {
+  return 'hops' in data && Array.isArray(data.hops);
 }
 
 /**
@@ -27,11 +41,34 @@ export function useElements(base: BasePath, data: StructuredResponse): FlowEleme
  */
 function* buildElements(
   base: BasePath,
-  data: StructuredResponse,
+  data: AllStructuredResponses,
 ): Generator<FlowElement<NodeData>> {
-  const { routes } = data;
-  // Eliminate empty AS paths & deduplicate non-empty AS paths. Length should be same as count minus empty paths.
-  const asPaths = routes.filter(r => r.as_path.length !== 0).map(r => [...new Set(r.as_path)]);
+  let asPaths: string[][] = [];
+
+  if (isBGPData(data)) {
+    // Handle BGP routes with AS paths
+    const { routes } = data;
+    asPaths = routes.filter(r => r.as_path.length !== 0).map(r => [...new Set(r.as_path.map(asn => String(asn)))]);
+  } else if (isTracerouteData(data)) {
+    // Handle traceroute hops - build AS path from hop ASNs
+    const hopAsns: string[] = [];
+    let currentAsn = '';
+    
+    for (const hop of data.hops) {
+      if (hop.asn && hop.asn !== 'None' && hop.asn !== currentAsn) {
+        currentAsn = hop.asn;
+        hopAsns.push(hop.asn);
+      }
+    }
+    
+    if (hopAsns.length > 0) {
+      asPaths = [hopAsns];
+    }
+  }
+
+  if (asPaths.length === 0) {
+    return;
+  }
 
   const totalPaths = asPaths.length - 1;
 

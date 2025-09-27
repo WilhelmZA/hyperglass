@@ -10,16 +10,16 @@ type TracerouteTableProps = Swap<FlexProps, 'children', TracerouteResult>;
 // Column definition for the traceroute table
 // Format: "Hop | IP | HostName (reverse dns) | ASN | Loss | Sent | Last | AVG | BEST | Worst"
 const columns = [
-  { key: 'hop_number', header: 'Hop', align: 'center' as const },
-  { key: 'ip_address', header: 'IP Address', align: 'left' as const },
-  { key: 'hostname', header: 'Hostname', align: 'left' as const },
-  { key: 'asn', header: 'ASN', align: 'left' as const },
-  { key: 'loss_pct', header: 'Loss', align: 'center' as const },
-  { key: 'sent_count', header: 'Sent', align: 'center' as const },
-  { key: 'last_rtt', header: 'Last', align: 'right' as const },
-  { key: 'avg_rtt', header: 'AVG', align: 'right' as const },
-  { key: 'best_rtt', header: 'Best', align: 'right' as const },
-  { key: 'worst_rtt', header: 'Worst', align: 'right' as const },
+  { key: 'hop_number', header: 'Hop', align: 'center' as const, width: '60px' },
+  { key: 'ip_address', header: 'IP Address', align: 'left' as const, width: '140px' },
+  { key: 'hostname', header: 'Hostname', align: 'left' as const, width: '200px' },
+  { key: 'asn', header: 'ASN', align: 'center' as const, width: '80px' },
+  { key: 'loss_pct', header: 'Loss', align: 'center' as const, width: '60px' },
+  { key: 'sent_count', header: 'Sent', align: 'center' as const, width: '60px' },
+  { key: 'last_rtt', header: 'Last', align: 'right' as const, width: '70px' },
+  { key: 'avg_rtt', header: 'AVG', align: 'right' as const, width: '70px' },
+  { key: 'best_rtt', header: 'Best', align: 'right' as const, width: '70px' },
+  { key: 'worst_rtt', header: 'Worst', align: 'right' as const, width: '70px' },
 ] as const;
 
 export const TracerouteTable = (props: TracerouteTableProps): JSX.Element => {

@@ -50,24 +50,25 @@ export const ASNField = (props: ASNFieldProps): JSX.Element => {
   if (!asn || asn === 'None' || asn === 'null') {
     return (
       <Text as="span" fontSize="sm" color="gray.500" {...rest}>
-        Unknown
+        —
       </Text>
     );
   }
   
-  const displayValue = org && org !== 'None' ? `AS${asn} (${org})` : `AS${asn}`;
+  // Display only ASN number, show org name on hover
+  const asnDisplay = `AS${asn}`;
+  const tooltipLabel = org && org !== 'None' ? `${asnDisplay} - ${org}` : asnDisplay;
   
   return (
-    <Tooltip hasArrow label={displayValue} placement="top">
+    <Tooltip hasArrow label={tooltipLabel} placement="top">
       <Text 
         as="span" 
         fontSize="sm" 
         fontFamily="mono" 
-        noOfLines={1}
-        maxW="200px"
+        cursor="help"
         {...rest}
       >
-        {displayValue}
+        {asnDisplay}
       </Text>
     </Tooltip>
   );
@@ -91,7 +92,7 @@ export const HostnameField = (props: HostnameFieldProps): JSX.Element => {
         fontSize="sm" 
         fontFamily="mono"
         noOfLines={1} 
-        maxW="150px"
+        maxW="180px"
         {...rest}
       >
         {hostname}

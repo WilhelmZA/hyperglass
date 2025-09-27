@@ -19,6 +19,7 @@ class TracerouteHop(HyperglassModel):
 
     hop_number: int
     ip_address: t.Optional[str] = None
+    display_ip: t.Optional[str] = None  # For truncated IPs that can't be validated
     hostname: t.Optional[str] = None
     rtt1: t.Optional[float] = None
     rtt2: t.Optional[float] = None
@@ -46,12 +47,17 @@ class TracerouteHop(HyperglassModel):
         if value is not None:
             # Handle truncated addresses (MikroTik sometimes truncates long IPv6 addresses with ...)
             if value.endswith('...') or value.endswith('..'):
-                return None
+                return None  # Invalid for BGP enrichment but kept in display_ip
             try:
                 ip_address(value)
             except AddressValueError:
                 return None
         return value
+
+    @property
+    def ip_display(self) -> t.Optional[str]:
+        """Get the IP address for display purposes (may be truncated)."""
+        return self.display_ip or self.ip_address
 
     @property
     def avg_rtt(self) -> t.Optional[float]:

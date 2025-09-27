@@ -153,7 +153,10 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
 
   let copyValue = data?.output as string;
 
-  const formatData = useTableToString(form.queryTarget, data, [data?.format]);
+  // Only create formatData for BGP outputs, not traceroute
+  const formatData = isBGPStructuredOutput(data) 
+    ? useTableToString(form.queryTarget, data, [data?.format])
+    : () => '';
 
   if (data?.format === 'application/json') {
     copyValue = formatData();

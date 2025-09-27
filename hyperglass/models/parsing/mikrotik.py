@@ -763,10 +763,20 @@ class MikrotikTracerouteTable(MikrotikBase):
 
         converted_hops = []
         for hop in self.hops:
+            # Handle truncated IP addresses
+            ip_address = hop.ip_address
+            display_ip = None
+            
+            if hop.ip_address and hop.ip_address.endswith('...'):
+                # For truncated IPs, store for display but set ip_address to None for validation
+                display_ip = hop.ip_address
+                ip_address = None
+            
             converted_hops.append(
                 TracerouteHop(
                     hop_number=hop.hop_number,
-                    ip_address=hop.ip_address,  # Validator will handle truncated IPs automatically
+                    ip_address=ip_address,  # None for truncated IPs
+                    display_ip=display_ip,  # Truncated IP for display
                     hostname=hop.hostname,
                     rtt1=hop.best_rtt,
                     rtt2=hop.avg_rtt,
