@@ -35,11 +35,16 @@ except ImportError:
     log.warning("aiofiles not available - IP enrichment will use slower sync I/O")
     aiofiles = None
 
-# Cache keys
-CACHE_KEY_CIDR_DATA = "hyperglass.ip_enrichment.cidr_data"
-CACHE_KEY_ASN_DATA = "hyperglass.ip_enrichment.asn_data"
-CACHE_KEY_IXP_DATA = "hyperglass.ip_enrichment.ixp_data"
-CACHE_KEY_LAST_UPDATE = "hyperglass.ip_enrichment.last_update"
+# File paths for persistent storage
+IP_ENRICHMENT_DATA_DIR = Path("/etc/hyperglass/ip_enrichment")
+CIDR_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "cidr_data.json"
+ASN_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "asn_data.json"
+IXP_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "ixp_data.json"
+LAST_UPDATE_FILE = IP_ENRICHMENT_DATA_DIR / "last_update.txt"
+
+# Raw data files for debugging/inspection
+RAW_TABLE_FILE = IP_ENRICHMENT_DATA_DIR / "table.jsonl"
+RAW_ASNS_FILE = IP_ENRICHMENT_DATA_DIR / "asns.csv"
 
 # Data URLs
 BGP_TOOLS_TABLE_URL = "https://bgp.tools/table.jsonl"
@@ -61,6 +66,61 @@ def get_cache_duration() -> int:
     except Exception:
         # Fallback if config not available
         return DEFAULT_CACHE_DURATION
+
+
+def should_refresh_data(force_refresh: bool = False) -> tuple[bool, str]:
+    """Check if data should be refreshed and return reason."""
+    if force_refresh:
+        return True, "Force refresh requested"
+    
+    if not LAST_UPDATE_FILE.exists():
+        return True, "No timestamp file found"
+    
+    # Check required files exist
+    required_files = [CIDR_DATA_FILE, ASN_DATA_FILE, IXP_DATA_FILE]
+    missing_files = [f.name for f in required_files if not f.exists()]
+    if missing_files:
+        return True, f"Missing data files: {', '.join(missing_files)}"
+    
+    # Check file age
+    try:
+        with open(LAST_UPDATE_FILE, "r") as f:
+            cached_time = datetime.fromisoformat(f.read().strip())
+        
+        age_seconds = (datetime.now() - cached_time).total_seconds()
+        cache_duration = get_cache_duration()
+        
+        if age_seconds >= cache_duration:
+            age_hours = age_seconds / 3600
+            return True, f"Data expired (age: {age_hours:.1f}h, max: {cache_duration/3600:.1f}h)"
+    
+    except Exception as e:
+        return True, f"Failed to read timestamp: {e}"
+    
+    return False, "Data is fresh"
+
+
+def validate_data_files() -> tuple[bool, str]:
+    """Validate that data files contain reasonable data."""
+    try:
+        # Check CIDR data
+        if CIDR_DATA_FILE.exists():
+            with open(CIDR_DATA_FILE, "r") as f:
+                cidr_data = json.load(f)
+            if not isinstance(cidr_data, list) or len(cidr_data) < 1000:
+                return False, f"CIDR data invalid or too small: {len(cidr_data) if isinstance(cidr_data, list) else 'not a list'}"
+        
+        # Check ASN data
+        if ASN_DATA_FILE.exists():
+            with open(ASN_DATA_FILE, "r") as f:
+                asn_data = json.load(f)
+            if not isinstance(asn_data, dict) or len(asn_data) < 100:
+                return False, f"ASN data invalid or too small: {len(asn_data) if isinstance(asn_data, dict) else 'not a dict'}"
+        
+        return True, "Data files are valid"
+    
+    except Exception as e:
+        return False, f"Data validation failed: {e}"
 
 
 # Simple result classes
@@ -99,48 +159,56 @@ class IPEnrichmentService:
         )  # (network, prefixlen, ixp_name)
         self.last_update: t.Optional[datetime] = None
 
-    async def ensure_data_loaded(self) -> bool:
-        """Ensure data is loaded and fresh."""
-        state = use_state("cache")
+    async def ensure_data_loaded(self, force_refresh: bool = False) -> bool:
+        """Ensure data is loaded and fresh from persistent files."""
+        # Create data directory if it doesn't exist
+        IP_ENRICHMENT_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Check if we have cached data that's still fresh
-        cached_time = state.get(CACHE_KEY_LAST_UPDATE)
-        cache_duration = get_cache_duration()
+        # Check if refresh is needed
+        should_refresh, reason = should_refresh_data(force_refresh)
+        
+        if not should_refresh:
+            # Validate existing data files
+            is_valid, validation_msg = validate_data_files()
+            if not is_valid:
+                should_refresh = True
+                reason = f"Data validation failed: {validation_msg}"
+        
+        if not should_refresh:
+            # Load from existing files
+            try:
+                with open(CIDR_DATA_FILE, "r") as f:
+                    cidr_data = json.load(f)
+                with open(ASN_DATA_FILE, "r") as f:
+                    asn_data = json.load(f)
+                with open(IXP_DATA_FILE, "r") as f:
+                    ixp_data = json.load(f)
+                with open(LAST_UPDATE_FILE, "r") as f:
+                    cached_time = datetime.fromisoformat(f.read().strip())
 
-        if cached_time:
-            age_seconds = (datetime.now() - cached_time).total_seconds()
-            age_hours = age_seconds / 3600
-            log.debug(
-                f"Found cached IP enrichment data from {cached_time}, age: {age_hours:.1f} hours"
-            )
-
-            if age_seconds < cache_duration:
-                # Try to load from cache
-                cidr_data = state.get(CACHE_KEY_CIDR_DATA)
-                asn_data = state.get(CACHE_KEY_ASN_DATA)
-                ixp_data = state.get(CACHE_KEY_IXP_DATA)
-
-                if cidr_data and asn_data and ixp_data:
-                    log.info(f"Loading IP enrichment data from cache (age: {age_hours:.1f}h)")
-                    log.debug(
-                        f"Cache contains: {len(cidr_data)} CIDR entries, "
-                        f"{len(asn_data)} ASN entries, {len(ixp_data)} IXP networks"
-                    )
-                    self.cidr_networks = cidr_data
-                    self.asn_info = asn_data
-                    self.ixp_networks = ixp_data
-                    self.last_update = cached_time
-                    return True
-                else:
-                    log.warning("Cache timestamp exists but data missing - will re-download")
-            else:
-                log.info(
-                    f"Cache expired (age: {age_hours:.1f}h, max: {cache_duration/3600:.1f}h) - will re-download"
+                age_hours = (datetime.now() - cached_time).total_seconds() / 3600
+                log.info(f"Loading IP enrichment data from files (age: {age_hours:.1f}h)")
+                log.debug(
+                    f"Files contain: {len(cidr_data)} CIDR entries, "
+                    f"{len(asn_data)} ASN entries, {len(ixp_data)} IXP networks"
                 )
-        else:
-            log.info("No cached IP enrichment data found - will download fresh data")
+                
+                # Convert string IP addresses back to IP objects
+                self.cidr_networks = [(ip_address(net), prefixlen, asn, cidr) for net, prefixlen, asn, cidr in cidr_data]
+                # ASN data has integer keys that become strings in JSON
+                self.asn_info = {int(k): v for k, v in asn_data.items()}
+                self.ixp_networks = [(ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data]
+                self.last_update = cached_time
+                return True
+                
+            except Exception as e:
+                log.warning(f"Failed to load existing data files: {e} - will refresh")
+                should_refresh = True
+                reason = f"Failed to load files: {e}"
 
         # Download fresh data
+        log.info(f"Refreshing IP enrichment data: {reason}")
+        
         if not httpx:
             log.error("httpx not available - cannot download IP enrichment data")
             return False
@@ -157,13 +225,23 @@ class IPEnrichmentService:
 
             download_duration = (datetime.now() - download_start).total_seconds()
 
-            # Cache the data
-            log.debug("💾 Caching IP enrichment data to Redis...")
+            # Save the data to persistent files
+            log.debug("💾 Saving IP enrichment data to persistent files...")
             cache_start = datetime.now()
-            state.set(CACHE_KEY_CIDR_DATA, self.cidr_networks)
-            state.set(CACHE_KEY_ASN_DATA, self.asn_info)
-            state.set(CACHE_KEY_IXP_DATA, self.ixp_networks)
-            state.set(CACHE_KEY_LAST_UPDATE, datetime.now())
+            
+            # Convert IP addresses to strings for JSON serialization
+            cidr_file_data = [(str(net), prefixlen, asn, cidr) for net, prefixlen, asn, cidr in self.cidr_networks]
+            ixp_file_data = [(str(net), prefixlen, name) for net, prefixlen, name in self.ixp_networks]
+            
+            with open(CIDR_DATA_FILE, "w") as f:
+                json.dump(cidr_file_data, f, separators=(',', ':'))  # Compact JSON
+            with open(ASN_DATA_FILE, "w") as f:
+                json.dump(self.asn_info, f, separators=(',', ':'))
+            with open(IXP_DATA_FILE, "w") as f:
+                json.dump(ixp_file_data, f, separators=(',', ':'))
+            with open(LAST_UPDATE_FILE, "w") as f:
+                f.write(datetime.now().isoformat())
+                
             cache_duration_actual = (datetime.now() - cache_start).total_seconds()
 
             self.last_update = datetime.now()
@@ -173,7 +251,7 @@ class IPEnrichmentService:
                 f"{len(self.asn_info)} ASN entries, {len(self.ixp_networks)} IXP networks"
             )
             log.debug(
-                f"⏱️  Download time: {download_duration:.1f}s, Cache time: {cache_duration_actual:.1f}s"
+                f"⏱️  Download time: {download_duration:.1f}s, Save time: {cache_duration_actual:.1f}s"
             )
             return True
 
@@ -181,13 +259,17 @@ class IPEnrichmentService:
             log.error(f"Failed to download IP enrichment data: {e}")
             return False
 
-    async def _download_bgp_data(self, client: "httpx.AsyncClient") -> None:
+    async def _download_bgp_data(self, client) -> None:
         """Download BGP.tools data."""
         log.info("📥 Downloading BGP.tools CIDR table from bgp.tools...")
         download_start = datetime.now()
         response = await client.get(BGP_TOOLS_TABLE_URL)
         response.raise_for_status()
         download_time = (datetime.now() - download_start).total_seconds()
+
+        # Save raw file for debugging
+        with open(RAW_TABLE_FILE, "w") as f:
+            f.write(response.text)
 
         # Process JSONL data
         process_start = datetime.now()
@@ -208,6 +290,7 @@ class IPEnrichmentService:
                         )
                         cidr_count += 1
                 except Exception as e:
+                    log.debug(f"Failed to parse CIDR line: {line[:100]} - {e}")
                     continue
 
         process_time = (datetime.now() - process_start).total_seconds()
@@ -229,92 +312,137 @@ class IPEnrichmentService:
         response.raise_for_status()
         download_time = (datetime.now() - download_start).total_seconds()
 
+        # Save raw file for debugging
+        with open(RAW_ASNS_FILE, "w") as f:
+            f.write(response.text)
+
         # Process CSV data
         process_start = datetime.now()
-        reader = csv.DictReader(response.text.strip().split("\n"))
+        lines = response.text.strip().split("\n")
+        if not lines:
+            log.error("Empty ASN data received")
+            return
+        
+        # Debug: log the first few lines to see the format
+        log.debug(f"ASN CSV header: {lines[0] if lines else 'NO HEADER'}")
+        if len(lines) > 1:
+            log.debug(f"ASN CSV first data line: {lines[1]}")
+        
+        reader = csv.DictReader(lines)
         asn_count = 0
         total_asns = 0
+        failed_count = 0
+        
         for row in reader:
             total_asns += 1
             try:
-                asn = int(row.get("asn", 0))
+                asn_str = row.get("asn", "").strip()
                 name = row.get("name", "").strip()
                 country = row.get("cc", "").strip()  # Country code from CC column
+                
+                if not asn_str:
+                    failed_count += 1
+                    continue
+                    
+                # Handle ASN formats like "AS12345" or just "12345"
+                if asn_str.upper().startswith("AS"):
+                    asn = int(asn_str[2:])
+                else:
+                    asn = int(asn_str)
+                    
                 if asn > 0 and name:
                     self.asn_info[asn] = {"name": name, "country": country}
                     asn_count += 1
-            except Exception:
+                else:
+                    failed_count += 1
+                    
+            except Exception as e:
+                failed_count += 1
+                if failed_count < 5:  # Only log first few failures
+                    log.debug(f"Failed to parse ASN row {total_asns}: {row} - {e}")
                 continue
 
         process_time = (datetime.now() - process_start).total_seconds()
         log.info(
             f"✅ Downloaded {asn_count}/{total_asns} ASN entries with country codes "
-            f"(download: {download_time:.1f}s, process: {process_time:.1f}s)"
+            f"(download: {download_time:.1f}s, process: {process_time:.1f}s, failed: {failed_count})"
         )
 
-    async def _download_ixp_data(self, client: "httpx.AsyncClient") -> None:
-        """Download PeeringDB IXP data."""
+    async def _download_ixp_data(self, client) -> None:
+        """Download PeeringDB IXP data with rate limiting."""
         log.info("📥 Downloading PeeringDB IXP data from peeringdb.com...")
 
-        # Get IXLANs (exchange point LANs)
-        download_start = datetime.now()
-        response = await client.get(PEERINGDB_IXLAN_URL)
-        response.raise_for_status()
-        ixlans = response.json()["data"]
-        ixlan_time = (datetime.now() - download_start).total_seconds()
+        try:
+            # Get IXLANs (exchange point LANs) with retry
+            download_start = datetime.now()
+            response = await client.get(PEERINGDB_IXLAN_URL)
+            response.raise_for_status()
+            ixlans = response.json()["data"]
+            ixlan_time = (datetime.now() - download_start).total_seconds()
 
-        # Create mapping of ixlan_id -> ixp_name
-        ixlan_to_name = {}
-        for ixlan in ixlans:
-            ixlan_id = ixlan.get("id")
-            ixp_name = ixlan.get("name", "")
-            if ixlan_id and ixp_name:
-                ixlan_to_name[ixlan_id] = ixp_name
+            # Create mapping of ixlan_id -> ixp_name
+            ixlan_to_name = {}
+            for ixlan in ixlans:
+                ixlan_id = ixlan.get("id")
+                ixp_name = ixlan.get("name", "")
+                if ixlan_id and ixp_name:
+                    ixlan_to_name[ixlan_id] = ixp_name
 
-        log.debug(f"Found {len(ixlan_to_name)} IXP LANs in {ixlan_time:.1f}s")
+            log.debug(f"Found {len(ixlan_to_name)} IXP LANs in {ixlan_time:.1f}s")
 
-        # Get IXP prefixes
-        download_start = datetime.now()
-        response = await client.get(PEERINGDB_IXPFX_URL)
-        response.raise_for_status()
-        ixpfxs = response.json()["data"]
-        prefix_time = (datetime.now() - download_start).total_seconds()
+            # Add delay to avoid rate limiting
+            await asyncio.sleep(1)
 
-        # Process IXP prefixes
-        process_start = datetime.now()
-        ixp_count = 0
-        total_prefixes = len(ixpfxs)
-        for ixpfx in ixpfxs:
-            try:
-                prefix = ixpfx.get("prefix")
-                ixlan_id = ixpfx.get("ixlan_id")
+            # Get IXP prefixes
+            download_start = datetime.now()
+            response = await client.get(PEERINGDB_IXPFX_URL)
+            response.raise_for_status()
+            ixpfxs = response.json()["data"]
+            prefix_time = (datetime.now() - download_start).total_seconds()
 
-                if prefix and ixlan_id in ixlan_to_name:
-                    network = ip_network(prefix, strict=False)
-                    ixp_name = ixlan_to_name[ixlan_id]
-                    self.ixp_networks.append((network.network_address, network.prefixlen, ixp_name))
-                    ixp_count += 1
-            except Exception:
-                continue
+            # Process IXP prefixes
+            process_start = datetime.now()
+            ixp_count = 0
+            total_prefixes = len(ixpfxs)
+            for ixpfx in ixpfxs:
+                try:
+                    prefix = ixpfx.get("prefix")
+                    ixlan_id = ixpfx.get("ixlan_id")
 
-        process_time = (datetime.now() - process_start).total_seconds()
+                    if prefix and ixlan_id in ixlan_to_name:
+                        network = ip_network(prefix, strict=False)
+                        ixp_name = ixlan_to_name[ixlan_id]
+                        self.ixp_networks.append((network.network_address, network.prefixlen, ixp_name))
+                        ixp_count += 1
+                except Exception:
+                    continue
 
-        # Sort by prefix length (descending) for longest-match lookup
-        sort_start = datetime.now()
-        self.ixp_networks.sort(key=lambda x: x[1], reverse=True)
-        sort_time = (datetime.now() - sort_start).total_seconds()
+            process_time = (datetime.now() - process_start).total_seconds()
 
-        log.info(
-            f"✅ Downloaded {ixp_count}/{total_prefixes} IXP networks "
-            f"(IXLAN: {ixlan_time:.1f}s, prefixes: {prefix_time:.1f}s, "
-            f"process: {process_time:.1f}s, sort: {sort_time:.1f}s)"
-        )
+            # Sort by prefix length (descending) for longest-match lookup
+            sort_start = datetime.now()
+            self.ixp_networks.sort(key=lambda x: x[1], reverse=True)
+            sort_time = (datetime.now() - sort_start).total_seconds()
+
+            log.info(
+                f"✅ Downloaded {ixp_count}/{total_prefixes} IXP networks "
+                f"(IXLAN: {ixlan_time:.1f}s, prefixes: {prefix_time:.1f}s, "
+                f"process: {process_time:.1f}s, sort: {sort_time:.1f}s)"
+            )
+            
+        except Exception as e:
+            log.warning(f"Failed to download IXP data (rate limiting?): {e}")
+            log.info("Continuing without IXP data - ASN lookups will still work")
+            # Don't fail the entire process if IXP data fails
+            self.ixp_networks = []
 
     async def lookup_ip(self, ip_str: str) -> IPInfo:
         """Lookup an IP address and return ASN or IXP information."""
         if not await self.ensure_data_loaded():
             log.warning("IP enrichment data not available")
             return IPInfo(ip_str)
+
+        log.debug(f"Looking up IP {ip_str} - have {len(self.cidr_networks)} CIDR entries, {len(self.asn_info)} ASN entries")
 
         try:
             target_ip = ip_address(ip_str)
@@ -324,6 +452,7 @@ class IPEnrichmentService:
 
         # Check if it's a private/special address
         if not (target_ip.is_global or target_ip.is_unspecified):
+            log.debug(f"IP {ip_str} is not global/unspecified - skipping lookup")
             return IPInfo(ip_str)
 
         # First check IXP networks (more specific usually)
@@ -337,6 +466,23 @@ class IPEnrichmentService:
                 continue
 
         # Then check CIDR networks for ASN
+        # For debugging 1.1.1.1, let's check a few entries around it
+        if ip_str == "1.1.1.1":
+            log.debug(f"Debugging 1.1.1.1 lookup - checking first 10 CIDR entries:")
+            for i, (net_addr, prefixlen, asn, cidr_string) in enumerate(self.cidr_networks[:10]):
+                try:
+                    network = ip_network(f"{net_addr}/{prefixlen}", strict=False)
+                    log.debug(f"  Entry {i}: {cidr_string} (AS{asn}) - contains 1.1.1.1: {target_ip in network}")
+                except Exception as e:
+                    log.debug(f"  Entry {i}: Failed to create network from {net_addr}/{prefixlen}: {e}")
+            
+            # Also check if we have any 1.1.1.x entries
+            matching_entries = []
+            for net_addr, prefixlen, asn, cidr_string in self.cidr_networks:
+                if "1.1.1" in str(net_addr) or "1.1.1" in cidr_string:
+                    matching_entries.append((net_addr, prefixlen, asn, cidr_string))
+            log.debug(f"Found {len(matching_entries)} entries containing '1.1.1': {matching_entries[:5]}")
+        
         for net_addr, prefixlen, asn, cidr_string in self.cidr_networks:
             try:
                 network = ip_network(f"{net_addr}/{prefixlen}", strict=False)
@@ -350,7 +496,9 @@ class IPEnrichmentService:
                     return IPInfo(
                         ip_str, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country
                     )
-            except Exception:
+            except Exception as e:
+                if ip_str == "1.1.1.1":  # Only log for our test case
+                    log.debug(f"Failed to check network {net_addr}/{prefixlen}: {e}")
                 continue
 
         log.debug(f"No enrichment data found for {ip_str}")
@@ -391,6 +539,45 @@ async def lookup_asn_name(asn: int) -> str:
 async def lookup_asn_country(asn: int) -> str:
     """Get the country code for an ASN number."""
     return await _service.lookup_asn_country(asn)
+
+
+async def refresh_ip_enrichment_data(force: bool = False) -> bool:
+    """Manually refresh IP enrichment data."""
+    log.info(f"Manual refresh requested (force={force})")
+    return await _service.ensure_data_loaded(force_refresh=force)
+
+
+def get_data_status() -> dict:
+    """Get status information about IP enrichment data."""
+    status = {
+        "data_directory": str(IP_ENRICHMENT_DATA_DIR),
+        "files_exist": {
+            "cidr_data": CIDR_DATA_FILE.exists(),
+            "asn_data": ASN_DATA_FILE.exists(),
+            "ixp_data": IXP_DATA_FILE.exists(),
+            "last_update": LAST_UPDATE_FILE.exists(),
+            "raw_table": RAW_TABLE_FILE.exists(),
+            "raw_asns": RAW_ASNS_FILE.exists(),
+        },
+        "last_update": None,
+        "age_hours": None,
+        "data_counts": {
+            "cidr_entries": len(_service.cidr_networks),
+            "asn_entries": len(_service.asn_info),
+            "ixp_networks": len(_service.ixp_networks),
+        }
+    }
+    
+    if LAST_UPDATE_FILE.exists():
+        try:
+            with open(LAST_UPDATE_FILE, "r") as f:
+                last_update = datetime.fromisoformat(f.read().strip())
+                status["last_update"] = last_update.isoformat()
+                status["age_hours"] = (datetime.now() - last_update).total_seconds() / 3600
+        except Exception:
+            pass
+    
+    return status
 
 
 # Compatibility functions for existing code

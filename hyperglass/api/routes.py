@@ -167,3 +167,27 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
             timestamp=timestamp,
         ),
     )
+
+
+@get("/api/admin/ip-enrichment/status")
+async def ip_enrichment_status() -> dict:
+    """Get IP enrichment data status."""
+    try:
+        from hyperglass.external.ip_enrichment import get_data_status
+        return get_data_status()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@post("/api/admin/ip-enrichment/refresh")
+async def ip_enrichment_refresh(force: bool = False) -> dict:
+    """Manually refresh IP enrichment data."""
+    try:
+        from hyperglass.external.ip_enrichment import refresh_ip_enrichment_data
+        success = await refresh_ip_enrichment_data(force=force)
+        return {
+            "success": success,
+            "message": "IP enrichment data refresh completed" if success else "IP enrichment data refresh failed"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
