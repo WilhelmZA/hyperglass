@@ -7,9 +7,11 @@ from dataclasses import dataclass
 
 # Simulate just the parsing logic without all the hyperglass imports
 
+
 @dataclass
 class MikrotikTracerouteHop:
     """Individual MikroTik traceroute hop."""
+
     hop_number: int
     ip_address: t.Optional[str] = None
     hostname: t.Optional[str] = None
@@ -29,6 +31,7 @@ class MikrotikTracerouteHop:
 @dataclass
 class MikrotikTracerouteTable:
     """MikroTik Traceroute Table."""
+
     target: str
     source: str
     hops: t.List[MikrotikTracerouteHop]
@@ -38,7 +41,7 @@ class MikrotikTracerouteTable:
     @classmethod
     def parse_text(cls, text: str, target: str, source: str) -> "MikrotikTracerouteTable":
         """Parse MikroTik traceroute output with detailed debugging."""
-        
+
         # DEBUG: Log the raw input
         print(f"=== RAW MIKROTIK TRACEROUTE INPUT ===")
         print(f"Target: {target}, Source: {source}")
@@ -57,7 +60,10 @@ class MikrotikTracerouteTable:
         table_starts = []
         for i, line in enumerate(lines):
             if ("Columns:" in line and "ADDRESS" in line) or (
-                "ADDRESS" in line and "LOSS" in line and "SENT" in line and not line.strip().startswith(("1", "2", "3", "4", "5", "6", "7", "8", "9"))
+                "ADDRESS" in line
+                and "LOSS" in line
+                and "SENT" in line
+                and not line.strip().startswith(("1", "2", "3", "4", "5", "6", "7", "8", "9"))
             ):
                 table_starts.append(i)
                 print(f"Found table start at line {i}: {repr(line)}")
@@ -68,14 +74,16 @@ class MikrotikTracerouteTable:
 
         # Take the LAST table (newest/final results)
         last_table_start = table_starts[-1]
-        print(f"Found {len(table_starts)} tables, using the last one starting at line {last_table_start}")
+        print(
+            f"Found {len(table_starts)} tables, using the last one starting at line {last_table_start}"
+        )
 
         # Determine format by checking the header line
         header_line = lines[last_table_start].strip()
         is_columnar_format = "Columns:" in header_line
         print(f"Header line: {repr(header_line)}")
         print(f"Is columnar format: {is_columnar_format}")
-        
+
         # Parse only the last table
         hops = []
         in_data_section = False
@@ -91,7 +99,11 @@ class MikrotikTracerouteTable:
                 continue
 
             # Skip the column header lines
-            if ("Columns:" in line) or ("ADDRESS" in line and "LOSS" in line and "SENT" in line) or line.startswith("#"):
+            if (
+                ("Columns:" in line)
+                or ("ADDRESS" in line and "LOSS" in line and "SENT" in line)
+                or line.startswith("#")
+            ):
                 in_data_section = True
                 print(f"Line {i}: HEADER - entering data section: {repr(line)}")
                 continue
@@ -143,14 +155,16 @@ class MikrotikTracerouteTable:
                         if len(parts) < 6:
                             print(f"Line {i}: Too few parts ({len(parts)}), skipping")
                             continue
-                            
+
                         ip_address = parts[0] if not parts[0].endswith("%") else None
-                        
+
                         # Handle truncated IPv6 addresses that end with "..."
                         if ip_address and ip_address.endswith("..."):
-                            print(f"Line {i}: Truncated IPv6 address detected: {ip_address}, setting to None")
+                            print(
+                                f"Line {i}: Truncated IPv6 address detected: {ip_address}, setting to None"
+                            )
                             ip_address = None
-                            
+
                         if ip_address:
                             loss_pct = int(parts[1].rstrip("%"))
                             sent_count = int(parts[2])
@@ -197,26 +211,28 @@ class MikrotikTracerouteTable:
                         best_rtt=parse_rtt(best_rtt_str),
                         worst_rtt=parse_rtt(worst_rtt_str),
                     )
-                    
+
                     hops.append(hop_obj)
-                    print(f"Line {i}: Created hop {final_hop_number}: {ip_address} - {loss_pct}% - {sent_count} sent")
+                    print(
+                        f"Line {i}: Created hop {final_hop_number}: {ip_address} - {loss_pct}% - {sent_count} sent"
+                    )
 
                 except (ValueError, IndexError) as e:
                     print(f"Failed to parse line '{line}': {e}")
                     continue
-        
+
         print(f"Before deduplication: {len(hops)} hops")
-        
+
         # For old format, we need to deduplicate by IP and take only final stats
         if not is_columnar_format and hops:
             # For old format, we need to deduplicate by IP and take only final stats
             print(f"Old format detected - deduplicating {len(hops)} total entries")
-            
+
             # Group by IP address and take the HIGHEST SENT count (final stats)
             ip_to_final_hop = {}
             ip_to_max_sent = {}
             hop_order = []
-            
+
             for hop in hops:
                 # Use IP address if available, otherwise use hop position for truncated addresses
                 if hop.ip_address:
@@ -225,36 +241,40 @@ class MikrotikTracerouteTable:
                     ip_key = f"truncated_hop_{hop.hop_number}"
                 else:
                     ip_key = f"timeout_{hop.hop_number}"
-                
+
                 # Track first appearance order
                 if ip_key not in hop_order:
                     hop_order.append(ip_key)
                     ip_to_max_sent[ip_key] = 0
                     print(f"New IP discovered: {ip_key}")
-                
+
                 # Keep hop with highest SENT count (most recent/final stats)
                 if hop.sent_count and hop.sent_count >= ip_to_max_sent[ip_key]:
                     ip_to_max_sent[ip_key] = hop.sent_count
                     ip_to_final_hop[ip_key] = hop
                     print(f"Updated {ip_key}: SENT={hop.sent_count} (final stats)")
-            
+
             print(f"IP order: {hop_order}")
             print(f"Final IP stats: {[(ip, ip_to_max_sent[ip]) for ip in hop_order]}")
-            
+
             # Rebuild hops list with final stats and correct hop numbers
             final_hops = []
             for i, ip_key in enumerate(hop_order, 1):
                 final_hop = ip_to_final_hop[ip_key]
                 final_hop.hop_number = i  # Correct hop numbering
                 final_hops.append(final_hop)
-                print(f"Final hop {i}: {ip_key} - Loss: {final_hop.loss_pct}% - Sent: {final_hop.sent_count}")
-            
+                print(
+                    f"Final hop {i}: {ip_key} - Loss: {final_hop.loss_pct}% - Sent: {final_hop.sent_count}"
+                )
+
             hops = final_hops
             print(f"Deduplication complete: {len(hops)} unique hops with final stats")
 
         print(f"After processing: {len(hops)} final hops")
         for hop in hops:
-            print(f"Final hop {hop.hop_number}: {hop.ip_address} - {hop.loss_pct}% loss - {hop.sent_count} sent")
+            print(
+                f"Final hop {hop.hop_number}: {hop.ip_address} - {hop.loss_pct}% loss - {hop.sent_count} sent"
+            )
 
         return MikrotikTracerouteTable(target=target, source=source, hops=hops)
 
@@ -279,11 +299,15 @@ if __name__ == "__main__":
 2a03:2880:f163:81:face:b00c:0...   0%    3   0.1ms     0.1       0     0.1       0"""
 
     print("Testing MikroTik IPv6 traceroute parser with truncated address...")
-    result = MikrotikTracerouteTable.parse_text(mikrotik_output, "2a03:2880:f163:81:face:b00c:0:25de", "CAPETOWN_ZA")
-    
+    result = MikrotikTracerouteTable.parse_text(
+        mikrotik_output, "2a03:2880:f163:81:face:b00c:0:25de", "CAPETOWN_ZA"
+    )
+
     print(f"\n=== FINAL RESULTS ===")
     print(f"Target: {result.target}")
     print(f"Source: {result.source}")
     print(f"Number of hops: {len(result.hops)}")
     for hop in result.hops:
-        print(f"  Hop {hop.hop_number}: {hop.ip_address or '<truncated>'} - {hop.loss_pct}% loss - {hop.sent_count} sent - {hop.avg_rtt}ms avg")
+        print(
+            f"  Hop {hop.hop_number}: {hop.ip_address or '<truncated>'} - {hop.loss_pct}% loss - {hop.sent_count} sent - {hop.avg_rtt}ms avg"
+        )

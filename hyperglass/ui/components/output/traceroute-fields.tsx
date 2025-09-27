@@ -92,7 +92,7 @@ export const HostnameField = (props: HostnameFieldProps): JSX.Element => {
         fontSize="sm" 
         fontFamily="mono"
         noOfLines={1} 
-        maxW="180px"
+        maxW="350px"
         {...rest}
       >
         {hostname}

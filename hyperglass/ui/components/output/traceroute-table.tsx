@@ -12,7 +12,7 @@ type TracerouteTableProps = Swap<FlexProps, 'children', TracerouteResult>;
 const columns = [
   { key: 'hop_number', header: 'Hop', align: 'center' as const, width: '80px' },
   { key: 'ip_address', header: 'IP Address', align: 'left' as const, width: '160px' },
-  { key: 'hostname', header: 'Hostname', align: 'left' as const, width: '280px' },
+  { key: 'hostname', header: 'Hostname', align: 'left' as const, width: '400px' },
   { key: 'asn', header: 'ASN', align: 'center' as const, width: '100px' },
   { key: 'loss_pct', header: 'Loss', align: 'center' as const, width: '80px' },
   { key: 'sent_count', header: 'Sent', align: 'center' as const, width: '80px' },
@@ -30,7 +30,7 @@ export const TracerouteTable = (props: TracerouteTableProps): JSX.Element => {
   return (
     <Flex my={8} justify="center" w="100%" {...rest}>
       <Box w="100%" overflowX="auto">
-        <Table variant="simple" size="sm" w="100%" minW="1200px">
+        <Table variant="simple" size="sm" w="100%" minW="1400px">
           <Thead bg={headerBg}>
             <Tr>
               {columns.map((column) => (
