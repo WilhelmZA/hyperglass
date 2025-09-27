@@ -343,10 +343,17 @@ class MikrotikTracerouteTable(MikrotikBase):
 
         lines = text.strip().split("\n")
 
-        # Find all table starts (marked by "Columns:" headers)
+        # Find all table starts - handle both formats:
+        # Format 1: "Columns: ADDRESS, LOSS, SENT..." (newer format with hop numbers)
+        # Format 2: "ADDRESS                          LOSS SENT..." (older format, no hop numbers)
         table_starts = []
         for i, line in enumerate(lines):
-            if "Columns:" in line and "ADDRESS" in line:
+            if ("Columns:" in line and "ADDRESS" in line) or (
+                "ADDRESS" in line
+                and "LOSS" in line
+                and "SENT" in line
+                and not line.strip().startswith(("1", "2", "3", "4", "5", "6", "7", "8", "9"))
+            ):
                 table_starts.append(i)
 
         if not table_starts:
@@ -359,9 +366,14 @@ class MikrotikTracerouteTable(MikrotikBase):
             f"Found {len(table_starts)} tables, using the last one starting at line {last_table_start}"
         )
 
+        # Determine format by checking the header line
+        header_line = lines[last_table_start].strip()
+        is_columnar_format = "Columns:" in header_line
+
         # Parse only the last table
         hops = []
         in_data_section = False
+        hop_counter = 1  # For old format without hop numbers
 
         # Start from the last table header
         for i in range(last_table_start, len(lines)):
@@ -371,8 +383,12 @@ class MikrotikTracerouteTable(MikrotikBase):
             if not line:
                 continue
 
-            # Skip the column header line
-            if "Columns:" in line or line.startswith("#"):
+            # Skip the column header lines
+            if (
+                ("Columns:" in line)
+                or ("ADDRESS" in line and "LOSS" in line and "SENT" in line)
+                or line.startswith("#")
+            ):
                 in_data_section = True
                 continue
 
@@ -381,41 +397,59 @@ class MikrotikTracerouteTable(MikrotikBase):
                 break  # End of this table
 
             if in_data_section and line:
-                # Parse data lines: hop_number  ip_address  loss%  sent  last  avg  best  worst  std-dev
-                # Example: "1  10.0.0.41         0%     1  0.5ms   0.5   0.5   0.5      0"
-                # Example: "4                   100%    1  timeout"
-
-                parts = line.split()
-                if len(parts) < 3:
-                    continue
-
                 try:
-                    hop_number = int(parts[0])
+                    if is_columnar_format:
+                        # New format: "1  10.0.0.41         0%     1  0.5ms   0.5   0.5   0.5      0"
+                        parts = line.split()
+                        if len(parts) < 3:
+                            continue
 
-                    # Check if there's an IP address or if it's empty (timeout hop)
-                    if len(parts) >= 8 and not parts[1].endswith("%"):
-                        # Normal hop with IP address
-                        ip_address = parts[1] if parts[1] else None
-                        loss_pct = int(parts[2].rstrip("%"))
-                        sent_count = int(parts[3])
-                        last_rtt_str = parts[4]
-                        avg_rtt_str = parts[5]
-                        best_rtt_str = parts[6]
-                        worst_rtt_str = parts[7]
+                        hop_number = int(parts[0])
 
-                    elif len(parts) >= 4 and parts[1].endswith("%"):
-                        # Timeout hop without IP address
-                        # Example: "4    100%    1  timeout"
-                        ip_address = None
-                        loss_pct = int(parts[1].rstrip("%"))
-                        sent_count = int(parts[2])
-                        last_rtt_str = parts[3] if len(parts) > 3 else "timeout"
-                        avg_rtt_str = "timeout"
-                        best_rtt_str = "timeout"
-                        worst_rtt_str = "timeout"
-
+                        # Check if there's an IP address or if it's empty (timeout hop)
+                        if len(parts) >= 8 and not parts[1].endswith("%"):
+                            # Normal hop with IP address
+                            ip_address = parts[1] if parts[1] else None
+                            loss_pct = int(parts[2].rstrip("%"))
+                            sent_count = int(parts[3])
+                            last_rtt_str = parts[4]
+                            avg_rtt_str = parts[5]
+                            best_rtt_str = parts[6]
+                            worst_rtt_str = parts[7]
+                        elif len(parts) >= 4 and parts[1].endswith("%"):
+                            # Timeout hop without IP address
+                            ip_address = None
+                            loss_pct = int(parts[1].rstrip("%"))
+                            sent_count = int(parts[2])
+                            last_rtt_str = parts[3] if len(parts) > 3 else "timeout"
+                            avg_rtt_str = "timeout"
+                            best_rtt_str = "timeout"
+                            worst_rtt_str = "timeout"
+                        else:
+                            continue
                     else:
-                        continue  # Skip malformed lines
+                        # Old format: "196.60.8.198                       0%    1  17.1ms    17.1    17.1    17.1       0"
+                        # We need to deduplicate by taking the LAST occurrence of each IP
+                        parts = line.split()
+                        if len(parts) < 6:
+                            continue
+
+                        ip_address = parts[0] if not parts[0].endswith("%") else None
+                        if ip_address:
+                            loss_pct = int(parts[1].rstrip("%"))
+                            sent_count = int(parts[2])
+                            last_rtt_str = parts[3]
+                            avg_rtt_str = parts[4]
+                            best_rtt_str = parts[5]
+                            worst_rtt_str = parts[6] if len(parts) > 6 else parts[5]
+                        else:
+                            # Timeout line
+                            loss_pct = int(parts[0].rstrip("%"))
+                            sent_count = int(parts[1])
+                            last_rtt_str = "timeout"
+                            avg_rtt_str = "timeout"
+                            best_rtt_str = "timeout"
+                            worst_rtt_str = "timeout"
 
                     # Convert timing values
                     def parse_rtt(rtt_str: str) -> t.Optional[float]:
@@ -428,9 +462,17 @@ class MikrotikTracerouteTable(MikrotikBase):
                         except ValueError:
                             return None
 
+                    if is_columnar_format:
+                        # Use hop number from the data
+                        final_hop_number = hop_number
+                    else:
+                        # Use sequential numbering for old format
+                        final_hop_number = hop_counter
+                        hop_counter += 1
+
                     hops.append(
                         MikrotikTracerouteHop(
-                            hop_number=hop_number,
+                            hop_number=final_hop_number,
                             ip_address=ip_address,
                             hostname=None,  # MikroTik doesn't do reverse DNS by default
                             loss_pct=loss_pct,
@@ -445,6 +487,27 @@ class MikrotikTracerouteTable(MikrotikBase):
                 except (ValueError, IndexError) as e:
                     _log.debug(f"Failed to parse line '{line}': {e}")
                     continue
+
+        # For old format, we need to deduplicate by IP and take only final stats
+        if not is_columnar_format and hops:
+            # Group by IP address and take the last occurrence (final stats)
+            ip_to_final_hop = {}
+            hop_order = []
+
+            for hop in hops:
+                ip_key = hop.ip_address or f"timeout_{hop.hop_number}"
+                if ip_key not in hop_order:
+                    hop_order.append(ip_key)
+                ip_to_final_hop[ip_key] = hop
+
+            # Rebuild hops list with final stats and correct hop numbers
+            final_hops = []
+            for i, ip_key in enumerate(hop_order, 1):
+                final_hop = ip_to_final_hop[ip_key]
+                final_hop.hop_number = i  # Correct hop numbering
+                final_hops.append(final_hop)
+
+            hops = final_hops
 
         result = MikrotikTracerouteTable(target=target, source=source, hops=hops)
         _log.info(f"Parsed {len(hops)} hops from MikroTik traceroute final table")
