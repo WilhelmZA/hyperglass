@@ -75,7 +75,7 @@ class TraceroutePluginMikrotik(OutputPlugin):
 
     _hyperglass_builtin: bool = PrivateAttr(True)
     platforms: t.Sequence[str] = ("mikrotik_routeros", "mikrotik_switchos", "mikrotik")
-    directives: t.Sequence[str] = ("traceroute", "MikroTik_Traceroute")
+    directives: t.Sequence[str] = ("__hyperglass_mikrotik_traceroute__",)
 
     def process(self, *, output: "OutputType", query: "Query") -> "OutputDataModel":
         """Process the MikroTik traceroute output."""
