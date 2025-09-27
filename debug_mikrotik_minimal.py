@@ -203,21 +203,31 @@ class MikrotikTracerouteTable:
         
         # For old format, we need to deduplicate by IP and take only final stats
         if not is_columnar_format and hops:
-            # Group by IP address and take the last occurrence (final stats)
+            # For old format, we need to deduplicate by IP and take only final stats
+            print(f"Old format detected - deduplicating {len(hops)} total entries")
+            
+            # Group by IP address and take the HIGHEST SENT count (final stats)
             ip_to_final_hop = {}
+            ip_to_max_sent = {}
             hop_order = []
             
             for hop in hops:
                 ip_key = hop.ip_address or f"timeout_{hop.hop_number}"
+                
+                # Track first appearance order
                 if ip_key not in hop_order:
                     hop_order.append(ip_key)
+                    ip_to_max_sent[ip_key] = 0
                     print(f"New IP discovered: {ip_key}")
-                else:
-                    print(f"Updating final stats for IP: {ip_key}")
-                ip_to_final_hop[ip_key] = hop
+                
+                # Keep hop with highest SENT count (most recent/final stats)
+                if hop.sent_count and hop.sent_count >= ip_to_max_sent[ip_key]:
+                    ip_to_max_sent[ip_key] = hop.sent_count
+                    ip_to_final_hop[ip_key] = hop
+                    print(f"Updated {ip_key}: SENT={hop.sent_count} (final stats)")
             
             print(f"IP order: {hop_order}")
-            print(f"Final IP stats: {list(ip_to_final_hop.keys())}")
+            print(f"Final IP stats: {[(ip, ip_to_max_sent[ip]) for ip in hop_order]}")
             
             # Rebuild hops list with final stats and correct hop numbers
             final_hops = []
@@ -228,6 +238,7 @@ class MikrotikTracerouteTable:
                 print(f"Final hop {i}: {ip_key} - Loss: {final_hop.loss_pct}% - Sent: {final_hop.sent_count}")
             
             hops = final_hops
+            print(f"Deduplication complete: {len(hops)} unique hops with final stats")
 
         print(f"After processing: {len(hops)} final hops")
         for hop in hops:
@@ -237,24 +248,25 @@ class MikrotikTracerouteTable:
 
 
 if __name__ == "__main__":
-    # Test with your actual problematic MikroTik output
-    mikrotik_output = """102.217.253.3                      0%    1 0.598ms   0.598   0.598   0.598       0
-102.217.253.3                      0%    2 0.635ms   0.616   0.598   0.635      18
-102.217.253.3                      0%    3 0.581ms   0.604   0.581   0.635      22
-196.60.9.113                       0%    1  17.1ms    17.1    17.1    17.1       0
-196.60.9.113                       0%    2  17.1ms    17.1    17.1    17.1       0
-196.60.9.113                       0%    3  17.2ms    17.1    17.1    17.2       0
-172.253.65.179                     0%    1    18ms      18      18      18       0
-172.253.65.179                     0%    2    19ms    18.5      18      19       0
-172.253.65.179                     0%    3    18ms    18.3      18      19       0
-192.178.86.205                     0%    1    19ms      19      19      19       0
-192.178.86.205                     0%    2    19ms      19      19      19       0
-192.178.86.205                     0%    3    19ms      19      19      19       0
-8.8.8.8                            0%    1    19ms      19      19      19       0
-8.8.8.8                            0%    2    19ms      19      19      19       0
-8.8.8.8                            0%    3    19ms      19      19      19       0"""
+    # Test with the actual MikroTik output after MikrotikGarbageOutput processing
+    mikrotik_output = """ADDRESS                          LOSS SENT    LAST     AVG    BEST   WORST STD-DEV STATUS                                                                                                                                                                                                                                                                                                                                                                                                                                     
+102.217.253.3                      0%    1  15.3ms    15.3    15.3    15.3       0                                                                                                                                                                                                                                                                                                                                                                                                                                            
+196.60.9.113                       0%    1  17.3ms    17.3    17.3    17.3       0                                                                                                                                                                                                                                                                                                                                                                                                                                            
+172.253.65.179                     0%    1  15.7ms    15.7    15.7    15.7       0                                                                                                                                                                                                                                                                                                                                                                                                                                            
+192.178.86.205                     0%    1    16ms      16      16      16       0                                                                                                                                                                                                                                                                                                                                                                                                                                            
+8.8.8.8                            0%    1  15.7ms    15.7    15.7    15.7       0                                                                                                                                                                                                                                                                                                                                                                                                                                            
+102.217.253.3                      0%    2  15.3ms    15.3    15.3    15.3       0                                                                                                                                                                                                                                                                                                                                                                                                                                            
+196.60.9.113                       0%    2  16.5ms    16.9    16.5    17.3     0.4                                                                                                                                                                                                                                                                                                                                                                                                                                            
+172.253.65.179                     0%    2  15.7ms    15.7    15.7    15.7       0                                                                                                                                                                                                                                                                                                                                                                                                                                            
+192.178.86.205                     0%    2  15.9ms      16    15.9      16     0.1                                                                                                                                                                                                                                                                                                                                                                                                                                            
+8.8.8.8                            0%    2  15.7ms    15.7    15.7    15.7       0                                                                                                                                                                                                                                                                                                                                                                                                                                            
+102.217.253.3                      0%    3  15.3ms    15.3    15.3    15.3       0                                                                                                                                                                                                                                                                                                                                                                                                                                            
+196.60.9.113                       0%    3  16.6ms    16.8    16.5    17.3     0.4                                                                                                                                                                                                                                                                                                                                                                                                                                            
+172.253.65.179                     0%    3  15.7ms    15.7    15.7    15.7       0                                                                                                                                                                                                                                                                                                                                                                                                                                            
+192.178.86.205                     0%    3  16.3ms    16.1    15.9    16.3     0.2                                                                                                                                                                                                                                                                                                                                                                                                                                            
+8.8.8.8                            0%    3  15.7ms    15.7    15.7    15.7       0"""
 
-    print("Testing MikroTik traceroute parser...")
+    print("Testing MikroTik traceroute parser with actual problematic output...")
     result = MikrotikTracerouteTable.parse_text(mikrotik_output, "8.8.8.8", "test_router")
     
     print(f"\n=== FINAL RESULTS ===")

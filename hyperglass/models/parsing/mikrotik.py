@@ -510,21 +510,30 @@ class MikrotikTracerouteTable(MikrotikBase):
         
         # For old format, we need to deduplicate by IP and take only final stats
         if not is_columnar_format and hops:
-            # Group by IP address and take the last occurrence (final stats)
+            _log.debug(f"Old format detected - deduplicating {len(hops)} total entries")
+            
+            # Group by IP address and take the HIGHEST SENT count (final stats)
             ip_to_final_hop = {}
+            ip_to_max_sent = {}
             hop_order = []
             
             for hop in hops:
                 ip_key = hop.ip_address or f"timeout_{hop.hop_number}"
+                
+                # Track first appearance order
                 if ip_key not in hop_order:
                     hop_order.append(ip_key)
+                    ip_to_max_sent[ip_key] = 0
                     _log.debug(f"New IP discovered: {ip_key}")
-                else:
-                    _log.debug(f"Updating final stats for IP: {ip_key}")
-                ip_to_final_hop[ip_key] = hop
+                
+                # Keep hop with highest SENT count (most recent/final stats)
+                if hop.sent_count and hop.sent_count >= ip_to_max_sent[ip_key]:
+                    ip_to_max_sent[ip_key] = hop.sent_count
+                    ip_to_final_hop[ip_key] = hop
+                    _log.debug(f"Updated {ip_key}: SENT={hop.sent_count} (final stats)")
             
             _log.debug(f"IP order: {hop_order}")
-            _log.debug(f"Final IP stats: {list(ip_to_final_hop.keys())}")
+            _log.debug(f"Final IP stats: {[(ip, ip_to_max_sent[ip]) for ip in hop_order]}")
             
             # Rebuild hops list with final stats and correct hop numbers
             final_hops = []
@@ -535,6 +544,7 @@ class MikrotikTracerouteTable(MikrotikBase):
                 _log.debug(f"Final hop {i}: {ip_key} - Loss: {final_hop.loss_pct}% - Sent: {final_hop.sent_count}")
             
             hops = final_hops
+            _log.debug(f"Deduplication complete: {len(hops)} unique hops with final stats")
 
         _log.debug(f"After processing: {len(hops)} final hops")
         for hop in hops:
@@ -715,11 +725,6 @@ class MikrotikTracerouteTable(MikrotikBase):
 
         result = MikrotikTracerouteTable(target=target, source=source, hops=hops)
         _log.info(f"Parsed {len(hops)} hops from MikroTik traceroute final table")
-        return result
-
-        result = MikrotikTracerouteTable(target=target, source=source, hops=hops)
-
-        _log.info(f"Parsed {len(hops)} hops from MikroTik traceroute output (final stats only)")
         return result
 
     def traceroute_result(self):
