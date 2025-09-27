@@ -22,9 +22,8 @@ async def check_redis(_: Litestar) -> t.NoReturn:
 async def init_ip_enrichment(_: Litestar) -> None:
     """Initialize IP enrichment data at startup."""
     try:
-        from hyperglass.settings import settings
-
-        if not settings.structured.ip_enrichment.enabled:
+        params = use_state("params")
+        if not params.structured.ip_enrichment.enabled:
             log.debug("IP enrichment disabled, skipping initialization")
             return
     except Exception as e:
@@ -33,7 +32,6 @@ async def init_ip_enrichment(_: Litestar) -> None:
 
     try:
         from hyperglass.external.ip_enrichment import _service
-
         log.info("Initializing IP enrichment data at startup...")
         success = await _service.ensure_data_loaded()
         if success:

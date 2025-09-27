@@ -48,13 +48,13 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
 
         # Check if IP enrichment is enabled in config
         try:
-            from hyperglass.settings import settings
-
-            if not settings.structured.ip_enrichment.enabled:
+            from hyperglass.state import use_state
+            params = use_state("params")
+            if not params.structured.ip_enrichment.enabled:
                 _log.debug("IP enrichment disabled in configuration")
                 return output
 
-            if not settings.structured.ip_enrichment.enrich_next_hop:
+            if not params.structured.ip_enrichment.enrich_next_hop:
                 _log.debug("Next-hop enrichment disabled in configuration")
                 return output
         except Exception as e:

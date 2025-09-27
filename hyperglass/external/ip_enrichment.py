@@ -54,9 +54,9 @@ DEFAULT_CACHE_DURATION = 24 * 60 * 60
 def get_cache_duration() -> int:
     """Get cache duration from config, ensuring minimum of 24 hours."""
     try:
-        from hyperglass.settings import settings
-
-        cache_timeout = settings.structured.ip_enrichment.cache_timeout
+        from hyperglass.state import use_state
+        params = use_state("params")
+        cache_timeout = params.structured.ip_enrichment.cache_timeout
         return max(cache_timeout, DEFAULT_CACHE_DURATION)
     except Exception:
         # Fallback if config not available
@@ -104,7 +104,7 @@ class IPEnrichmentService:
         state = use_state()
 
         # Check if we have cached data that's still fresh
-        cached_time = await state.get(CACHE_KEY_LAST_UPDATE)
+        cached_time = state.get(CACHE_KEY_LAST_UPDATE)
         cache_duration = get_cache_duration()
 
         if cached_time:
@@ -116,9 +116,9 @@ class IPEnrichmentService:
 
             if age_seconds < cache_duration:
                 # Try to load from cache
-                cidr_data = await state.get(CACHE_KEY_CIDR_DATA)
-                asn_data = await state.get(CACHE_KEY_ASN_DATA)
-                ixp_data = await state.get(CACHE_KEY_IXP_DATA)
+                cidr_data = state.get(CACHE_KEY_CIDR_DATA)
+                asn_data = state.get(CACHE_KEY_ASN_DATA)
+                ixp_data = state.get(CACHE_KEY_IXP_DATA)
 
                 if cidr_data and asn_data and ixp_data:
                     log.info(f"Loading IP enrichment data from cache (age: {age_hours:.1f}h)")
@@ -160,10 +160,10 @@ class IPEnrichmentService:
             # Cache the data
             log.debug("💾 Caching IP enrichment data to Redis...")
             cache_start = datetime.now()
-            await state.set(CACHE_KEY_CIDR_DATA, self.cidr_networks)
-            await state.set(CACHE_KEY_ASN_DATA, self.asn_info)
-            await state.set(CACHE_KEY_IXP_DATA, self.ixp_networks)
-            await state.set(CACHE_KEY_LAST_UPDATE, datetime.now())
+            state.set(CACHE_KEY_CIDR_DATA, self.cidr_networks)
+            state.set(CACHE_KEY_ASN_DATA, self.asn_info)
+            state.set(CACHE_KEY_IXP_DATA, self.ixp_networks)
+            state.set(CACHE_KEY_LAST_UPDATE, datetime.now())
             cache_duration_actual = (datetime.now() - cache_start).total_seconds()
 
             self.last_update = datetime.now()
