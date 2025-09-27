@@ -132,7 +132,7 @@ class TracerouteResult(HyperglassModel):
             if hop.asn and hop.asn != "None" and hop.asn != current_asn:
                 current_asn = hop.asn
                 current_org = hop.org
-                
+
                 # Format as "AS15169 (Google LLC)" if we have org name
                 if current_org and current_org != "None":
                     as_path.append(f"AS{current_asn} ({current_org})")
@@ -161,9 +161,15 @@ class TracerouteResult(HyperglassModel):
         for hop in self.hops:
             if hop.ip_address in network_data:
                 data: TargetDetail = network_data[hop.ip_address]
-                hop.asn = data.get("asn", "None")
-                hop.org = data.get("org", "None")
-                hop.prefix = data.get("prefix", "None")
-                hop.country = data.get("country", "None")
-                hop.rir = data.get("rir", "None")
-                hop.allocated = data.get("allocated", "None")
+                # Handle ASN formatting
+                asn_raw = data.get("asn")
+                if asn_raw and asn_raw != "None":
+                    hop.asn = f"AS{asn_raw}"
+                else:
+                    hop.asn = None
+
+                hop.org = data.get("org") if data.get("org") != "None" else None
+                hop.prefix = data.get("prefix") if data.get("prefix") != "None" else None
+                hop.country = data.get("country") if data.get("country") != "None" else None
+                hop.rir = data.get("rir") if data.get("rir") != "None" else None
+                hop.allocated = data.get("allocated") if data.get("allocated") != "None" else None

@@ -24,7 +24,7 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
     platforms: t.Sequence[str] = (
         "mikrotik_routeros",
         "mikrotik_switchos",
-        "mikrotik", 
+        "mikrotik",
         "cisco_ios",
         "juniper_junos",
         "arista_eos",
@@ -49,10 +49,11 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
         # Check if IP enrichment is enabled in config
         try:
             from hyperglass.settings import settings
+
             if not settings.structured.ip_enrichment.enabled:
                 _log.debug("IP enrichment disabled in configuration")
                 return output
-            
+
             if not settings.structured.ip_enrichment.enrich_next_hop:
                 _log.debug("Next-hop enrichment disabled in configuration")
                 return output
@@ -68,6 +69,7 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
                 if loop.is_running():
                     # If we're already in an event loop, create a new task
                     import concurrent.futures
+
                     with concurrent.futures.ThreadPoolExecutor() as executor:
                         future = executor.submit(asyncio.run, self._enrich_async(output))
                         future.result()

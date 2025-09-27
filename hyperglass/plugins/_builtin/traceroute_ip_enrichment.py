@@ -24,7 +24,7 @@ class ZTracerouteIpEnrichment(OutputPlugin):
     _hyperglass_builtin: bool = PrivateAttr(True)
     platforms: t.Sequence[str] = (
         "mikrotik_routeros",
-        "mikrotik_switchos", 
+        "mikrotik_switchos",
         "mikrotik",
         "cisco_ios",
         "juniper_junos",
@@ -58,6 +58,7 @@ class ZTracerouteIpEnrichment(OutputPlugin):
         # Check if IP enrichment is enabled in config
         try:
             from hyperglass.settings import settings
+
             if not settings.structured.ip_enrichment.enabled:
                 _log.debug("IP enrichment disabled in configuration")
                 # Still do reverse DNS if enrichment is disabled
@@ -77,6 +78,7 @@ class ZTracerouteIpEnrichment(OutputPlugin):
                 if loop.is_running():
                     # If we're already in an event loop, create a new task
                     import concurrent.futures
+
                     with concurrent.futures.ThreadPoolExecutor() as executor:
                         future = executor.submit(asyncio.run, self._enrich_async(output))
                         future.result()

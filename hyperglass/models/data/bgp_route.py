@@ -133,10 +133,10 @@ class BGPRoute(HyperglassModel):
         """Detailed AS path with organization names using IP enrichment."""
         if not self.as_path:
             return "Unknown"
-            
+
         try:
             from hyperglass.external.ip_enrichment import lookup_asn_name
-            
+
             detailed_path = []
             for asn in self.as_path:
                 try:
@@ -147,7 +147,7 @@ class BGPRoute(HyperglassModel):
                         detailed_path.append(f"AS{asn}")
                 except Exception:
                     detailed_path.append(f"AS{asn}")
-            
+
             return " -> ".join(detailed_path)
         except Exception:
             return self.as_path_summary
@@ -193,6 +193,14 @@ class BGPRouteTable(HyperglassModel):
         for route in self.routes:
             if route.next_hop in network_data:
                 data: TargetDetail = network_data[route.next_hop]
-                route.next_hop_asn = data.get("asn", "None")
-                route.next_hop_org = data.get("org", "None")
-                route.next_hop_country = data.get("country", "None")
+                # Handle ASN formatting
+                asn_raw = data.get("asn")
+                if asn_raw and asn_raw != "None":
+                    route.next_hop_asn = f"AS{asn_raw}"
+                else:
+                    route.next_hop_asn = None
+
+                route.next_hop_org = data.get("org") if data.get("org") != "None" else None
+                route.next_hop_country = (
+                    data.get("country") if data.get("country") != "None" else None
+                )
