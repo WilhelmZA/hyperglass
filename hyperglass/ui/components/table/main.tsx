@@ -16,19 +16,19 @@ import { PageSelect } from './page-select';
 import type { TableOptions, PluginHook } from 'react-table';
 import type { Theme, TableColumn, CellRenderProps } from '~/types';
 
-interface TableProps {
-  data: Route[];
+interface TableProps<T = Route> {
+  data: T[];
   striped?: boolean;
-  columns: TableColumn[];
+  columns: TableColumn[] | any[]; // Allow more flexible column types
   heading?: React.ReactNode;
   bordersVertical?: boolean;
   bordersHorizontal?: boolean;
-  Cell?: React.FC<CellRenderProps>;
-  rowHighlightProp?: keyof Route;
+  Cell?: React.FC<any>; // More flexible cell render props
+  rowHighlightProp?: keyof T;
   rowHighlightBg?: Theme.ColorNames;
 }
 
-export const Table = (props: TableProps): JSX.Element => {
+export const Table = <T = Route>(props: TableProps<T>): JSX.Element => {
   const {
     data,
     columns,
@@ -62,11 +62,11 @@ export const Table = (props: TableProps): JSX.Element => {
     defaultColumn,
     data,
     initialState: { hiddenColumns },
-  } as TableOptions<Route>;
+  } as TableOptions<T>;
 
-  const plugins = [useSortBy, usePagination] as PluginHook<Route>[];
+  const plugins = [useSortBy, usePagination] as PluginHook<T>[];
 
-  const instance = useTable<Route>(options, ...plugins);
+  const instance = useTable<T>(options, ...plugins);
 
   const {
     page,
