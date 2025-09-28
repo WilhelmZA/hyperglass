@@ -14,6 +14,7 @@ Core Functions:
 import asyncio
 import json
 import csv
+import pickle
 import typing as t
 from datetime import datetime, timedelta
 from ipaddress import ip_address, ip_network, IPv4Address, IPv6Address
@@ -41,6 +42,7 @@ CIDR_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "cidr_data.json"
 ASN_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "asn_data.json"
 IXP_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "ixp_data.json"
 LAST_UPDATE_FILE = IP_ENRICHMENT_DATA_DIR / "last_update.txt"
+COMBINED_CACHE_FILE = IP_ENRICHMENT_DATA_DIR / "combined_cache.pickle"
 
 # Raw data files for debugging/inspection
 RAW_TABLE_FILE = IP_ENRICHMENT_DATA_DIR / "table.jsonl"
@@ -76,9 +78,18 @@ def should_refresh_data(force_refresh: bool = False) -> tuple[bool, str]:
     if not LAST_UPDATE_FILE.exists():
         return True, "No timestamp file found"
     
-    # Check required files exist
-    required_files = [CIDR_DATA_FILE, ASN_DATA_FILE, IXP_DATA_FILE]
-    missing_files = [f.name for f in required_files if not f.exists()]
+    # Check each required file individually - if ANY are missing, refresh ALL
+    required_files = [
+        (CIDR_DATA_FILE, "cidr_data.json"),
+        (ASN_DATA_FILE, "asn_data.json"), 
+        (IXP_DATA_FILE, "ixp_data.json")
+    ]
+    
+    missing_files = []
+    for file_path, file_name in required_files:
+        if not file_path.exists():
+            missing_files.append(file_name)
+    
     if missing_files:
         return True, f"Missing data files: {', '.join(missing_files)}"
     
@@ -147,7 +158,7 @@ class IPInfo:
 
 
 class IPEnrichmentService:
-    """Main IP enrichment service with optimized lookups."""
+    """Main IP enrichment service with optimized lookups and pickle cache."""
 
     def __init__(self):
         self.cidr_networks: t.List[t.Tuple[t.Union[IPv4Address, IPv6Address], int, int, str]] = (
@@ -163,6 +174,9 @@ class IPEnrichmentService:
         self._ipv4_networks: t.List[t.Tuple[int, int, int, str]] = []  # (net_int, mask_bits, asn, cidr)
         self._ipv6_networks: t.List[t.Tuple[int, int, int, str]] = []  # (net_int, mask_bits, asn, cidr)
         self._lookup_optimized = False
+
+        # Combined cache for ultra-fast loading
+        self._combined_cache: t.Optional[t.Dict[str, t.Any]] = None
 
     def _optimize_lookups(self):
         """Convert IP networks to integer format for faster lookups."""
@@ -198,6 +212,49 @@ class IPEnrichmentService:
         )
         self._lookup_optimized = True
 
+    def _save_combined_cache(self):
+        """Save all data structures to a single pickle file for ultra-fast loading."""
+        try:
+            cache_data = {
+                'cidr_networks': self.cidr_networks,
+                'asn_info': self.asn_info,
+                'ixp_networks': self.ixp_networks,
+                'ipv4_networks': self._ipv4_networks,
+                'ipv6_networks': self._ipv6_networks,
+                'last_update': self.last_update,
+                'lookup_optimized': self._lookup_optimized
+            }
+            
+            with open(COMBINED_CACHE_FILE, 'wb') as f:
+                pickle.dump(cache_data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            
+            log.debug(f"Saved combined cache with {len(self.cidr_networks)} CIDR entries to pickle file")
+        except Exception as e:
+            log.error(f"Failed to save combined cache: {e}")
+
+    def _load_combined_cache(self) -> bool:
+        """Load all data structures from pickle file."""
+        if not COMBINED_CACHE_FILE.exists():
+            return False
+            
+        try:
+            with open(COMBINED_CACHE_FILE, 'rb') as f:
+                cache_data = pickle.load(f)
+            
+            self.cidr_networks = cache_data['cidr_networks']
+            self.asn_info = cache_data['asn_info'] 
+            self.ixp_networks = cache_data['ixp_networks']
+            self._ipv4_networks = cache_data['ipv4_networks']
+            self._ipv6_networks = cache_data['ipv6_networks']
+            self.last_update = cache_data['last_update']
+            self._lookup_optimized = cache_data['lookup_optimized']
+            
+            log.debug(f"Loaded combined cache with {len(self.cidr_networks)} CIDR entries from pickle file")
+            return True
+        except Exception as e:
+            log.error(f"Failed to load combined cache: {e}")
+            return False
+
     async def ensure_data_loaded(self, force_refresh: bool = False) -> bool:
         """Ensure data is loaded and fresh from persistent files."""
         # Create data directory if it doesn't exist
@@ -214,7 +271,17 @@ class IPEnrichmentService:
                 reason = f"Data validation failed: {validation_msg}"
         
         if not should_refresh:
-            # Load from existing files
+            # Try to load from ultra-fast pickle cache first
+            if self._load_combined_cache():
+                age_hours = (datetime.now() - self.last_update).total_seconds() / 3600 if self.last_update else 0
+                log.info(f"Loading IP enrichment data from pickle cache (age: {age_hours:.1f}h)")
+                log.debug(
+                    f"Cache contains: {len(self.cidr_networks)} CIDR entries, "
+                    f"{len(self.asn_info)} ASN entries, {len(self.ixp_networks)} IXP networks"
+                )
+                return True
+            
+            # Fallback to JSON files if pickle cache failed
             try:
                 with open(CIDR_DATA_FILE, "r") as f:
                     cidr_data = json.load(f)
@@ -226,7 +293,7 @@ class IPEnrichmentService:
                     cached_time = datetime.fromisoformat(f.read().strip())
 
                 age_hours = (datetime.now() - cached_time).total_seconds() / 3600
-                log.info(f"Loading IP enrichment data from files (age: {age_hours:.1f}h)")
+                log.info(f"Loading IP enrichment data from JSON files (age: {age_hours:.1f}h)")
                 log.debug(
                     f"Files contain: {len(cidr_data)} CIDR entries, "
                     f"{len(asn_data)} ASN entries, {len(ixp_data)} IXP networks"
@@ -241,6 +308,10 @@ class IPEnrichmentService:
                 
                 # Reset optimization flag so it gets rebuilt with new data
                 self._lookup_optimized = False
+                
+                # Save to pickle cache for next time
+                self._optimize_lookups()
+                self._save_combined_cache()
                 
                 return True
                 
@@ -261,12 +332,40 @@ class IPEnrichmentService:
             download_start = datetime.now()
 
             async with httpx.AsyncClient(timeout=300) as client:
-                # Download BGP data
-                await self._download_bgp_data(client)
-                # Download IXP data
-                await self._download_ixp_data(client)
+                # Track which downloads succeeded
+                bgp_success = False
+                ixp_success = False
+                
+                # Try to download BGP data (required)
+                try:
+                    await self._download_bgp_data(client)
+                    bgp_success = True
+                    log.debug("✅ BGP data download successful")
+                except Exception as e:
+                    log.error(f"❌ BGP data download failed: {e}")
+                    # BGP data is critical - if this fails, we can't continue
+                    raise Exception(f"Critical BGP data download failed: {e}")
+                
+                # Try to download IXP data (optional but preferred)
+                try:
+                    await self._download_ixp_data(client)
+                    ixp_success = True
+                    log.debug("✅ IXP data download successful")
+                except Exception as e:
+                    log.error(f"❌ IXP data download failed: {e}")
+                    # IXP data is optional - clear any partial data and continue
+                    self.ixp_networks = []
+                    log.warning("Continuing without IXP data - IXP detection will be unavailable")
 
             download_duration = (datetime.now() - download_start).total_seconds()
+            
+            if not bgp_success:
+                # This shouldn't happen due to the raise above, but be explicit
+                raise Exception("BGP data download failed - cannot continue")
+                
+            log.info(f"📊 Download summary: BGP data: ✅, IXP data: {'✅' if ixp_success else '❌'}")
+            
+            # Continue with saving even if IXP failed...
 
             # Save the data to persistent files
             log.debug("💾 Saving IP enrichment data to persistent files...")
@@ -289,8 +388,10 @@ class IPEnrichmentService:
 
             self.last_update = datetime.now()
             
-            # Reset optimization flag so it gets rebuilt with new data
+            # Optimize lookups and create pickle cache for ultra-fast loading
             self._lookup_optimized = False
+            self._optimize_lookups()
+            self._save_combined_cache()
             
             log.info(f"✅ IP enrichment data loaded successfully!")
             log.info(
@@ -623,6 +724,7 @@ def get_data_status() -> dict:
             "asn_data": ASN_DATA_FILE.exists(),
             "ixp_data": IXP_DATA_FILE.exists(),
             "last_update": LAST_UPDATE_FILE.exists(),
+            "combined_cache": COMBINED_CACHE_FILE.exists(),
             "raw_table": RAW_TABLE_FILE.exists(),
             "raw_asns": RAW_ASNS_FILE.exists(),
         },
@@ -760,9 +862,9 @@ async def network_info(*targets: str) -> TargetData:
                     "org": ip_info.ixp_name,
                 }
             elif ip_info.asn is not None:
-                # ASN case - normal network
+                # ASN case - normal network - format with AS prefix
                 detail = {
-                    "asn": str(ip_info.asn),
+                    "asn": f"AS{ip_info.asn}",  # Add AS prefix here
                     "ip": target,
                     "prefix": ip_info.prefix or "None",  # Use the CIDR from table.jsonl
                     "country": ip_info.country or "None",  # Use country code from asns.csv

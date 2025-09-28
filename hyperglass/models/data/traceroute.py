@@ -164,19 +164,10 @@ class TracerouteResult(HyperglassModel):
         for hop in self.hops:
             if hop.ip_address in network_data:
                 data: TargetDetail = network_data[hop.ip_address]
-                # Handle ASN formatting - avoid double "AS" prefix
-                asn_raw = data.get("asn")
-                if asn_raw and asn_raw != "None":
-                    # Special case for IXPs
-                    if asn_raw == "IXP":
-                        hop.asn = "IXP"
-                    else:
-                        # Remove any existing AS prefix and add our own
-                        asn_number = asn_raw.replace("AS", "").strip()
-                        if asn_number.isdigit():
-                            hop.asn = f"AS{asn_number}"
-                        else:
-                            hop.asn = None
+                # ASN field should already be properly formatted from ip_enrichment
+                asn_value = data.get("asn")
+                if asn_value and asn_value != "None":
+                    hop.asn = asn_value  # Use as-is (already has "AS" prefix or is "IXP")
                 else:
                     hop.asn = None
 
