@@ -29,7 +29,6 @@ class TracerouteHop(HyperglassModel):
     loss_pct: t.Optional[int] = None
     sent_count: t.Optional[int] = None
     last_rtt: t.Optional[float] = None
-    avg_rtt: t.Optional[float] = None
     best_rtt: t.Optional[float] = None
     worst_rtt: t.Optional[float] = None
 
