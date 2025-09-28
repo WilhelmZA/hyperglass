@@ -203,3 +203,42 @@ class TracerouteResult(HyperglassModel):
                 hop.country = data.get("country") if data.get("country") != "None" else None
                 hop.rir = data.get("rir") if data.get("rir") != "None" else None
                 hop.allocated = data.get("allocated") if data.get("allocated") != "None" else None
+
+    async def enrich_asn_organizations(self):
+        """Enrich ASN organization names using bulk ASN lookup."""
+        from hyperglass.external.ip_enrichment import lookup_asns_bulk
+        from hyperglass.log import log
+
+        _log = log.bind(source="traceroute_asn_enrichment")
+
+        # Collect all unique ASNs that need organization info
+        asns_to_lookup = []
+        for hop in self.hops:
+            if hop.asn and hop.asn != "None" and hop.asn != "IXP":
+                asns_to_lookup.append(hop.asn)
+                _log.debug(f"Hop {hop.hop_number}: ASN={hop.asn}, current org='{hop.org}'")
+
+        if not asns_to_lookup:
+            _log.debug("No ASNs to lookup")
+            return
+
+        # Remove duplicates while preserving order
+        unique_asns = list(dict.fromkeys(asns_to_lookup))
+        _log.info(f"Looking up organizations for {len(unique_asns)} unique ASNs: {unique_asns}")
+        
+        # Bulk lookup ASN organization data
+        asn_data = await lookup_asns_bulk(unique_asns)
+        _log.debug(f"Got ASN data: {asn_data}")
+
+        # Apply the organization data to hops
+        for hop in self.hops:
+            if hop.asn and hop.asn in asn_data:
+                data = asn_data[hop.asn]
+                org_name = data.get("name") if data.get("name") != f"AS{hop.asn}" else None
+                
+                _log.debug(f"Hop {hop.hop_number} ASN {hop.asn}: setting org='{org_name}' (was '{hop.org}')")
+                
+                # Always update org from ASN data (more accurate than IP-based org)
+                hop.org = org_name
+                if not hop.country:  # Only set country if not already set
+                    hop.country = data.get("country") or None

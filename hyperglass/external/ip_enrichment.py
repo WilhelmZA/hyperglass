@@ -756,6 +756,38 @@ async def lookup_asn_country(asn: int) -> str:
     return await _service.lookup_asn_country(asn)
 
 
+async def lookup_asns_bulk(asns: t.List[t.Union[str, int]]) -> t.Dict[str, t.Dict[str, str]]:
+    """Bulk lookup ASN organization names and countries.
+    
+    Args:
+        asns: List of ASN numbers (as strings like "328964" or integers)
+        
+    Returns:
+        Dict mapping ASN string to {"name": org_name, "country": country_code}
+        Example: {"328964": {"name": "Insight Network Solutions", "country": "ZA"}}
+    """
+    await _service.ensure_data_loaded()
+    
+    results = {}
+    for asn in asns:
+        # Skip non-numeric ASNs like "IXP"
+        if asn == "IXP" or asn is None:
+            continue
+            
+        try:
+            asn_int = int(asn) 
+            asn_data = _service.asn_info.get(asn_int, {})
+            results[str(asn)] = {
+                "name": asn_data.get("name", f"AS{asn}"),
+                "country": asn_data.get("country", "")
+            }
+        except (ValueError, TypeError):
+            # Skip invalid ASN values
+            continue
+    
+    return results
+
+
 async def refresh_ip_enrichment_data(force: bool = False) -> bool:
     """Manually refresh IP enrichment data."""
     log.info(f"Manual refresh requested (force={force})")

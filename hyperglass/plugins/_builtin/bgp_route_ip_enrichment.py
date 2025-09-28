@@ -36,6 +36,8 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
     async def _enrich_async(self, output: BGPRouteTable) -> None:
         """Async helper to enrich BGP route data."""
         await output.enrich_with_ip_enrichment()
+        # Also enrich AS path ASNs with organization names
+        await output.enrich_as_path_organizations()
 
     def process(self, *, output: "OutputDataModel", query: "Query") -> "OutputDataModel":
         """Enrich structured BGP route data with next-hop IP enrichment information."""

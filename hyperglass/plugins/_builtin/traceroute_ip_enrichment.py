@@ -44,7 +44,11 @@ class ZTracerouteIpEnrichment(OutputPlugin):
 
     async def _enrich_async(self, output: TracerouteResult) -> None:
         """Async helper to enrich traceroute data."""
+        # First enrich with IP information (ASN numbers)
         await output.enrich_with_ip_enrichment()
+        
+        # Then enrich ASN numbers with organization names
+        await output.enrich_asn_organizations()
 
     def process(self, *, output: "OutputDataModel", query: "Query") -> "OutputDataModel":
         """Enrich structured traceroute data with IP enrichment and reverse DNS information."""

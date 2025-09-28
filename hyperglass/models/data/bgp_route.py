@@ -204,3 +204,22 @@ class BGPRouteTable(HyperglassModel):
                 route.next_hop_country = (
                     data.get("country") if data.get("country") != "None" else None
                 )
+
+    async def enrich_as_path_organizations(self):
+        """Enrich AS path ASNs with organization names using bulk lookup."""
+        from hyperglass.external.ip_enrichment import lookup_asns_bulk
+
+        # Collect all unique ASNs from AS paths
+        all_asns = set()
+        for route in self.routes:
+            all_asns.update(route.as_path)
+        
+        if not all_asns:
+            return
+
+        # Convert to strings and bulk lookup
+        asn_data = await lookup_asns_bulk([str(asn) for asn in all_asns])
+        
+        # Store the ASN organization mapping for use by frontend
+        # This could be used by AS path display components
+        self._asn_organizations = asn_data
