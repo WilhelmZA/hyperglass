@@ -912,9 +912,9 @@ async def network_info(*targets: str) -> TargetData:
                     "org": ip_info.ixp_name,
                 }
             elif ip_info.asn is not None:
-                # ASN case - normal network - format with AS prefix
+                # ASN case - normal network - return just the NUMBER, no AS prefix
                 detail = {
-                    "asn": f"AS{ip_info.asn}",  # Add AS prefix here
+                    "asn": str(ip_info.asn),  # Just the number as string, e.g. "328964"
                     "ip": target,
                     "prefix": ip_info.prefix or "None",  # Use the CIDR from table.jsonl
                     "country": ip_info.country or "None",  # Use country code from asns.csv

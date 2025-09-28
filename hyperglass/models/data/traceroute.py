@@ -74,13 +74,18 @@ class TracerouteHop(HyperglassModel):
 
     @property
     def asn_display(self) -> str:
-        """Display ASN with organization name."""
-        if self.asn and self.org and self.asn != "None" and self.org != "None":
-            # ASN already has "AS" prefix or is "IXP" - use as-is
-            return f"{self.asn} ({self.org})"
-        elif self.asn and self.asn != "None":
-            # ASN already has "AS" prefix or is "IXP" - use as-is  
-            return self.asn
+        """Display ASN - just the number, no AS prefix."""
+        if self.asn and self.asn != "None":
+            if self.asn == "IXP":
+                # For IXPs, show "IXP" with org if available
+                if self.org and self.org != "None":
+                    return f"IXP ({self.org})"
+                return "IXP"
+            else:
+                # For ASNs, show just the number with org if available
+                if self.org and self.org != "None":
+                    return f"{self.asn} ({self.org})"
+                return self.asn
         return "Unknown"
 
 
@@ -119,7 +124,8 @@ class TracerouteResult(HyperglassModel):
         for hop in self.hops:
             if hop.asn and hop.asn not in ["None", None] and hop.asn != current_asn:
                 current_asn = hop.asn
-                as_path.append(hop.asn)  # hop.asn already has "AS" prefix or is "IXP"
+                # hop.asn is now just number ("328964") or "IXP" - display as-is
+                as_path.append(hop.asn)
 
         return " -> ".join(as_path) if as_path else "Unknown"
 
@@ -132,7 +138,7 @@ class TracerouteResult(HyperglassModel):
 
         for hop in self.hops:
             if hop.asn and hop.asn not in ["None", None] and hop.asn != current_asn:
-                current_asn = hop.asn  # Already has "AS" prefix or is "IXP"
+                current_asn = hop.asn  # Just number ("328964") or "IXP"
                 current_org = hop.org
 
                 # Format with org name if we have it
@@ -166,10 +172,10 @@ class TracerouteResult(HyperglassModel):
         for hop in self.hops:
             if hop.ip_address in network_data:
                 data: TargetDetail = network_data[hop.ip_address]
-                # ASN field should already be properly formatted from ip_enrichment
+                # ASN field is now just number string ("328964") or "IXP"
                 asn_value = data.get("asn")
                 if asn_value and asn_value != "None":
-                    hop.asn = asn_value  # Use as-is (already has "AS" prefix or is "IXP")
+                    hop.asn = asn_value  # Store as-is: "328964" or "IXP"
                 else:
                     hop.asn = None
 
