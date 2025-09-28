@@ -13,6 +13,7 @@ from .mikrotik_normalize_input import MikrotikTargetNormalizerInput
 from .traceroute_ip_enrichment import ZTracerouteIpEnrichment
 from .bgp_route_ip_enrichment import ZBgpRouteIpEnrichment
 from .trace_route_mikrotik import TraceroutePluginMikrotik
+from .trace_route_huawei import TraceroutePluginHuawei
 
 __all__ = (
     "BGPRoutePluginArista",
@@ -26,5 +27,6 @@ __all__ = (
     "ZTracerouteIpEnrichment",
     "ZBgpRouteIpEnrichment",
     "TraceroutePluginMikrotik",
+    "TraceroutePluginHuawei",
     "RemoveCommand",
 )
