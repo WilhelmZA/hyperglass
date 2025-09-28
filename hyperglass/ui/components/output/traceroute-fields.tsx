@@ -55,8 +55,8 @@ export const ASNField = (props: ASNFieldProps): JSX.Element => {
     );
   }
   
-  // Display only ASN number, show org name on hover
-  const asnDisplay = `AS${asn}`;
+  // Display ASN as-is (no prefix added since backend now sends clean format)
+  const asnDisplay = asn; // Just use the value directly: "328964" or "IXP"
   const tooltipLabel = org && org !== 'None' ? `${asnDisplay} - ${org}` : asnDisplay;
   
   return (
