@@ -242,3 +242,11 @@ class TracerouteResult(HyperglassModel):
                 hop.org = org_name
                 if not hop.country:  # Only set country if not already set
                     hop.country = data.get("country") or None
+
+        # Store the ASN organization mapping for frontend path visualization
+        self._asn_organizations = asn_data
+
+    @property
+    def asn_organizations(self) -> t.Dict[str, t.Dict[str, str]]:
+        """Get ASN organization mapping for frontend path visualization."""
+        return getattr(self, '_asn_organizations', {})

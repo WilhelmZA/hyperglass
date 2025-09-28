@@ -44,11 +44,15 @@ function* buildElements(
   data: AllStructuredResponses,
 ): Generator<FlowElement<NodeData>> {
   let asPaths: string[][] = [];
+  let asnOrgs: Record<string, { name: string; country: string }> = {};
 
   if (isBGPData(data)) {
     // Handle BGP routes with AS paths
     const { routes } = data;
     asPaths = routes.filter(r => r.as_path.length !== 0).map(r => [...new Set(r.as_path.map(asn => String(asn)))]);
+    
+    // Get ASN organization mapping if available
+    asnOrgs = (data as any).asn_organizations || {};
   } else if (isTracerouteData(data)) {
     // Handle traceroute hops - build AS path from hop ASNs
     const hopAsns: string[] = [];
@@ -64,6 +68,9 @@ function* buildElements(
     if (hopAsns.length > 0) {
       asPaths = [hopAsns];
     }
+    
+    // Get ASN organization mapping if available
+    asnOrgs = (data as any).asn_organizations || {};
   }
 
   if (asPaths.length === 0) {
@@ -151,7 +158,7 @@ function* buildElements(
           position: { x, y },
           data: {
             asn: `${asn}`,
-            name: `AS${asn}`,
+            name: asnOrgs[asn]?.name || `AS${asn}`, // Use org name if available, fallback to AS prefix
             hasChildren: idx < endIdx,
             hasParents: true,
           },
