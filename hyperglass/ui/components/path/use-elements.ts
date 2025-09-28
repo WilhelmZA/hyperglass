@@ -60,6 +60,13 @@ function* buildElements(
     
     // Get ASN organization mapping if available
     asnOrgs = (data as any).asn_organizations || {};
+    
+    // Debug: Log BGP ASN organization data
+    if (Object.keys(asnOrgs).length > 0) {
+      console.debug('BGP ASN organizations loaded:', asnOrgs);
+    } else {
+      console.warn('BGP ASN organizations not found or empty');
+    }
   } else if (isTracerouteData(data)) {
     // Handle traceroute hops - build AS path from hop ASNs
     const hopAsns: string[] = [];
@@ -82,6 +89,13 @@ function* buildElements(
     
     // Get ASN organization mapping if available
     asnOrgs = (data as any).asn_organizations || {};
+    
+    // Debug: Log traceroute ASN organization data
+    if (Object.keys(asnOrgs).length > 0) {
+      console.debug('Traceroute ASN organizations loaded:', asnOrgs);
+    } else {
+      console.warn('Traceroute ASN organizations not found or empty');
+    }
   }
 
   if (asPaths.length === 0) {
