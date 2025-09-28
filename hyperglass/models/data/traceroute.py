@@ -152,6 +152,25 @@ class TracerouteResult(HyperglassModel):
 
         return " -> ".join(as_path) if as_path else "Unknown"
 
+    @property 
+    def as_path_data(self) -> t.List[t.Dict[str, t.Union[str, None]]]:
+        """AS path data as structured list for frontend visualization."""
+        as_path_data = []
+        current_asn = None
+        current_org = None
+
+        for hop in self.hops:
+            if hop.asn and hop.asn not in ["None", None] and hop.asn != current_asn:
+                current_asn = hop.asn  # Just number ("328964") or "IXP"
+                current_org = hop.org
+
+                as_path_data.append({
+                    "asn": current_asn,
+                    "org": current_org if current_org and current_org != "None" else None
+                })
+
+        return as_path_data
+
     async def enrich_with_ip_enrichment(self):
         """Enrich traceroute hops with IP enrichment data."""
         from hyperglass.external.ip_enrichment import network_info
