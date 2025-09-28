@@ -150,7 +150,12 @@ function* buildElements(
     id: base.asn,
     type: 'ASNode',
     position: { x, y },
-    data: { asn: base.asn, name: base.name, hasChildren: true, hasParents: false },
+    data: { 
+      asn: base.asn, 
+      name: asnOrgs[base.asn]?.name || base.name, 
+      hasChildren: true, 
+      hasParents: false 
+    },
   };
 
   for (const [groupIdx, pathGroup] of asPaths.entries()) {
@@ -169,7 +174,7 @@ function* buildElements(
           position: { x, y },
           data: {
             asn: `${asn}`,
-            name: asnOrgs[asn]?.name || (asn === '0' ? 'Private/Unknown' : `AS${asn}`), // Special handling for AS0
+            name: asn === 'IXP' ? 'IXP' : asnOrgs[asn]?.name || (asn === '0' ? 'Private/Unknown' : `AS${asn}`),
             hasChildren: idx < endIdx,
             hasParents: true,
           },
