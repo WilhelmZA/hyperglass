@@ -160,6 +160,7 @@ class BGPRouteTable(HyperglassModel):
     count: int = 0
     routes: t.List[BGPRoute]
     winning_weight: WinningWeight
+    asn_organizations: t.Dict[str, t.Dict[str, str]] = {}  # ASN -> {name, country}
 
     def __init__(self, **kwargs):
         """Sort routes by prefix after validation."""
@@ -222,9 +223,4 @@ class BGPRouteTable(HyperglassModel):
 
         # Store the ASN organization mapping for use by frontend
         # This could be used by AS path display components
-        self._asn_organizations = asn_data
-
-    @property
-    def asn_organizations(self) -> t.Dict[str, t.Dict[str, str]]:
-        """Get ASN organization mapping for frontend path visualization."""
-        return getattr(self, "_asn_organizations", {})
+        self.asn_organizations = asn_data

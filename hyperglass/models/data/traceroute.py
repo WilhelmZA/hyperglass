@@ -100,6 +100,7 @@ class TracerouteResult(HyperglassModel):
     raw_output: t.Optional[str] = (
         None  # Store cleaned/processed output for "Copy Raw" functionality (not original raw router output)
     )
+    asn_organizations: t.Dict[str, t.Dict[str, str]] = {}  # ASN -> {name, country}
 
     @property
     def hop_count(self) -> int:
@@ -248,9 +249,4 @@ class TracerouteResult(HyperglassModel):
                     hop.country = data.get("country") or None
 
         # Store the ASN organization mapping for frontend path visualization
-        self._asn_organizations = asn_data
-
-    @property
-    def asn_organizations(self) -> t.Dict[str, t.Dict[str, str]]:
-        """Get ASN organization mapping for frontend path visualization."""
-        return getattr(self, "_asn_organizations", {})
+        self.asn_organizations = asn_data
