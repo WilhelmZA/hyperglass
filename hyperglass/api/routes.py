@@ -1,6 +1,7 @@
 """API Routes."""
 
 # Standard Library
+import asyncio
 import json
 import time
 import typing as t
@@ -27,6 +28,15 @@ from hyperglass.models.config.devices import Devices, APIDevice
 from .state import get_state, get_params, get_devices
 from .tasks import send_webhook
 from .fake_output import fake_output
+
+# Global dict to track ongoing queries to prevent duplicate execution
+_ongoing_queries: t.Dict[str, asyncio.Event] = {}
+
+
+async def _cleanup_query_event(cache_key: str) -> None:
+    """Clean up completed query event after a short delay."""
+    await asyncio.sleep(1)  # Allow waiting requests to proceed
+    _ongoing_queries.pop(cache_key, None)
 
 __all__ = (
     "device",
@@ -96,44 +106,69 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
     elif not cache_response:
         _log.bind(cache_key=cache_key).debug("Cache miss")
 
-        timestamp = data.timestamp
+        # Check if this exact query is already running
+        if cache_key in _ongoing_queries:
+            _log.bind(cache_key=cache_key).debug("Query already in progress - waiting for completion")
+            # Wait for the ongoing query to complete
+            await _ongoing_queries[cache_key].wait()
+            # Check cache again after waiting
+            cache_response = cache.get_map(cache_key, "output")
+            if cache_response:
+                _log.bind(cache_key=cache_key).debug("Query completed by another request")
+                cached = True
+                runtime = 0
+                timestamp = cache.get_map(cache_key, "timestamp")
+            else:
+                _log.bind(cache_key=cache_key).warning("Query completed but no cache found - executing anyway")
 
-        starttime = time.time()
+        if not cache_response:
+            # Mark this query as ongoing
+            _ongoing_queries[cache_key] = asyncio.Event()
+            
+            try:
+                timestamp = data.timestamp
+                starttime = time.time()
 
-        if _state.params.fake_output:
-            # Return fake, static data for development purposes, if enabled.
-            output = await fake_output(
-                query_type=data.query_type,
-                structured=data.device.structured_output or False,
-            )
-        else:
-            # Pass request to execution module
-            output = await execute(data)
+                if _state.params.fake_output:
+                    # Return fake, static data for development purposes, if enabled.
+                    output = await fake_output(
+                        query_type=data.query_type,
+                        structured=data.device.structured_output or False,
+                    )
+                else:
+                    # Pass request to execution module
+                    output = await execute(data)
 
-        endtime = time.time()
-        elapsedtime = round(endtime - starttime, 4)
-        _log.debug("Runtime: {!s} seconds", elapsedtime)
+                endtime = time.time()
+                elapsedtime = round(endtime - starttime, 4)
+                _log.debug("Runtime: {!s} seconds", elapsedtime)
 
-        if output is None:
-            raise HyperglassError(message=_state.params.messages.general, alert="danger")
+                if output is None:
+                    raise HyperglassError(message=_state.params.messages.general, alert="danger")
 
-        json_output = is_type(output, OutputDataModel)
+                json_output = is_type(output, OutputDataModel)
 
-        if json_output:
-            # Export structured output as JSON string to guarantee value
-            # is serializable, then convert it back to a dict.
-            as_json = output.export_json()
-            raw_output = json.loads(as_json)
-        else:
-            raw_output = str(output)
+                if json_output:
+                    # Export structured output as JSON string to guarantee value
+                    # is serializable, then convert it back to a dict.
+                    as_json = output.export_json()
+                    raw_output = json.loads(as_json)
+                else:
+                    raw_output = str(output)
 
-        cache.set_map_item(cache_key, "output", raw_output)
-        cache.set_map_item(cache_key, "timestamp", timestamp)
-        cache.expire(cache_key, expire_in=_state.params.cache.timeout)
+                cache.set_map_item(cache_key, "output", raw_output)
+                cache.set_map_item(cache_key, "timestamp", timestamp)
+                cache.expire(cache_key, expire_in=_state.params.cache.timeout)
 
-        _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
+                _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
 
-        runtime = int(round(elapsedtime, 0))
+                runtime = int(round(elapsedtime, 0))
+            
+            finally:
+                # Mark query as complete and notify waiting requests
+                _ongoing_queries[cache_key].set()
+                # Clean up the event after a short delay to allow waiting requests to proceed
+                asyncio.create_task(_cleanup_query_event(cache_key))
 
     # If it does, return the cached entry
     cache_response = cache.get_map(cache_key, "output")
