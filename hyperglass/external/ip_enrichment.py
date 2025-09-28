@@ -576,7 +576,7 @@ class IPEnrichmentService:
                 for ixpfx in ixpfxs:
                     try:
                         prefix = ixpfx.get("prefix")
-                        
+
                         if prefix:
                             network = ip_network(prefix, strict=False)
                             # Use "IXP Network" as generic name since we only need to know it's an IXP
@@ -800,11 +800,11 @@ async def lookup_asns_bulk(asns: t.List[t.Union[str, int]]) -> t.Dict[str, t.Dic
     """Bulk lookup ASN organization names and countries.
 
     Args:
-        asns: List of ASN numbers (as strings like "328964" or integers)
+        asns: List of ASN numbers (as strings like "12345" or integers)
 
     Returns:
         Dict mapping ASN string to {"name": org_name, "country": country_code}
-        Example: {"328964": {"name": "Insight Network Solutions", "country": "ZA"}}
+        Example: {"12345": {"name": "Example ISP", "country": "US"}}
     """
     await _service.ensure_data_loaded()
 
@@ -988,7 +988,7 @@ async def network_info(*targets: str) -> TargetData:
             elif ip_info.asn is not None:
                 # ASN case - normal network - return just the NUMBER, no AS prefix
                 detail = {
-                    "asn": str(ip_info.asn),  # Just the number as string, e.g. "328964"
+                    "asn": str(ip_info.asn),  # Just the number as string, e.g. "12345"
                     "ip": target,
                     "prefix": ip_info.prefix or "None",  # Use the CIDR from table.jsonl
                     "country": ip_info.country or "None",  # Use country code from asns.csv

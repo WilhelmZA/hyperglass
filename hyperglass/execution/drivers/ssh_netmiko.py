@@ -86,7 +86,7 @@ class NetmikoConnection(SSHConnection):
         # Run blocking netmiko operations in thread executor to prevent blocking the event loop
         import asyncio
         import functools
-        
+
         def _netmiko_connect():
             """Execute blocking netmiko operations in a separate thread."""
             try:

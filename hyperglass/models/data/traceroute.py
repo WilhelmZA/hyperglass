@@ -124,7 +124,7 @@ class TracerouteResult(HyperglassModel):
         for hop in self.hops:
             if hop.asn and hop.asn not in ["None", None] and hop.asn != current_asn:
                 current_asn = hop.asn
-                # hop.asn is now just number ("328964") or "IXP" - display as-is
+                # hop.asn is now just number ("12345") or "IXP" - display as-is
                 as_path.append(hop.asn)
 
         return " -> ".join(as_path) if as_path else "Unknown"
@@ -138,7 +138,7 @@ class TracerouteResult(HyperglassModel):
 
         for hop in self.hops:
             if hop.asn and hop.asn not in ["None", None] and hop.asn != current_asn:
-                current_asn = hop.asn  # Just number ("328964") or "IXP"
+                current_asn = hop.asn  # Just number ("12345") or "IXP"
                 current_org = hop.org
 
                 # Format with org name if we have it
@@ -161,7 +161,7 @@ class TracerouteResult(HyperglassModel):
 
         for hop in self.hops:
             if hop.asn and hop.asn not in ["None", None] and hop.asn != current_asn:
-                current_asn = hop.asn  # Just number ("328964") or "IXP"
+                current_asn = hop.asn  # Just number ("12345") or "IXP"
                 current_org = hop.org
 
                 as_path_data.append(
@@ -193,10 +193,10 @@ class TracerouteResult(HyperglassModel):
         for hop in self.hops:
             if hop.ip_address in network_data:
                 data: TargetDetail = network_data[hop.ip_address]
-                # ASN field is now just number string ("328964") or "IXP"
+                # ASN field is now just number string ("12345") or "IXP"
                 asn_value = data.get("asn")
                 if asn_value and asn_value != "None":
-                    hop.asn = asn_value  # Store as-is: "328964" or "IXP"
+                    hop.asn = asn_value  # Store as-is: "12345" or "IXP"
                 else:
                     hop.asn = None
 

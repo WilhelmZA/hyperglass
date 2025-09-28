@@ -212,7 +212,7 @@ class BGPRouteTable(HyperglassModel):
         from hyperglass.log import log
 
         _log = log.bind(source="bgp_asn_enrichment")
-        
+
         # Collect all unique ASNs from AS paths
         all_asns = set()
         for route in self.routes:
@@ -224,16 +224,20 @@ class BGPRouteTable(HyperglassModel):
 
         # Convert to strings and bulk lookup
         asn_strings = [str(asn) for asn in all_asns]
-        _log.warning(f"🔍 BGP AS PATH ENRICHMENT STARTED - Looking up {len(asn_strings)} ASNs: {asn_strings}")
-        
+        _log.warning(
+            f"🔍 BGP AS PATH ENRICHMENT STARTED - Looking up {len(asn_strings)} ASNs: {asn_strings}"
+        )
+
         try:
             asn_data = await lookup_asns_bulk(asn_strings)
             _log.debug(f"Got ASN organization data: {asn_data}")
-            
+
             # Store the ASN organization mapping for use by frontend
             self.asn_organizations = asn_data
-            _log.warning(f"🔍 BGP AS PATH ENRICHMENT SUCCESS - Enriched with {len(asn_data)} ASN organizations: {asn_data}")
-            
+            _log.warning(
+                f"🔍 BGP AS PATH ENRICHMENT SUCCESS - Enriched with {len(asn_data)} ASN organizations: {asn_data}"
+            )
+
         except Exception as e:
             _log.error(f"Failed to lookup ASN organizations: {e}")
             self.asn_organizations = {}

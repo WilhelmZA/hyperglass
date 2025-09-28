@@ -34,10 +34,12 @@ from .fake_output import fake_output
 # Global query deduplication tracking
 _ongoing_queries: t.Dict[str, asyncio.Event] = {}
 
+
 async def _cleanup_query_event(cache_key: str) -> None:
     """Clean up completed query event after a short delay."""
     await asyncio.sleep(5)  # Allow time for waiting requests to proceed
     _ongoing_queries.pop(cache_key, None)
+
 
 # Global dict to track ongoing queries to prevent duplicate execution
 _ongoing_queries: t.Dict[str, asyncio.Event] = {}
@@ -47,6 +49,7 @@ async def _cleanup_query_event(cache_key: str) -> None:
     """Clean up completed query event after a short delay."""
     await asyncio.sleep(1)  # Allow waiting requests to proceed
     _ongoing_queries.pop(cache_key, None)
+
 
 __all__ = (
     "device",
@@ -111,7 +114,9 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         _log.bind(cache_key=cache_key).debug("Cache hit")
 
         # If a cached response exists, reset the expiration time.
-        await loop.run_in_executor(None, partial(cache.expire, cache_key, expire_in=_state.params.cache.timeout))
+        await loop.run_in_executor(
+            None, partial(cache.expire, cache_key, expire_in=_state.params.cache.timeout)
+        )
 
         cached = True
         runtime = 0
@@ -122,23 +127,31 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
 
         # Check if this exact query is already running
         if cache_key in _ongoing_queries:
-            _log.bind(cache_key=cache_key).debug("Query already in progress - waiting for completion")
+            _log.bind(cache_key=cache_key).debug(
+                "Query already in progress - waiting for completion"
+            )
             # Wait for the ongoing query to complete
             await _ongoing_queries[cache_key].wait()
             # Check cache again after waiting
-            cache_response = await loop.run_in_executor(None, partial(cache.get_map, cache_key, "output"))
+            cache_response = await loop.run_in_executor(
+                None, partial(cache.get_map, cache_key, "output")
+            )
             if cache_response:
                 _log.bind(cache_key=cache_key).debug("Query completed by another request")
                 cached = True
                 runtime = 0
-                timestamp = await loop.run_in_executor(None, partial(cache.get_map, cache_key, "timestamp"))
+                timestamp = await loop.run_in_executor(
+                    None, partial(cache.get_map, cache_key, "timestamp")
+                )
             else:
-                _log.bind(cache_key=cache_key).warning("Query completed but no cache found - executing anyway")
+                _log.bind(cache_key=cache_key).warning(
+                    "Query completed but no cache found - executing anyway"
+                )
 
         if not cache_response:
             # Mark this query as ongoing
             _ongoing_queries[cache_key] = asyncio.Event()
-            
+
             try:
                 timestamp = data.timestamp
                 starttime = time.time()
@@ -171,14 +184,20 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                     raw_output = str(output)
 
                 # Only cache successful results
-                await loop.run_in_executor(None, partial(cache.set_map_item, cache_key, "output", raw_output))
-                await loop.run_in_executor(None, partial(cache.set_map_item, cache_key, "timestamp", timestamp))
-                await loop.run_in_executor(None, partial(cache.expire, cache_key, expire_in=_state.params.cache.timeout))
+                await loop.run_in_executor(
+                    None, partial(cache.set_map_item, cache_key, "output", raw_output)
+                )
+                await loop.run_in_executor(
+                    None, partial(cache.set_map_item, cache_key, "timestamp", timestamp)
+                )
+                await loop.run_in_executor(
+                    None, partial(cache.expire, cache_key, expire_in=_state.params.cache.timeout)
+                )
 
                 _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
 
                 runtime = int(round(elapsedtime, 0))
-            
+
             except (DeviceTimeout, ResponseEmpty) as exc:
                 # Don't cache timeout or empty response errors - allow immediate retry
                 _log.bind(cache_key=cache_key).warning(
@@ -186,7 +205,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                 )
                 # Re-raise the exception so the error handler can process it normally
                 raise exc
-            
+
             finally:
                 # Mark query as complete and notify waiting requests
                 _ongoing_queries[cache_key].set()
