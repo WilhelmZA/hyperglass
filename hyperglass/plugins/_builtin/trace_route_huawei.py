@@ -199,8 +199,15 @@ class TraceroutePluginHuawei(OutputPlugin):
 
     def process(self, output: "OutputType", query: "Query") -> "OutputType":
         """Process Huawei traceroute output."""
+        # Extract target and source with fallbacks
+        target = str(query.query_target) if query.query_target else "unknown"
+        source = "unknown"
+        
+        if hasattr(query, "device") and query.device:
+            source = getattr(query.device, "display_name", None) or getattr(query.device, "name", "unknown")
+        
         return parse_huawei_traceroute(
             output=output,
-            target=str(query.query_target),
-            source=query.device.display_name,
+            target=target,
+            source=source,
         )
