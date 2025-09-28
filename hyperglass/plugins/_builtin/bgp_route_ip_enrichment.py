@@ -29,6 +29,8 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
         "juniper_junos",
         "arista_eos",
         "frr",
+        "huawei",
+        "huawei_vrpv8",
     )
     directives: t.Sequence[str] = ("bgp_route", "bgp_community")
     common: bool = True

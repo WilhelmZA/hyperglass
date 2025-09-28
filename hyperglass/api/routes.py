@@ -17,6 +17,7 @@ from litestar.background_tasks import BackgroundTask
 from hyperglass.log import log
 from hyperglass.state import HyperglassState
 from hyperglass.exceptions import HyperglassError
+from hyperglass.exceptions.public import DeviceTimeout, ResponseEmpty
 from hyperglass.models.api import Query
 from hyperglass.models.data import OutputDataModel
 from hyperglass.util.typing import is_type
@@ -169,6 +170,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                 else:
                     raw_output = str(output)
 
+                # Only cache successful results
                 await loop.run_in_executor(None, partial(cache.set_map_item, cache_key, "output", raw_output))
                 await loop.run_in_executor(None, partial(cache.set_map_item, cache_key, "timestamp", timestamp))
                 await loop.run_in_executor(None, partial(cache.expire, cache_key, expire_in=_state.params.cache.timeout))
@@ -176,6 +178,14 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                 _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
 
                 runtime = int(round(elapsedtime, 0))
+            
+            except (DeviceTimeout, ResponseEmpty) as exc:
+                # Don't cache timeout or empty response errors - allow immediate retry
+                _log.bind(cache_key=cache_key).warning(
+                    "Query failed with timeout or empty response - not caching result to allow immediate retry"
+                )
+                # Re-raise the exception so the error handler can process it normally
+                raise exc
             
             finally:
                 # Mark query as complete and notify waiting requests

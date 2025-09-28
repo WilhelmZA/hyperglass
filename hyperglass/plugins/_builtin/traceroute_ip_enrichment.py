@@ -28,6 +28,8 @@ class ZTracerouteIpEnrichment(OutputPlugin):
         "mikrotik",
         "cisco_ios",
         "juniper_junos",
+        "huawei",
+        "huawei_vrpv8",
     )
     directives: t.Sequence[str] = ("traceroute", "MikroTik_Traceroute")
     common: bool = True
