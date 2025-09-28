@@ -49,7 +49,14 @@ function* buildElements(
   if (isBGPData(data)) {
     // Handle BGP routes with AS paths
     const { routes } = data;
-    asPaths = routes.filter(r => r.as_path.length !== 0).map(r => [...new Set(r.as_path.map(asn => String(asn)))]);
+    asPaths = routes
+      .filter(r => r.as_path.length !== 0)
+      .map(r => {
+        const uniqueAsns = [...new Set(r.as_path.map(asn => String(asn)))];
+        // Remove the base ASN if it's the first hop to avoid duplication
+        return uniqueAsns[0] === base.asn ? uniqueAsns.slice(1) : uniqueAsns;
+      })
+      .filter(path => path.length > 0); // Remove empty paths
     
     // Get ASN organization mapping if available
     asnOrgs = (data as any).asn_organizations || {};
@@ -66,7 +73,11 @@ function* buildElements(
     }
     
     if (hopAsns.length > 0) {
-      asPaths = [hopAsns];
+      // Remove the base ASN if it's the first hop to avoid duplication
+      const filteredAsns = hopAsns[0] === base.asn ? hopAsns.slice(1) : hopAsns;
+      if (filteredAsns.length > 0) {
+        asPaths = [filteredAsns];
+      }
     }
     
     // Get ASN organization mapping if available
