@@ -33,16 +33,19 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
     directives: t.Sequence[str] = ("bgp_route", "bgp_community")
     common: bool = True
 
-    async def _enrich_async(self, output: BGPRouteTable) -> None:
+    async def _enrich_async(self, output: BGPRouteTable, enrich_next_hop: bool = True) -> None:
         """Async helper to enrich BGP route data."""
         _log = log.bind(plugin=self.__class__.__name__)
         
-        try:
-            # First enrich with next-hop IP information (if enabled)
-            await output.enrich_with_ip_enrichment()
-            _log.debug("BGP next-hop IP enrichment completed")
-        except Exception as e:
-            _log.error(f"BGP next-hop IP enrichment failed: {e}")
+        if enrich_next_hop:
+            try:
+                # First enrich with next-hop IP information (if enabled)
+                await output.enrich_with_ip_enrichment()
+                _log.debug("BGP next-hop IP enrichment completed")
+            except Exception as e:
+                _log.error(f"BGP next-hop IP enrichment failed: {e}")
+        else:
+            _log.debug("BGP next-hop IP enrichment skipped (disabled in config)")
             
         try:
             # Always enrich AS path ASNs with organization names
@@ -61,6 +64,7 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
         _log.warning(f"🔍 BGP ROUTE PLUGIN STARTED - Processing {len(output.routes)} BGP routes")
         
         # Check if IP enrichment is enabled in config
+        enrich_next_hop = True
         try:
             from hyperglass.state import use_state
 
@@ -69,9 +73,10 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
                 _log.debug("IP enrichment disabled in configuration")
                 return output
 
-            if not params.structured.ip_enrichment.enrich_next_hop:
-                _log.debug("Next-hop enrichment disabled in configuration")
-                return output
+            # Check next-hop enrichment setting but don't exit - we still want ASN org enrichment
+            enrich_next_hop = params.structured.ip_enrichment.enrich_next_hop
+            if not enrich_next_hop:
+                _log.debug("Next-hop enrichment disabled in configuration - will skip next-hop lookup but continue with ASN organization enrichment")
         except Exception as e:
             _log.debug(f"Could not check IP enrichment config: {e}")
 
@@ -86,13 +91,13 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
                     import concurrent.futures
 
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self._enrich_async(output))
+                        future = executor.submit(asyncio.run, self._enrich_async(output, enrich_next_hop))
                         future.result()
                 else:
-                    loop.run_until_complete(self._enrich_async(output))
+                    loop.run_until_complete(self._enrich_async(output, enrich_next_hop))
             except RuntimeError:
                 # No event loop, create one
-                asyncio.run(self._enrich_async(output))
+                asyncio.run(self._enrich_async(output, enrich_next_hop))
             _log.warning(f"🔍 BGP ROUTE PLUGIN COMPLETED - ASN organizations: {len(output.asn_organizations)}")
         except Exception as e:
             _log.error(f"BGP route IP enrichment failed: {e}")
