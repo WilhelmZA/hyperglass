@@ -46,7 +46,7 @@ class ZTracerouteIpEnrichment(OutputPlugin):
         """Async helper to enrich traceroute data."""
         # First enrich with IP information (ASN numbers)
         await output.enrich_with_ip_enrichment()
-        
+
         # Then enrich ASN numbers with organization names
         await output.enrich_asn_organizations()
 
@@ -62,6 +62,7 @@ class ZTracerouteIpEnrichment(OutputPlugin):
         # Check if IP enrichment is enabled in config
         try:
             from hyperglass.state import use_state
+
             params = use_state("params")
             if not params.structured.ip_enrichment.enabled:
                 _log.debug("IP enrichment disabled in configuration")

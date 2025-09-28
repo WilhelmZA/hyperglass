@@ -169,7 +169,7 @@ function* buildElements(
           position: { x, y },
           data: {
             asn: `${asn}`,
-            name: asnOrgs[asn]?.name || `AS${asn}`, // Use org name if available, fallback to AS prefix
+            name: asnOrgs[asn]?.name || (asn === '0' ? 'Private/Unknown' : `AS${asn}`), // Special handling for AS0
             hasChildren: idx < endIdx,
             hasParents: true,
           },

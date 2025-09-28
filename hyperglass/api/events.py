@@ -32,6 +32,7 @@ async def init_ip_enrichment(_: Litestar) -> None:
 
     try:
         from hyperglass.external.ip_enrichment import _service
+
         log.info("Initializing IP enrichment data at startup...")
         success = await _service.ensure_data_loaded()
         if success:

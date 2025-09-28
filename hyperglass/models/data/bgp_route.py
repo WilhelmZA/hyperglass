@@ -213,18 +213,18 @@ class BGPRouteTable(HyperglassModel):
         all_asns = set()
         for route in self.routes:
             all_asns.update(route.as_path)
-        
+
         if not all_asns:
             return
 
         # Convert to strings and bulk lookup
         asn_data = await lookup_asns_bulk([str(asn) for asn in all_asns])
-        
+
         # Store the ASN organization mapping for use by frontend
         # This could be used by AS path display components
         self._asn_organizations = asn_data
 
-    @property 
+    @property
     def asn_organizations(self) -> t.Dict[str, t.Dict[str, str]]:
         """Get ASN organization mapping for frontend path visualization."""
-        return getattr(self, '_asn_organizations', {})
+        return getattr(self, "_asn_organizations", {})
