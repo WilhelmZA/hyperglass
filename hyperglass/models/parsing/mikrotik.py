@@ -672,7 +672,6 @@ class MikrotikTracerouteTable(MikrotikBase):
                     loss_pct=hop.loss_pct,
                     sent_count=hop.sent_count,
                     last_rtt=hop.last_rtt,
-                    avg_rtt=hop.avg_rtt,
                     best_rtt=hop.best_rtt,
                     worst_rtt=hop.worst_rtt,
                     # BGP enrichment fields will be populated by enrichment plugin

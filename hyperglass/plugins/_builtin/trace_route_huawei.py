@@ -112,15 +112,24 @@ class HuaweiTracerouteTable(TracerouteResult):
                 hops.append(TracerouteHop(
                     hop_number=hop_number,
                     ip_address=ip_address,
+                    display_ip=None,  # Huawei doesn't truncate IPs like MikroTik
+                    hostname=None,  # Will be populated by IP enrichment
                     rtt1=rtt,
                     rtt2=None,  # Huawei shows only one RTT per line
                     rtt3=None,
-                    # Set statistics for proper table display
+                    # MikroTik-specific statistics (populate for consistency)
                     sent_count=1,  # Huawei sends 1 ping per hop
                     last_rtt=rtt,  # Same as the only RTT
                     best_rtt=rtt,  # Same as the only RTT
                     worst_rtt=rtt,  # Same as the only RTT
                     loss_pct=0,  # No loss if we got a response
+                    # BGP enrichment fields (will be populated by enrichment plugin)
+                    asn=None,
+                    org=None,
+                    prefix=None,
+                    country=None,
+                    rir=None,
+                    allocated=None,
                 ))
                 continue
 
@@ -134,15 +143,24 @@ class HuaweiTracerouteTable(TracerouteResult):
                 hops.append(TracerouteHop(
                     hop_number=hop_number,
                     ip_address=None,
+                    display_ip=None,
+                    hostname=None,
                     rtt1=None,
                     rtt2=None,
                     rtt3=None,
-                    # Set statistics for timeout
+                    # MikroTik-specific statistics for timeout
                     sent_count=1,  # Still sent 1 ping, just timed out
-                    loss_pct=100,  # 100% loss for timeout
                     last_rtt=None,
                     best_rtt=None,
                     worst_rtt=None,
+                    loss_pct=100,  # 100% loss for timeout
+                    # BGP enrichment fields (all None for timeout)
+                    asn=None,
+                    org=None,
+                    prefix=None,
+                    country=None,
+                    rir=None,
+                    allocated=None,
                 ))
                 continue
                 
