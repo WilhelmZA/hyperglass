@@ -688,6 +688,53 @@ class IPEnrichmentService:
         asn_data = self.asn_info.get(asn, {})
         return asn_data.get("country", "")
 
+    def lookup_ip_direct(self, ip_str: str) -> IPInfo:
+        """Direct IP lookup without ensuring data is loaded - for bulk operations."""
+        try:
+            target_ip = ip_address(ip_str)
+        except ValueError as e:
+            log.error(f"Invalid IP address: {ip_str}: {e}")
+            return IPInfo(ip_str)
+
+        # Check IXP networks first
+        for ixp_net, ixp_prefix, ixp_name in self.ixp_networks:
+            try:
+                ixp_network = ip_network(f"{ixp_net}/{ixp_prefix}")
+                if target_ip in ixp_network:
+                    log.debug(f"Found IXP match for {ip_str}: {ixp_name}")
+                    return IPInfo(ip_str, is_ixp=True, ixp_name=ixp_name)
+            except Exception:
+                continue
+
+        # Ensure optimized lookup is ready
+        if not self._lookup_optimized:
+            self._optimize_lookups()
+
+        # Fast integer-based lookup for ASN
+        target_int = int(target_ip)
+        
+        if isinstance(target_ip, IPv4Address):
+            # Use optimized IPv4 lookup
+            for net_int, mask_bits, asn, cidr_string in self._ipv4_networks:
+                if (target_int >> mask_bits) == (net_int >> mask_bits):
+                    asn_data = self.asn_info.get(asn, {})
+                    asn_name = asn_data.get("name", f"AS{asn}")
+                    country = asn_data.get("country", "")
+                    log.debug(f"Found ASN match for {ip_str}: AS{asn} ({asn_name}) in {cidr_string}")
+                    return IPInfo(ip_str, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country)
+        else:
+            # Use optimized IPv6 lookup
+            for net_int, mask_bits, asn, cidr_string in self._ipv6_networks:
+                if (target_int >> mask_bits) == (net_int >> mask_bits):
+                    asn_data = self.asn_info.get(asn, {})
+                    asn_name = asn_data.get("name", f"AS{asn}")
+                    country = asn_data.get("country", "")
+                    log.debug(f"Found ASN match for {ip_str}: AS{asn} ({asn_name}) in {cidr_string}")
+                    return IPInfo(ip_str, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country)
+
+        log.debug(f"No enrichment data found for {ip_str}")
+        return IPInfo(ip_str)
+
 
 # Global service instance
 _service = IPEnrichmentService()
@@ -843,11 +890,14 @@ async def network_info(*targets: str) -> TargetData:
     try:
         _log.info(f"Enriching {len(query_targets)} IP addresses")
 
+        # Load data ONCE for all lookups
+        await _service.ensure_data_loaded()
+
         query_data = {}
 
-        # Process each target
+        # Process each target without reloading data
         for target in query_targets:
-            ip_info = await lookup_ip(target)
+            ip_info = _service.lookup_ip_direct(target)  # Use direct lookup that doesn't reload data
 
             # Convert to TargetDetail format
             if ip_info.is_ixp and ip_info.ixp_name:

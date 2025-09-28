@@ -76,9 +76,11 @@ class TracerouteHop(HyperglassModel):
     def asn_display(self) -> str:
         """Display ASN with organization name."""
         if self.asn and self.org and self.asn != "None" and self.org != "None":
-            return f"AS{self.asn} ({self.org})"
+            # ASN already has "AS" prefix or is "IXP" - use as-is
+            return f"{self.asn} ({self.org})"
         elif self.asn and self.asn != "None":
-            return f"AS{self.asn}"
+            # ASN already has "AS" prefix or is "IXP" - use as-is  
+            return self.asn
         return "Unknown"
 
 
