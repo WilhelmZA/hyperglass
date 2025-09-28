@@ -6,6 +6,7 @@ import json
 import time
 import typing as t
 from datetime import UTC, datetime
+from functools import partial
 
 # Third Party
 from litestar import Request, Response, get, post
@@ -28,6 +29,14 @@ from hyperglass.models.config.devices import Devices, APIDevice
 from .state import get_state, get_params, get_devices
 from .tasks import send_webhook
 from .fake_output import fake_output
+
+# Global query deduplication tracking
+_ongoing_queries: t.Dict[str, asyncio.Event] = {}
+
+async def _cleanup_query_event(cache_key: str) -> None:
+    """Clean up completed query event after a short delay."""
+    await asyncio.sleep(5)  # Allow time for waiting requests to proceed
+    _ongoing_queries.pop(cache_key, None)
 
 # Global dict to track ongoing queries to prevent duplicate execution
 _ongoing_queries: t.Dict[str, asyncio.Event] = {}
@@ -74,6 +83,8 @@ async def info(params: Params) -> APIParams:
 @post("/api/query", dependencies={"_state": Provide(get_state)})
 async def query(_state: HyperglassState, request: Request, data: Query) -> QueryResponse:
     """Ingest request data pass it to the backend application to perform the query."""
+    import asyncio
+    from functools import partial
 
     timestamp = datetime.now(UTC)
 
@@ -88,7 +99,9 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
 
     _log.info("Starting query execution")
 
-    cache_response = cache.get_map(cache_key, "output")
+    # Wrap blocking cache operations in executor to prevent event loop blocking
+    loop = asyncio.get_event_loop()
+    cache_response = await loop.run_in_executor(None, partial(cache.get_map, cache_key, "output"))
     json_output = False
     cached = False
     runtime = 65535
@@ -97,11 +110,11 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         _log.bind(cache_key=cache_key).debug("Cache hit")
 
         # If a cached response exists, reset the expiration time.
-        cache.expire(cache_key, expire_in=_state.params.cache.timeout)
+        await loop.run_in_executor(None, partial(cache.expire, cache_key, expire_in=_state.params.cache.timeout))
 
         cached = True
         runtime = 0
-        timestamp = cache.get_map(cache_key, "timestamp")
+        timestamp = await loop.run_in_executor(None, partial(cache.get_map, cache_key, "timestamp"))
 
     elif not cache_response:
         _log.bind(cache_key=cache_key).debug("Cache miss")
@@ -112,12 +125,12 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
             # Wait for the ongoing query to complete
             await _ongoing_queries[cache_key].wait()
             # Check cache again after waiting
-            cache_response = cache.get_map(cache_key, "output")
+            cache_response = await loop.run_in_executor(None, partial(cache.get_map, cache_key, "output"))
             if cache_response:
                 _log.bind(cache_key=cache_key).debug("Query completed by another request")
                 cached = True
                 runtime = 0
-                timestamp = cache.get_map(cache_key, "timestamp")
+                timestamp = await loop.run_in_executor(None, partial(cache.get_map, cache_key, "timestamp"))
             else:
                 _log.bind(cache_key=cache_key).warning("Query completed but no cache found - executing anyway")
 
@@ -156,9 +169,9 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                 else:
                     raw_output = str(output)
 
-                cache.set_map_item(cache_key, "output", raw_output)
-                cache.set_map_item(cache_key, "timestamp", timestamp)
-                cache.expire(cache_key, expire_in=_state.params.cache.timeout)
+                await loop.run_in_executor(None, partial(cache.set_map_item, cache_key, "output", raw_output))
+                await loop.run_in_executor(None, partial(cache.set_map_item, cache_key, "timestamp", timestamp))
+                await loop.run_in_executor(None, partial(cache.expire, cache_key, expire_in=_state.params.cache.timeout))
 
                 _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
 
@@ -171,7 +184,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                 asyncio.create_task(_cleanup_query_event(cache_key))
 
     # If it does, return the cached entry
-    cache_response = cache.get_map(cache_key, "output")
+    cache_response = await loop.run_in_executor(None, partial(cache.get_map, cache_key, "output"))
 
     json_output = is_type(cache_response, t.Dict)
     response_format = "text/plain"
