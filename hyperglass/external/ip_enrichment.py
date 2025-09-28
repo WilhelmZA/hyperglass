@@ -51,7 +51,6 @@ RAW_ASNS_FILE = IP_ENRICHMENT_DATA_DIR / "asns.csv"
 # Data URLs
 BGP_TOOLS_TABLE_URL = "https://bgp.tools/table.jsonl"
 BGP_TOOLS_ASNS_URL = "https://bgp.tools/asns.csv"
-PEERINGDB_IXLAN_URL = "https://www.peeringdb.com/api/ixlan"
 PEERINGDB_IXPFX_URL = "https://www.peeringdb.com/api/ixpfx"
 
 # Cache duration (24 hours default, configurable)
@@ -547,8 +546,8 @@ class IPEnrichmentService:
         )
 
     async def _download_ixp_data(self, client) -> None:
-        """Download PeeringDB IXP data with rate limiting and retry logic."""
-        log.info("📥 Downloading PeeringDB IXP data from peeringdb.com...")
+        """Download PeeringDB IXP prefixes data - simplified approach using only IXPFX."""
+        log.info("📥 Downloading PeeringDB IXP prefixes from peeringdb.com...")
 
         max_retries = 3
         base_delay = 5  # Start with 5 second delay
@@ -560,29 +559,7 @@ class IPEnrichmentService:
                     log.info(f"Retry attempt {attempt + 1}/{max_retries} after {delay}s delay...")
                     await asyncio.sleep(delay)
 
-                # Get IXLANs (exchange point LANs) with retry
-                log.debug("Downloading IXP LANs...")
-                download_start = datetime.now()
-                response = await client.get(PEERINGDB_IXLAN_URL)
-                response.raise_for_status()
-                ixlans = response.json()["data"]
-                ixlan_time = (datetime.now() - download_start).total_seconds()
-
-                # Create mapping of ixlan_id -> ixp_name
-                ixlan_to_name = {}
-                for ixlan in ixlans:
-                    ixlan_id = ixlan.get("id")
-                    ixp_name = ixlan.get("name", "")
-                    if ixlan_id and ixp_name:
-                        ixlan_to_name[ixlan_id] = ixp_name
-
-                log.debug(f"Found {len(ixlan_to_name)} IXP LANs in {ixlan_time:.1f}s")
-
-                # Add delay between API calls to avoid rate limiting
-                log.debug("Waiting 3s before downloading IXP prefixes...")
-                await asyncio.sleep(3)
-
-                # Get IXP prefixes
+                # Get IXP prefixes directly - no need for IXLAN lookup
                 log.debug("Downloading IXP prefixes...")
                 download_start = datetime.now()
                 response = await client.get(PEERINGDB_IXPFX_URL)
@@ -590,7 +567,7 @@ class IPEnrichmentService:
                 ixpfxs = response.json()["data"]
                 prefix_time = (datetime.now() - download_start).total_seconds()
 
-                # Process IXP prefixes
+                # Process IXP prefixes - use a generic IXP name since we don't need specific names
                 process_start = datetime.now()
                 ixp_count = 0
                 total_prefixes = len(ixpfxs)
@@ -599,11 +576,11 @@ class IPEnrichmentService:
                 for ixpfx in ixpfxs:
                     try:
                         prefix = ixpfx.get("prefix")
-                        ixlan_id = ixpfx.get("ixlan_id")
-
-                        if prefix and ixlan_id in ixlan_to_name:
+                        
+                        if prefix:
                             network = ip_network(prefix, strict=False)
-                            ixp_name = ixlan_to_name[ixlan_id]
+                            # Use "IXP Network" as generic name since we only need to know it's an IXP
+                            ixp_name = "IXP Network"
                             self.ixp_networks.append(
                                 (network.network_address, network.prefixlen, ixp_name)
                             )
@@ -622,8 +599,8 @@ class IPEnrichmentService:
 
                 log.info(
                     f"✅ Downloaded {ixp_count}/{total_prefixes} IXP networks "
-                    f"(IXLAN: {ixlan_time:.1f}s, prefixes: {prefix_time:.1f}s, "
-                    f"process: {process_time:.1f}s, sort: {sort_time:.1f}s, failed: {failed_prefixes})"
+                    f"(download: {prefix_time:.1f}s, process: {process_time:.1f}s, "
+                    f"sort: {sort_time:.1f}s, failed: {failed_prefixes})"
                 )
                 return  # Success - exit retry loop
 
