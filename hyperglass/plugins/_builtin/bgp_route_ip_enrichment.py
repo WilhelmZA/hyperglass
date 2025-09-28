@@ -58,8 +58,8 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
             return output
 
         _log = log.bind(plugin=self.__class__.__name__)
-        _log.debug(f"Starting IP enrichment for {len(output.routes)} BGP routes")
-
+        _log.warning(f"🔍 BGP ROUTE PLUGIN STARTED - Processing {len(output.routes)} BGP routes")
+        
         # Check if IP enrichment is enabled in config
         try:
             from hyperglass.state import use_state
@@ -93,7 +93,7 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
             except RuntimeError:
                 # No event loop, create one
                 asyncio.run(self._enrich_async(output))
-            _log.debug("BGP route IP enrichment completed successfully")
+            _log.warning(f"🔍 BGP ROUTE PLUGIN COMPLETED - ASN organizations: {len(output.asn_organizations)}")
         except Exception as e:
             _log.error(f"BGP route IP enrichment failed: {e}")
 
