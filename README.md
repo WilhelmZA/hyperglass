@@ -46,7 +46,7 @@ hyperglass is intended to make implementing a looking glass too easy not to do, 
   - TNSR
   - VyOS
 - **Structured BGP Route support** for: Arista EOS, FRRouting, Huawei VRP, Juniper Junos, MikroTik RouterOS
-- **Structured Traceroute support** for: Huawei VRP, MikroTik RouterOS/SwitchOS
+- **Structured Traceroute support** for: Arista EOS, FRRouting, Huawei VRP, Juniper Junos, MikroTik RouterOS/SwitchOS
 - Configurable support for any other [supported platform](https://hyperglass.dev/platforms)
 - Optionally access devices via an SSH proxy/jump server
 - Access-list/prefix-list style query control to whitelist or blacklist query targets

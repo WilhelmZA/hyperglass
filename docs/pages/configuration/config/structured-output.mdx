@@ -21,7 +21,7 @@ For external validation, hyperglass supports two backends:
 
 Additionally, hyperglass provides the ability to control which BGP communities are shown to the end user.
 
-For devices with structured traceroute support (MikroTik RouterOS and Huawei VRP), hyperglass can enhance the output with IP enrichment data including ASN information, organization names, country codes, and IXP detection using offline data from BGP.tools and PeeringDB.
+For devices with structured traceroute support (Arista EOS, FRRouting, Huawei VRP, Juniper Junos, and MikroTik RouterOS), hyperglass can enhance the output with IP enrichment data including ASN information, organization names, country codes, and IXP detection using offline data from BGP.tools and PeeringDB.
 
 | Parameter                         | Type            | Default Value | Description                                                                                                                            |
 | :-------------------------------- | :-------------- | :------------ | :------------------------------------------------------------------------------------------------------------------------------------- |
@@ -168,8 +168,11 @@ structured:
     **Structured Traceroute Support**
     
     Structured traceroute with rich metadata is available for:
-    - **MikroTik RouterOS/SwitchOS**: Parses multi-table format with statistics
+    - **Arista EOS**: Parses Unix-style traceroute output with hostname, multiple RTT support, and MPLS labels
+    - **FRRouting**: Parses Unix-style traceroute output with load balancing and multi-path support
     - **Huawei VRP**: Parses Unix-style traceroute output
+    - **Juniper Junos**: Parses traceroute output with MPLS labels, multipath, and partial timeouts
+    - **MikroTik RouterOS/SwitchOS**: Parses multi-table format with statistics
     
     When IP enrichment is enabled, traceroute hops are enhanced with ASN numbers, organization names, country codes, prefixes, and IXP detection.
 </Callout>
