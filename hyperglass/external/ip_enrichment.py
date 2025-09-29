@@ -180,6 +180,9 @@ IP_ENRICHMENT_DATA_DIR = Path("/etc/hyperglass/ip_enrichment")
 # Only persist PeeringDB IXP prefixes; per-IP lookups use bgp.tools on-demand
 IXP_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "ixp_data.json"
 LAST_UPDATE_FILE = IP_ENRICHMENT_DATA_DIR / "last_update.txt"
+# Optional raw PeeringDB dump that may be present on disk; if present and
+# ixp_data.json is missing we'll convert it to the optimized runtime format.
+IXPFX_RAW_FILE = IP_ENRICHMENT_DATA_DIR / "ixpfx.json"
 
 # Backoff marker file written when upstream rate-limits us (HTTP 429). The
 # file contains an ISO timestamp until which downloads should be suppressed.
@@ -316,6 +319,8 @@ class IPEnrichmentService:
         # Small in-memory cache for per-IP lookups to avoid repeated websocket
         # queries during runtime. Maps ip_str -> (asn, asn_name, prefix)
         self._ip_cache: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]] = {}
+        # Lock to serialize data load so concurrent callers don't duplicate work
+        self._ensure_lock = asyncio.Lock()
 
     def _optimize_lookups(self):
         """Convert IP networks to integer format for faster lookups."""
@@ -364,33 +369,128 @@ class IPEnrichmentService:
         if _download_lock is None:
             _download_lock = _ProcessFileLock(IP_ENRICHMENT_DATA_DIR / "download.lock")
 
-        # Immediate guard: if any IXP file already exists on disk and the
-        # caller did not request a forced refresh, prefer it and skip any
-        # network downloads. This ensures we never auto-download when a file
-        # has been provided (even if it's empty) unless explicitly requested.
-        try:
-            if IXP_DATA_FILE.exists() and not force_refresh:
-                try:
-                    with open(IXP_DATA_FILE, "r") as f:
-                        ixp_data = json.load(f)
-                    if ixp_data and isinstance(ixp_data, list) and len(ixp_data) > 0:
-                        self.ixp_networks = [
-                            (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
-                        ]
-                        log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk (early guard)")
-                    else:
-                        log.warning(
-                            "ixp_data.json exists but is empty or invalid; honoring existing file and skipping automatic download"
-                        )
-                except Exception as e:
-                    log.warning(f"Failed to read existing ixp_data.json: {e}; honoring file existence and skipping automatic download")
+        # Fast-path: if already loaded in memory, return immediately
+        if self.ixp_networks:
+            return True
+
+        # Serialize loads to avoid duplicate file reads when multiple callers
+        # call ensure_data_loaded concurrently.
+        async with self._ensure_lock:
+            # Double-check after acquiring the lock
+            if self.ixp_networks:
                 return True
+
+            # Immediate guard: if any IXP file already exists on disk and the
+            # caller did not request a forced refresh, prefer it and skip any
+            # network downloads. This ensures we never auto-download when a file
+            # has been provided (even if it's empty) unless explicitly requested.
+            try:
+                if IXP_DATA_FILE.exists() and not force_refresh:
+                    try:
+                        with open(IXP_DATA_FILE, "r") as f:
+                            ixp_data = json.load(f)
+                        if ixp_data and isinstance(ixp_data, list) and len(ixp_data) > 0:
+                            self.ixp_networks = [
+                                (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
+                            ]
+                            log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk (early guard)")
+                        else:
+                            log.warning(
+                                "ixp_data.json exists but is empty or invalid; honoring existing file and skipping automatic download"
+                            )
+                    except Exception as e:
+                        log.warning(f"Failed to read existing ixp_data.json: {e}; honoring file existence and skipping automatic download")
+                    return True
+            except Exception:
+                # Ignore filesystem errors and continue to refresh logic
+                pass
+
+        # If the optimized runtime file is missing but a raw PeeringDB dump
+        # (`ixpfx.json`) exists, attempt to convert it into `ixp_data.json`.
+        # This avoids contacting PeeringDB when a raw dump is already available
+        # on disk (for example created by an operator).
+        try:
+            if not IXP_DATA_FILE.exists() and IXPFX_RAW_FILE.exists():
+                log.info("Found raw ixpfx.json - attempting to convert to ixp_data.json")
+                try:
+                    with open(IXPFX_RAW_FILE, "r") as f:
+                        raw = json.load(f)
+
+                    # raw may be dict with "data" key or a list of objects
+                    items = None
+                    if isinstance(raw, dict) and "data" in raw and isinstance(raw["data"], list):
+                        items = raw["data"]
+                    elif isinstance(raw, list):
+                        items = raw
+                    else:
+                        items = []
+
+                    ixp_list = []
+                    for rec in items:
+                        # Accept multiple shapes: rec may itself be a mapping
+                        # with 'prefix' or 'prefixes' fields; handle common cases
+                        try:
+                            # Some dumps have top-level 'prefix' field
+                            if isinstance(rec, dict) and rec.get("prefix"):
+                                prefix = rec.get("prefix")
+                                ixp_list.append(prefix)
+                                continue
+
+                            # Some entries include nested objects or lists
+                            if isinstance(rec, dict):
+                                # If it's an ixpfx-style object it may have 'prefix' or 'prefixes'
+                                if "prefix" in rec and rec.get("prefix"):
+                                    ixp_list.append(rec.get("prefix"))
+                                    continue
+                                if "prefixes" in rec and isinstance(rec.get("prefixes"), list):
+                                    for p in rec.get("prefixes"):
+                                        if isinstance(p, dict) and p.get("prefix"):
+                                            ixp_list.append(p.get("prefix"))
+                                    continue
+                        except Exception:
+                            continue
+
+                    # Normalize and build the tuple form we persist: (str(network), prefixlen, name)
+                    parsed = []
+                    for p in ixp_list:
+                        try:
+                            net = ip_network(p, strict=False)
+                            parsed.append((str(net.network_address), net.prefixlen, "IXP Network"))
+                        except Exception:
+                            continue
+
+                    if parsed:
+                        # sort by prefixlen desc
+                        parsed.sort(key=lambda x: x[1], reverse=True)
+                        tmp_ixp = IXP_DATA_FILE.with_name(IXP_DATA_FILE.name + ".tmp")
+                        with open(tmp_ixp, "w") as f:
+                            json.dump(parsed, f, separators=(',', ':'))
+                        import os
+
+                        os.replace(tmp_ixp, IXP_DATA_FILE)
+                        log.info(f"Converted {len(parsed)} IXP prefixes from ixpfx.json -> ixp_data.json")
+                        # update last_update marker
+                        try:
+                            tmp_last = LAST_UPDATE_FILE.with_name(LAST_UPDATE_FILE.name + ".tmp")
+                            with open(tmp_last, "w") as f:
+                                f.write(datetime.now().isoformat())
+                            os.replace(tmp_last, LAST_UPDATE_FILE)
+                        except Exception:
+                            pass
+                        # load into memory
+                        self.ixp_networks = [
+                            (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
+                        ]
+                        return True
+                    else:
+                        log.warning("No prefixes extracted from ixpfx.json; will attempt network refresh if allowed")
+                except Exception as e:
+                    log.warning(f"Failed to convert ixpfx.json: {e}")
         except Exception:
-            # Ignore filesystem errors and continue to refresh logic
             pass
 
-        # If a backoff is active, don't try to refresh
-        should_refresh, reason = should_refresh_data(force_refresh)
+            # If a backoff is active, don't try to refresh
+            should_refresh, reason = should_refresh_data(force_refresh)
 
         # If an IXP file exists, prefer it and avoid downloads unless forced.
         try:
@@ -525,6 +625,7 @@ class IPEnrichmentService:
                 except Exception:
                     pass
                 return False
+    # end async with _ensure_lock
 
     async def _download_ixp_data(self, client) -> None:
         """Download PeeringDB IXP prefixes data - simplified approach using only IXPFX."""
@@ -641,22 +742,19 @@ class IPEnrichmentService:
 
             loop = asyncio.get_running_loop()
             resp = await ws_query()
+            log.debug(f"bgp.tools websocket lookup for {ip_str}: {'response' if resp else 'no response'}")
         except Exception:
             resp = None
 
-        # HTTP fallback: bgp.tools also exposes a direct lookup endpoint
+        # If websocket didn't return a response, do not attempt HTTP fallback.
+        # bgp.tools requires the websocket API for bulk/whois; there is no
+        # supported HTTP fallback for our use-case. Log and return empty.
         if resp is None:
-            try:
-                if not httpx:
-                    return (None, None, None)
-                url = f"https://bgp.tools/api/whois/{ip_str}"
-                async with httpx.AsyncClient(timeout=15) as client:
-                    r = await client.get(url)
-                    if r.status_code != 200:
-                        return (None, None, None)
-                    resp = r.json()
-            except Exception:
-                return (None, None, None)
+            log.warning(
+                "bgp.tools websocket lookup failed or websockets unavailable for %s; no HTTP fallback will be used",
+                ip_str,
+            )
+            return (None, None, None)
 
         # Parse response - expected keys depend on API; handle common forms
         try:
@@ -695,6 +793,191 @@ class IPEnrichmentService:
         except Exception:
             return (None, None, None)
 
+    async def _query_bgp_tools_bulk(self, ips: t.List[str]) -> t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]]:
+        """Query bgp.tools for multiple IPs using a single websocket connection when possible.
+
+        Returns a mapping ip -> (asn, asn_name, prefix).
+        """
+        results: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]] = {}
+
+        # Try websocket first for efficiency
+        try:
+            import websockets
+
+            uri = "wss://bgp.tools/ws"
+
+            async def ws_bulk():
+                try:
+                    async with websockets.connect(uri, ping_interval=None) as ws:
+                        # Send all queries
+                        for ip in ips:
+                            payload = {"query": "whois", "prefix": ip}
+                            await ws.send(json.dumps(payload))
+
+                        # Read a response for each request
+                        for _ in ips:
+                            try:
+                                resp_raw = await asyncio.wait_for(ws.recv(), timeout=10)
+                                resp = json.loads(resp_raw)
+                                # Attempt to extract IP from response if present
+                                ip_key = None
+                                if isinstance(resp, dict):
+                                    ip_key = resp.get("query") or resp.get("prefix") or resp.get("ip")
+                                # We may not receive the ip echoed back; fall back to consuming in order
+                                # but we'll map by order if needed after parsing
+                                # Parse as in single lookup
+                                asn = None
+                                org = None
+                                prefix = None
+                                if isinstance(resp, dict):
+                                    if "asn" in resp:
+                                        try:
+                                            asn = int(resp.get("asn"))
+                                        except Exception:
+                                            asn = None
+                                    org = resp.get("org") or resp.get("as_name")
+                                    prefix = resp.get("prefix")
+                                    if not asn and resp.get("data") and isinstance(resp.get("data"), dict):
+                                        data = resp.get("data")
+                                        if "asn" in data:
+                                            try:
+                                                asn = int(data.get("asn"))
+                                            except Exception:
+                                                asn = None
+                                        org = org or data.get("org") or data.get("as_name")
+                                        prefix = prefix or data.get("prefix")
+
+                                # Store under the prefix if present, else leave placeholder
+                                if prefix:
+                                    # Normalize ip from prefix
+                                    try:
+                                        net = ip_network(prefix, strict=False)
+                                        ipstr = str(net.network_address)
+                                    except Exception:
+                                        ipstr = None
+                                else:
+                                    ipstr = None
+
+                                results[ipstr or _] = (asn, org, prefix)
+                            except Exception:
+                                # Response timed out or parse failed; continue
+                                continue
+                        return True
+                except Exception:
+                    return False
+
+            ok = await ws_bulk()
+            if ok:
+                # Normalize results: ensure all requested IPs have an entry, falling back to None
+                out = {}
+                for ip in ips:
+                    if ip in self._ip_cache:
+                        out[ip] = self._ip_cache[ip]
+                    else:
+                        # Try to find by prefix network address if present
+                        found = None
+                        for k, v in results.items():
+                            if k == ip:
+                                found = v
+                                break
+                        out[ip] = found or (None, None, None)
+                return out
+        except Exception:
+            # Websocket not available or failed - fall back to HTTP
+            pass
+
+        # bgp.tools requires websocket API for whois/bulk queries; there is no
+        # reliable HTTP fallback in our usage. Return empty results for all
+        # ips and log so operators can ensure the `websockets` package and
+        # connectivity to wss://bgp.tools are available.
+        out: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]] = {}
+        log.warning(
+            "bgp.tools websocket bulk lookup failed or websockets unavailable; returning empty results for %d IPs",
+            len(ips),
+        )
+        for ip in ips:
+            out[ip] = (None, None, None)
+        return out
+
+    async def lookup_ips_bulk(self, ips: t.List[str]) -> t.Dict[str, IPInfo]:
+        """Bulk lookup for multiple IPs, using local data first and bgp.tools bulk queries for misses."""
+        results: t.Dict[str, IPInfo] = {}
+
+        # Ensure IXP data loaded
+        await self.ensure_data_loaded()
+
+        # Prepare misses
+        misses: t.List[str] = []
+        for ip in ips:
+            try:
+                target_ip = ip_address(ip)
+            except Exception:
+                results[ip] = IPInfo(ip)
+                continue
+
+            # private/reserved
+            if target_ip.is_private or target_ip.is_reserved or target_ip.is_loopback:
+                results[ip] = IPInfo(ip, asn=0, asn_name="Private", prefix="Private Network")
+                continue
+
+            # check IXP
+            found_ixp = False
+            for net_addr, prefixlen, ixp_name in self.ixp_networks:
+                try:
+                    network = ip_network(f"{net_addr}/{prefixlen}", strict=False)
+                    if target_ip in network:
+                        results[ip] = IPInfo(ip, is_ixp=True, ixp_name=ixp_name)
+                        found_ixp = True
+                        break
+                except Exception:
+                    continue
+            if found_ixp:
+                continue
+
+            # try local optimized tables
+            if not self._lookup_optimized:
+                self._optimize_lookups()
+
+            matched = False
+            target_int = int(target_ip)
+            if isinstance(target_ip, IPv4Address):
+                for net_int, mask_bits, asn, cidr_string in self._ipv4_networks:
+                    if (target_int >> mask_bits) == (net_int >> mask_bits):
+                        asn_data = self.asn_info.get(asn, {})
+                        asn_name = asn_data.get("name", f"AS{asn}")
+                        country = asn_data.get("country", "")
+                        results[ip] = IPInfo(ip, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country)
+                        matched = True
+                        break
+            else:
+                for net_int, mask_bits, asn, cidr_string in self._ipv6_networks:
+                    if (target_int >> mask_bits) == (net_int >> mask_bits):
+                        asn_data = self.asn_info.get(asn, {})
+                        asn_name = asn_data.get("name", f"AS{asn}")
+                        country = asn_data.get("country", "")
+                        results[ip] = IPInfo(ip, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country)
+                        matched = True
+                        break
+
+            if not matched:
+                misses.append(ip)
+
+        # Query bgp.tools in bulk for misses
+        if misses:
+            bulk = await self._query_bgp_tools_bulk(misses)
+            for ip in misses:
+                asn, asn_name, prefix = bulk.get(ip, (None, None, None))
+                if asn:
+                    try:
+                        self.asn_info[int(asn)] = {"name": asn_name or f"AS{asn}", "country": ""}
+                    except Exception:
+                        pass
+                    results[ip] = IPInfo(ip, asn=asn, asn_name=asn_name, prefix=prefix)
+                else:
+                    results[ip] = IPInfo(ip, asn=0, asn_name="Unknown")
+
+        return results
+
     async def lookup_ip(self, ip_str: str) -> IPInfo:
         """Lookup an IP address and return ASN or IXP information."""
         # Try to load IXP data, but continue even if the load fails. We still
@@ -702,7 +985,8 @@ class IPEnrichmentService:
         # is missing; failing to load the IXP file should not prevent remote
         # lookups.
         try:
-            await self.ensure_data_loaded()
+            if not self.ixp_networks:
+                await self.ensure_data_loaded()
         except Exception:
             log.debug("ensure_data_loaded raised an exception; continuing with on-demand lookups")
 
@@ -1058,45 +1342,45 @@ async def network_info(*targets: str) -> TargetData:
         return default_data
 
     try:
-        _log.info(f"Enriching {len(query_targets)} IP addresses")
+        _log.info(f"Enriching {len(query_targets)} IP addresses using bulk lookup")
 
-        # Load data ONCE for all lookups
-        await _service.ensure_data_loaded()
-
+        # Use the bulk lookup to query bgp.tools efficiently
         query_data = {}
+        bulk_results = await _service.lookup_ips_bulk(query_targets)
 
-        # Process each target without reloading data
-        for target in query_targets:
-            # Use the async lookup which will perform on-demand bgp.tools queries
-            # for IPs not found in local tables. `lookup_ip_direct` intentionally
-            # avoids remote lookups and therefore would not query bgp.tools.
-            ip_info = await _service.lookup_ip(target)
-
+        for target, ip_info in bulk_results.items():
             # Convert to TargetDetail format
             if ip_info.is_ixp and ip_info.ixp_name:
-                # IXP case - put "IXP" in ASN field and IXP name in org field
                 detail: TargetDetail = {
-                    "asn": "IXP",  # Show "IXP" as the ASN for IXPs
+                    "asn": "IXP",
                     "ip": target,
                     "prefix": "None",
                     "country": "None",
-                    "rir": "IXP",  # Mark as IXP in RIR field
+                    "rir": "IXP",
                     "allocated": "None",
                     "org": ip_info.ixp_name,
                 }
-            elif ip_info.asn is not None:
-                # ASN case - normal network - return just the NUMBER, no AS prefix
+            elif ip_info.asn is not None and ip_info.asn != 0:
                 detail = {
-                    "asn": str(ip_info.asn),  # Just the number as string, e.g. "12345"
+                    "asn": str(ip_info.asn),
                     "ip": target,
-                    "prefix": ip_info.prefix or "None",  # Use the CIDR from table.jsonl
-                    "country": ip_info.country or "None",  # Use country code from asns.csv
-                    "rir": "UNKNOWN",  # Not available from our enrichment
-                    "allocated": "None",  # Not available from our enrichment
+                    "prefix": ip_info.prefix or "None",
+                    "country": ip_info.country or "None",
+                    "rir": "UNKNOWN",
+                    "allocated": "None",
                     "org": ip_info.asn_name or "None",
                 }
+            elif ip_info.asn == 0:
+                detail = {
+                    "asn": "None",
+                    "ip": target,
+                    "prefix": "None",
+                    "country": "None",
+                    "rir": "Unknown",
+                    "allocated": "None",
+                    "org": "None",
+                }
             else:
-                # No match found
                 detail = {
                     "asn": "None",
                     "ip": target,
