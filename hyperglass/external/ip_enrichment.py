@@ -12,6 +12,8 @@ Core Functions:
 """
 
 import asyncio
+import time
+import fcntl
 import json
 import csv
 import pickle
@@ -24,7 +26,67 @@ from hyperglass.log import log
 from hyperglass.state import use_state
 
 # Global download coordination lock to prevent multiple workers from downloading simultaneously
-_download_lock = asyncio.Lock()
+# Use a process-wide file lock so separate worker processes (uvicorn/gunicorn workers)
+# coordinate; asyncio.Lock is only per-process and doesn't prevent multiple processes
+# from downloading concurrently (which caused the 429 flood).
+
+
+class _ProcessFileLock:
+    """Async-friendly process-wide lock using fcntl.flock in a thread executor.
+
+    This provides the same `async with _download_lock:` API but uses a filesystem
+    lock file so multiple processes can coordinate.
+    """
+
+    def __init__(self, lock_path: Path, timeout: int = 300, poll_interval: float = 0.1):
+        self.lock_path = lock_path
+        self.timeout = timeout
+        self.poll_interval = poll_interval
+        self._fd = None
+
+    def _acquire_blocking(self) -> None:
+        # Ensure the lock file exists
+        fd = open(self.lock_path, "w+")
+        start = time.time()
+        while True:
+            try:
+                fcntl.flock(fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                # Keep the file descriptor open for the life of the lock
+                self._fd = fd
+                return
+            except BlockingIOError:
+                if (time.time() - start) >= self.timeout:
+                    fd.close()
+                    raise TimeoutError(f"Timed out waiting for lock {self.lock_path}")
+                time.sleep(self.poll_interval)
+
+    def _release_blocking(self) -> None:
+        try:
+            if self._fd:
+                fcntl.flock(self._fd.fileno(), fcntl.LOCK_UN)
+                try:
+                    self._fd.close()
+                except Exception:
+                    pass
+                self._fd = None
+        except Exception:
+            # Nothing we can do on release failure
+            pass
+
+    async def __aenter__(self):
+        loop = asyncio.get_running_loop()
+        # Run blocking acquire in executor
+        await loop.run_in_executor(None, self._acquire_blocking)
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._release_blocking)
+
+
+# Instantiate a process-global lock file in the data dir. The data dir may not yet
+# exist at import time; the constant path is defined below and we'll initialize
+# the actual _download_lock after the paths are declared. (See below.)
 
 # Optional dependencies - graceful fallback if not available
 try:
@@ -58,6 +120,10 @@ PEERINGDB_IXPFX_URL = "https://www.peeringdb.com/api/ixpfx"
 
 # Cache duration (24 hours default, configurable)
 DEFAULT_CACHE_DURATION = 24 * 60 * 60
+
+
+# Initialize process-wide download lock (now that data dir path constants are defined)
+_download_lock = _ProcessFileLock(IP_ENRICHMENT_DATA_DIR / "download.lock")
 
 
 def get_cache_duration() -> int:
