@@ -1,14 +1,7 @@
-"""IP enrichment service - the main network lookup system for hyperglass.
+"""IP enrichment: ASN and IXP lookups for hyperglass.
 
-This completely replaces bgp.tools with bulk data approach using:
-- BGP.tools static files for CIDR->ASN mapping
-- BGP.tools ASN database for ASN->Organization names
-- PeeringDB for IXP detection
-
-Core Functions:
-- lookup_ip(ip_address) -> ASN number/name OR IXP name
-- lookup_asn_name(asn_number) -> ASN organization name
-- network_info(*ips) -> bulk lookup (for compatibility)
+Uses bgp.tools for ASN lookups and PeeringDB for IXP prefixes.
+Provides lookup_ip, lookup_asn_name and network_info compatibility APIs.
 """
 
 import asyncio
@@ -26,17 +19,16 @@ import socket
 from hyperglass.log import log
 from hyperglass.state import use_state
 
-# Global download coordination lock to prevent multiple workers from downloading simultaneously
-# Use a process-wide file lock so separate worker processes (uvicorn/gunicorn workers)
-# coordinate; asyncio.Lock is only per-process and doesn't prevent multiple processes
-# from downloading concurrently (which caused the 429 flood).
+# Process-wide lock to coordinate downloads across worker processes.
+# Uses an on-disk lock directory so separate processes don't simultaneously
+# download enrichment data and cause rate limits.
 
 
 class _ProcessFileLock:
-    """Async-friendly process-wide lock using fcntl.flock in a thread executor.
+    """Async-friendly, process-wide filesystem lock.
 
-    This provides the same `async with _download_lock:` API but uses a filesystem
-    lock file so multiple processes can coordinate.
+    Provides an async context manager that runs blocking mkdir/remove
+    operations in an executor so multiple processes can coordinate.
     """
 
     def __init__(self, lock_path: Path, timeout: int = 300, poll_interval: float = 0.1):
@@ -49,11 +41,7 @@ class _ProcessFileLock:
         self._startup_jitter = 0.25
 
     def _acquire_blocking(self) -> None:
-        # Use an atomic directory creation as the lock primitive. mkdir is
-        # atomic on POSIX filesystems and works reliably across processes
-        # (and in many container / overlayfs setups where fcntl.flock may be
-        # unreliable). We'll create a lock directory alongside the intended
-        # lock file path and remove it on release.
+    # Use atomic mkdir on a .lck directory as the lock primitive.
         import os
         import random
         import json
@@ -61,15 +49,14 @@ class _ProcessFileLock:
 
         lock_dir = str(self.lock_path) + ".lck"
 
-        # Small random sleep before the first attempt to spread mkdir calls
+    # Small jitter before first attempt to reduce concurrent mkdirs
         time.sleep(random.uniform(0, self._startup_jitter))
         start = time.time()
 
         while True:
             try:
-                # Atomic attempt to create the directory; if it succeeds we
-                # hold the lock. If it already exists, mkdir will raise
-                # FileExistsError and we'll retry until timeout.
+                # Try to create the lock directory atomically; on success we
+                # hold the lock. If it exists, retry until timeout.
                 os.mkdir(lock_dir)
 
                 # Write a small owner metadata file to help debugging stale locks
@@ -85,9 +72,7 @@ class _ProcessFileLock:
                 log.debug(f"Acquired process lock {lock_dir} (pid={os.getpid()})")
                 return
             except FileExistsError:
-                # If the existing lock looks stale (owner file older than timeout)
-                # try to remove it and acquire again. This helps recover from
-                # processes that crashed without releasing the lock.
+                # If the lock appears stale (older than timeout), try cleanup.
                 try:
                     owner_file = os.path.join(lock_dir, "owner.json")
                     mtime = None
@@ -178,21 +163,10 @@ except ImportError:
 
 # File paths for persistent storage
 IP_ENRICHMENT_DATA_DIR = Path("/etc/hyperglass/ip_enrichment")
-# Only persist PeeringDB IXP prefixes; per-IP lookups use bgp.tools on-demand
-IXP_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "ixp_data.json"
+IXP_PICKLE_FILE = IP_ENRICHMENT_DATA_DIR / "ixp_data.pickle"
 LAST_UPDATE_FILE = IP_ENRICHMENT_DATA_DIR / "last_update.txt"
-# Optional raw PeeringDB dump that may be present on disk; if present and
-# ixp_data.json is missing we'll convert it to the optimized runtime format.
-IXPFX_RAW_FILE = IP_ENRICHMENT_DATA_DIR / "ixpfx.json"
 
-# Backoff marker file written when upstream rate-limits us (HTTP 429). The
-# file contains an ISO timestamp until which downloads should be suppressed.
-DOWNLOAD_BACKOFF_FILE = IP_ENRICHMENT_DATA_DIR / "download_backoff.txt"
-
-# PeeringDB API URL for IXP prefixes
-PEERINGDB_IXPFX_URL = "https://www.peeringdb.com/api/ixpfx"
-
-# Cache duration (24 hours default, configurable)
+# Cache duration (seconds). Default: 24 hours. Can be overridden in config.
 DEFAULT_CACHE_DURATION = 24 * 60 * 60
 
 
@@ -223,28 +197,17 @@ def should_refresh_data(force_refresh: bool = False) -> tuple[bool, str]:
     if force_refresh:
         return True, "Force refresh requested"
 
-    # If a backoff marker exists and it's still in the future, skip refreshes
-    try:
-        if DOWNLOAD_BACKOFF_FILE.exists():
-            with open(DOWNLOAD_BACKOFF_FILE, "r") as f:
-                retry_until = datetime.fromisoformat(f.read().strip())
-            if datetime.now() < retry_until:
-                return False, f"Backoff active until {retry_until.isoformat()}"
-            else:
-                try:
-                    DOWNLOAD_BACKOFF_FILE.unlink()
-                except Exception:
-                    pass
-    except Exception:
-        pass
+    # No persistent backoff marker; decide refresh purely by file age / config
+    # and any transient network errors will be handled by the downloader's
+    # retry logic.
 
     # If an IXP file exists, prefer it and do not perform automatic refreshes
     # unless the caller explicitly requested a force refresh.
-    if IXP_DATA_FILE.exists() and not force_refresh:
+    if IXP_PICKLE_FILE.exists() and not force_refresh:
         return False, "ixp_data.json exists; skipping automatic refresh"
 
     # If IXP file is missing, refresh is needed
-    if not IXP_DATA_FILE.exists():
+    if not IXP_PICKLE_FILE.exists():
         return True, "No ixp_data.json present"
 
     # Otherwise check timestamp age
@@ -381,156 +344,142 @@ class IPEnrichmentService:
             if self.ixp_networks:
                 return True
 
-            # Immediate guard: if any IXP file already exists on disk and the
-            # caller did not request a forced refresh, prefer it and skip any
-            # network downloads. This ensures we never auto-download when a file
-            # has been provided (even if it's empty) unless explicitly requested.
+            # Fast-path: if an optimized pickle exists and the caller did not
+            # request a forced refresh, load it (fastest). Fall back to the
+            # legacy JSON IXP file or downloads if the pickle is missing or
+            # invalid. This ensures the pickle is the preferred on-disk cache
+            # for faster startup.
             try:
-                if IXP_DATA_FILE.exists() and not force_refresh:
+                pickle_path = IP_ENRICHMENT_DATA_DIR / "ixp_data.pickle"
+                if pickle_path.exists() and not force_refresh:
                     try:
-                        with open(IXP_DATA_FILE, "r") as f:
-                            ixp_data = json.load(f)
-                        if ixp_data and isinstance(ixp_data, list) and len(ixp_data) > 0:
+                        with open(pickle_path, "rb") as f:
+                            parsed = pickle.load(f)
+                        if parsed and isinstance(parsed, list) and len(parsed) > 0:
                             self.ixp_networks = [
-                                (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
+                                (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
                             ]
-                            log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk (early guard)")
+                            log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from optimized pickle (fast-path)")
+                            return True
                         else:
-                            log.warning(
-                                "ixp_data.json exists but is empty or invalid; honoring existing file and skipping automatic download"
-                            )
+                            log.warning("Optimized pickle exists but appears empty or invalid; falling back to JSON/load or refresh")
                     except Exception as e:
-                        log.warning(f"Failed to read existing ixp_data.json: {e}; honoring file existence and skipping automatic download")
-                    return True
+                        log.warning(f"Failed to load optimized pickle {pickle_path}: {e}; falling back")
+            except Exception:
+                # Non-fatal; continue to JSON/download logic
+                pass
+
+            # Immediate guard: if an optimized pickle exists on disk and the
+            # caller did not request a forced refresh, prefer it and skip any
+            # network downloads. This keeps startup fast by loading the already
+            # generated optimized mapping.
+            try:
+                pickle_path = IP_ENRICHMENT_DATA_DIR / "ixp_data.pickle"
+                if pickle_path.exists() and not force_refresh:
+                    try:
+                        with open(pickle_path, "rb") as f:
+                            parsed = pickle.load(f)
+                        if parsed and isinstance(parsed, list) and len(parsed) > 0:
+                            self.ixp_networks = [
+                                (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
+                            ]
+                            log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from optimized pickle (early guard)")
+                            return True
+                        else:
+                            log.warning("Optimized pickle exists but appears empty or invalid; will attempt to refresh")
+                    except Exception as e:
+                        log.warning(f"Failed to read optimized pickle: {e}; will attempt to refresh")
             except Exception:
                 # Ignore filesystem errors and continue to refresh logic
                 pass
 
-        # If the optimized runtime file is missing but a raw PeeringDB dump
-        # (`ixpfx.json`) exists, attempt to convert it into `ixp_data.json`.
-        # This avoids contacting PeeringDB when a raw dump is already available
-        # on disk (for example created by an operator).
+        # No operator raw-dump conversion: rely on endpoint JSON files (ixpfx.json,
+        # ixlan.json, ix.json) in the data directory or download them from
+        # PeeringDB when a refresh is required. Determine whether we should
+        # refresh based on the backoff marker / cache duration.
+        should_refresh, reason = should_refresh_data(force_refresh)
+
+        # If an optimized pickle exists, prefer it and avoid downloads unless forced.
         try:
-            if not IXP_DATA_FILE.exists() and IXPFX_RAW_FILE.exists():
-                log.info("Found raw ixpfx.json - attempting to convert to ixp_data.json")
+            pickle_path = IP_ENRICHMENT_DATA_DIR / "ixp_data.pickle"
+            if pickle_path.exists():
                 try:
-                    with open(IXPFX_RAW_FILE, "r") as f:
-                        raw = json.load(f)
-
-                    # raw may be dict with "data" key or a list of objects
-                    items = None
-                    if isinstance(raw, dict) and "data" in raw and isinstance(raw["data"], list):
-                        items = raw["data"]
-                    elif isinstance(raw, list):
-                        items = raw
-                    else:
-                        items = []
-
-                    ixp_list = []
-                    for rec in items:
-                        # Accept multiple shapes: rec may itself be a mapping
-                        # with 'prefix' or 'prefixes' fields; handle common cases
-                        try:
-                            # Some dumps have top-level 'prefix' field
-                            if isinstance(rec, dict) and rec.get("prefix"):
-                                prefix = rec.get("prefix")
-                                ixp_list.append(prefix)
-                                continue
-
-                            # Some entries include nested objects or lists
-                            if isinstance(rec, dict):
-                                # If it's an ixpfx-style object it may have 'prefix' or 'prefixes'
-                                if "prefix" in rec and rec.get("prefix"):
-                                    ixp_list.append(rec.get("prefix"))
-                                    continue
-                                if "prefixes" in rec and isinstance(rec.get("prefixes"), list):
-                                    for p in rec.get("prefixes"):
-                                        if isinstance(p, dict) and p.get("prefix"):
-                                            ixp_list.append(p.get("prefix"))
-                                    continue
-                        except Exception:
-                            continue
-
-                    # Normalize and build the tuple form we persist: (str(network), prefixlen, name)
-                    parsed = []
-                    for p in ixp_list:
-                        try:
-                            net = ip_network(p, strict=False)
-                            parsed.append((str(net.network_address), net.prefixlen, "IXP Network"))
-                        except Exception:
-                            continue
-
-                    if parsed:
-                        # sort by prefixlen desc
-                        parsed.sort(key=lambda x: x[1], reverse=True)
-                        tmp_ixp = IXP_DATA_FILE.with_name(IXP_DATA_FILE.name + ".tmp")
-                        with open(tmp_ixp, "w") as f:
-                            json.dump(parsed, f, separators=(',', ':'))
-                        import os
-
-                        os.replace(tmp_ixp, IXP_DATA_FILE)
-                        log.info(f"Converted {len(parsed)} IXP prefixes from ixpfx.json -> ixp_data.json")
-                        # update last_update marker
-                        try:
-                            tmp_last = LAST_UPDATE_FILE.with_name(LAST_UPDATE_FILE.name + ".tmp")
-                            with open(tmp_last, "w") as f:
-                                f.write(datetime.now().isoformat())
-                            os.replace(tmp_last, LAST_UPDATE_FILE)
-                        except Exception:
-                            pass
-                        # load into memory
-                        self.ixp_networks = [
-                            (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
-                        ]
-                        return True
-                    else:
-                        log.warning("No prefixes extracted from ixpfx.json; will attempt network refresh if allowed")
-                except Exception as e:
-                    log.warning(f"Failed to convert ixpfx.json: {e}")
-        except Exception:
-            pass
-
-            # If a backoff is active, don't try to refresh
-            should_refresh, reason = should_refresh_data(force_refresh)
-
-        # If an IXP file exists, prefer it and avoid downloads unless forced.
-        try:
-            if IXP_DATA_FILE.exists():
-                try:
-                    st = IXP_DATA_FILE.stat()
+                    st = pickle_path.stat()
                     size = getattr(st, "st_size", None)
                 except Exception:
                     size = None
 
-                # If file size indicates non-empty typical JSON array (size>2) try to load
-                if size is not None and size > 2:
+                # If file size indicates non-empty file try to load
+                if size is not None and size > 0:
                     try:
-                        with open(IXP_DATA_FILE, "r") as f:
-                            ixp_data = json.load(f)
+                        with open(pickle_path, "rb") as f:
+                            parsed = pickle.load(f)
                     except Exception as e:
-                        log.warning(f"Failed to parse existing IXP data file: {e}")
-                        ixp_data = None
+                        log.warning(f"Failed to parse existing optimized IXP pickle: {e}")
+                        parsed = None
 
-                    if ixp_data and isinstance(ixp_data, list) and len(ixp_data) > 0:
+                    if parsed and isinstance(parsed, list) and len(parsed) > 0:
                         self.ixp_networks = [
-                            (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
+                            (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
                         ]
-                        log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk (size={size})")
+                        log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from optimized pickle (size={size})")
                         return True
                     else:
                         log.warning(
-                            "Existing IXP data file '%s' appears empty or invalid (size=%s); will attempt to refresh",
-                            IXP_DATA_FILE,
+                            "Existing optimized pickle appears empty or invalid (size=%s); will attempt to refresh",
                             size,
                         )
                 else:
-                    log.debug(f"IXP data file exists but size indicates empty or very small (size={size})")
+                    log.debug(f"Optimized pickle exists but size indicates empty or very small (size={size})")
         except Exception as e:
-            log.warning(f"Failed to load existing IXP data: {e}")
+            log.warning(f"Failed to load existing optimized IXP data: {e}")
 
         # If we're currently under a backoff or refresh is not required, skip downloading
         if not should_refresh:
-            log.info(f"Skipping IXP refresh: {reason}")
+            # If the optimized pickle is missing but the raw PeeringDB JSON files
+            # are present and the last_update timestamp is still within the
+            # configured cache duration, attempt to build the optimized pickle
+            # from the existing JSON files instead of downloading.
+            try:
+                pickle_path = IP_ENRICHMENT_DATA_DIR / "ixp_data.pickle"
+                json_paths = [
+                    IP_ENRICHMENT_DATA_DIR / "ixpfx.json",
+                    IP_ENRICHMENT_DATA_DIR / "ixlan.json",
+                    IP_ENRICHMENT_DATA_DIR / "ix.json",
+                ]
+
+                have_all_json = all(p.exists() for p in json_paths)
+                if not pickle_path.exists() and have_all_json and LAST_UPDATE_FILE.exists():
+                    try:
+                        with open(LAST_UPDATE_FILE, "r") as f:
+                            cached_time = datetime.fromisoformat(f.read().strip())
+                        age_seconds = (datetime.now() - cached_time).total_seconds()
+                        cache_duration = get_cache_duration()
+                        if age_seconds < cache_duration:
+                            log.info("Building optimized pickle from existing PeeringDB JSON files")
+                            loop = asyncio.get_running_loop()
+                            ok = await loop.run_in_executor(None, self._combine_peeringdb_files)
+                            if ok and pickle_path.exists():
+                                # Load the generated pickle into memory
+                                try:
+                                    with open(pickle_path, "rb") as f:
+                                        parsed = pickle.load(f)
+                                    self.ixp_networks = [
+                                        (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
+                                    ]
+                                    log.info("Loaded %d IXP prefixes from generated pickle", len(self.ixp_networks))
+                                    return True
+                                except Exception as e:
+                                    log.warning(f"Failed to load generated pickle: {e}")
+                    except Exception:
+                        # If reading last_update fails, fall through to skipping refresh
+                        pass
+
+            except Exception:
+                # Non-fatal; proceed to skip refresh
+                pass
+
+            log.info("Skipping IXP refresh: %s", reason)
             return False
 
         # Acquire lock and refresh IXP list only
@@ -540,178 +489,122 @@ class IPEnrichmentService:
                 # Double-check: if another worker already refreshed the IXP file
                 # while we were waiting for the lock, load it regardless of the
                 # general should_refresh flag.
-                if IXP_DATA_FILE.exists():
-                    with open(IXP_DATA_FILE, "r") as f:
-                        ixp_data = json.load(f)
+                if IXP_PICKLE_FILE.exists():
+                    try:
+                        with open(IXP_PICKLE_FILE, "rb") as f:
+                            parsed = pickle.load(f)
+                    except Exception as e:
+                        log.warning(f"Existing optimized pickle is invalid after lock wait: {e}; will attempt to refresh")
+                        parsed = None
 
-                    if not ixp_data or (isinstance(ixp_data, list) and len(ixp_data) == 0):
+                    if not parsed or (isinstance(parsed, list) and len(parsed) == 0):
                         log.warning(
-                            "Existing IXP data file '%s' is empty after lock wait; will attempt to refresh",
-                            IXP_DATA_FILE,
+                            "Existing optimized pickle is empty after lock wait; will attempt to refresh",
                         )
                     else:
                         self.ixp_networks = [
-                            (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
+                            (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
                         ]
                         log.info(
-                            f"Loaded {len(self.ixp_networks)} IXP prefixes from disk (post-lock)"
+                            f"Loaded {len(self.ixp_networks)} IXP prefixes from optimized pickle (post-lock)"
                         )
                         return True
             except Exception:
                 pass
 
             if not httpx:
-                log.error("httpx not available - cannot download PeeringDB IXP prefixes")
+                log.error("httpx not available: cannot download PeeringDB prefixes")
                 return False
 
             try:
                 async with httpx.AsyncClient(timeout=30) as client:
                     await self._download_ixp_data(client)
 
-                # Persist IXP data only if we actually downloaded prefixes.
-                ixp_file_data = [
-                    (str(net), prefixlen, name) for net, prefixlen, name in self.ixp_networks
-                ]
-
-                if len(ixp_file_data) == 0:
-                    # If we have no prefixes from the download, do not overwrite an
-                    # existing on-disk IXP file (which may contain valid data). This
-                    # prevents a failed refresh (e.g., due to rate-limit) from
-                    # replacing a previously-good file with an empty list.
-                    if IXP_DATA_FILE.exists():
-                        log.warning(
-                            "Downloaded 0 IXP prefixes; keeping existing '%s' on disk",
-                            IXP_DATA_FILE,
-                        )
-                        return False
-                    else:
-                        log.warning(
-                            "Downloaded 0 IXP prefixes and no existing IXP file present; not persisting"
-                        )
-                        return False
-
-                tmp_ixp = IXP_DATA_FILE.with_name(IXP_DATA_FILE.name + ".tmp")
-                with open(tmp_ixp, "w") as f:
-                    json.dump(ixp_file_data, f, separators=(",", ":"))
-                import os
-
-                os.replace(tmp_ixp, IXP_DATA_FILE)
+                # After download+combine, ensure we actually have prefixes and
+                # update the last-update marker. The combined pickle is already
+                # written by _combine_peeringdb_files invoked by _download_ixp_data.
+                if not self.ixp_networks or len(self.ixp_networks) == 0:
+                    log.warning("Downloaded 0 IXP prefixes; keeping existing optimized pickle if present")
+                    return False
 
                 # Update last update marker
                 tmp_last = LAST_UPDATE_FILE.with_name(LAST_UPDATE_FILE.name + ".tmp")
                 with open(tmp_last, "w") as f:
                     f.write(datetime.now().isoformat())
+                import os
+
                 os.replace(tmp_last, LAST_UPDATE_FILE)
 
                 self.last_update = datetime.now()
-                log.info(f"Refreshed and saved {len(self.ixp_networks)} IXP prefixes")
+                log.info("Refreshed and saved %d IXP prefixes (pickle)", len(self.ixp_networks))
                 return True
             except Exception as e:
-                log.error(f"Failed to refresh IXP prefixes: {e}")
-                # If rate limited, write a short backoff file to avoid repeated retries
-                try:
-                    if "429" in str(e) or "Too Many Requests" in str(e):
-                        retry_until = datetime.now() + timedelta(minutes=60)
-                        with open(
-                            DOWNLOAD_BACKOFF_FILE.with_name(DOWNLOAD_BACKOFF_FILE.name + ".tmp"),
-                            "w",
-                        ) as f:
-                            f.write(retry_until.isoformat())
-                        import os
-
-                        os.replace(
-                            DOWNLOAD_BACKOFF_FILE.with_name(DOWNLOAD_BACKOFF_FILE.name + ".tmp"),
-                            DOWNLOAD_BACKOFF_FILE,
-                        )
-                except Exception:
-                    pass
+                log.error("Failed to refresh IXP prefixes: %s", e)
+                # No persistent backoff behavior; log and return failure.
                 return False
     # end async with _ensure_lock
 
     async def _download_ixp_data(self, client) -> None:
-        """Download PeeringDB IXP prefixes data - simplified approach using only IXPFX."""
-        log.info("📥 Downloading PeeringDB IXP prefixes from peeringdb.com...")
+        """Download and combine PeeringDB datasets: ixpfx, ixlan, ix.
 
-        max_retries = 3
-        base_delay = 5  # Start with 5 second delay
+        Behavior:
+        - Download each endpoint to {name}.temp (e.g., ixpfx.temp).
+        - If download and JSON parsing succeed, atomically rename to {name}.json.
+        - If any download fails, leave existing {name}.json (if present) in place.
+        - After ensuring all three files exist (new or old), combine them into a
+          list of tuples (str(network_address), prefixlen, ixp_name), sorted by
+          prefixlen descending, and persist as a pickled file for fast loading.
+        """
+        log.info("Downloading PeeringDB datasets: ixpfx, ixlan, ix")
 
-        for attempt in range(max_retries):
+        if not client:
+            log.error("HTTP client not available for PeeringDB downloads")
+            return
+
+        endpoints = {
+            "ixpfx": "https://www.peeringdb.com/api/ixpfx",
+            "ixlan": "https://www.peeringdb.com/api/ixlan",
+            "ix": "https://www.peeringdb.com/api/ix",
+        }
+
+        # Download each endpoint to .temp -> .json atomically
+        for name, url in endpoints.items():
+            temp_path = IP_ENRICHMENT_DATA_DIR / f"{name}.temp"
+            final_path = IP_ENRICHMENT_DATA_DIR / f"{name}.json"
             try:
-                if attempt > 0:
-                    delay = base_delay * (2**attempt)  # Exponential backoff
-                    log.info(f"Retry attempt {attempt + 1}/{max_retries} after {delay}s delay...")
-                    await asyncio.sleep(delay)
+                log.debug("Downloading PeeringDB endpoint %s", url)
+                resp = await client.get(url, timeout=30)
+                resp.raise_for_status()
+                data = resp.json()
 
-                # Get IXP prefixes directly - no need for IXLAN lookup
-                log.debug("Downloading IXP prefixes...")
-                download_start = datetime.now()
-                response = await client.get(PEERINGDB_IXPFX_URL)
-                response.raise_for_status()
-                ixpfxs = response.json()["data"]
-                prefix_time = (datetime.now() - download_start).total_seconds()
+                # Write to temp file first
+                try:
+                    with open(temp_path, "w") as f:
+                        json.dump(data, f, separators=(',', ':'))
+                    # Atomic replace
+                    import os
 
-                # Process IXP prefixes - use a generic IXP name since we don't need specific names
-                process_start = datetime.now()
-                ixp_count = 0
-                total_prefixes = len(ixpfxs)
-                failed_prefixes = 0
-
-                for ixpfx in ixpfxs:
+                    os.replace(temp_path, final_path)
+                    log.info("Saved PeeringDB dataset %s -> %s", name, final_path)
+                except Exception as e:
+                    log.warning("Failed to write %s: %s", temp_path, e)
                     try:
-                        prefix = ixpfx.get("prefix")
-
-                        if prefix:
-                            network = ip_network(prefix, strict=False)
-                            # Use "IXP Network" as generic name since we only need to know it's an IXP
-                            ixp_name = "IXP Network"
-                            self.ixp_networks.append(
-                                (network.network_address, network.prefixlen, ixp_name)
-                            )
-                            ixp_count += 1
-                        else:
-                            failed_prefixes += 1
+                        if temp_path.exists():
+                            temp_path.unlink()
                     except Exception:
-                        failed_prefixes += 1
-
-                process_time = (datetime.now() - process_start).total_seconds()
-
-                # Sort by prefix length (descending) for longest-match lookup
-                sort_start = datetime.now()
-                self.ixp_networks.sort(key=lambda x: x[1], reverse=True)
-                sort_time = (datetime.now() - sort_start).total_seconds()
-
-                log.info(
-                    f"✅ Downloaded {ixp_count}/{total_prefixes} IXP networks "
-                    f"(download: {prefix_time:.1f}s, process: {process_time:.1f}s, "
-                    f"sort: {sort_time:.1f}s, failed: {failed_prefixes})"
-                )
-                return  # Success - exit retry loop
-
+                        pass
             except Exception as e:
-                if "429" in str(e) or "Too Many Requests" in str(e):
-                    if attempt < max_retries - 1:
-                        delay = base_delay * (2 ** (attempt + 1))
-                        log.warning(
-                            f"Rate limited by PeeringDB API (attempt {attempt + 1}/{max_retries}). Retrying in {delay}s..."
-                        )
-                        continue
-                    else:
-                        log.error(
-                            f"Rate limited by PeeringDB API after {max_retries} attempts. Skipping IXP data."
-                        )
-                        break
-                else:
-                    log.warning(
-                        f"Failed to download IXP data (attempt {attempt + 1}/{max_retries}): {e}"
-                    )
-                    if attempt < max_retries - 1:
-                        continue
-                    break
+                log.warning("Failed to download %s: %s; will use existing %s if present", url, e, final_path)
 
-        # If we get here, all retries failed
-        log.warning("Could not download IXP data after retries - continuing without IXP detection")
-        log.info("ASN lookups will still work, but IXP networks won't be identified")
-        self.ixp_networks = []
+        # After downloads, combine on-disk JSON files into the optimized pickle
+        # The actual combine logic is implemented in _combine_peeringdb_files so
+        # it can be reused (e.g., when the optimized pickle is missing but the
+        # raw JSON endpoint files are present and still fresh).
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._combine_peeringdb_files)
+        except Exception as e:
+            log.warning("Failed to combine PeeringDB datasets after download: %s", e)
 
     async def _query_bgp_tools_for_ip(
         self, ip_str: str
@@ -825,6 +718,125 @@ class IPEnrichmentService:
         # Cache result
         self._ip_cache[ip_str] = (asn, org, prefix)
         return (asn, org, prefix)
+
+    def _combine_peeringdb_files(self) -> bool:
+        """Combine existing PeeringDB JSON files into the optimized pickle.
+
+        Reads ixpfx.json, ixlan.json, ix.json from the data directory (if
+        present), builds a deduplicated prefix->IXP name mapping, sorts by
+        prefix length (desc) and persists the result to ixp_data.pickle
+        atomically. Returns True on success, False otherwise.
+        """
+        try:
+            ixpfx_data = []
+            ixlan_data = []
+            ix_data = []
+
+            if (IP_ENRICHMENT_DATA_DIR / "ixpfx.json").exists():
+                with open(IP_ENRICHMENT_DATA_DIR / "ixpfx.json", "r") as f:
+                    raw = json.load(f)
+                    if isinstance(raw, dict) and "data" in raw:
+                        ixpfx_data = raw.get("data", [])
+                    elif isinstance(raw, list):
+                        ixpfx_data = raw
+
+            if (IP_ENRICHMENT_DATA_DIR / "ixlan.json").exists():
+                with open(IP_ENRICHMENT_DATA_DIR / "ixlan.json", "r") as f:
+                    raw = json.load(f)
+                    if isinstance(raw, dict) and "data" in raw:
+                        ixlan_data = raw.get("data", [])
+                    elif isinstance(raw, list):
+                        ixlan_data = raw
+
+            if (IP_ENRICHMENT_DATA_DIR / "ix.json").exists():
+                with open(IP_ENRICHMENT_DATA_DIR / "ix.json", "r") as f:
+                    raw = json.load(f)
+                    if isinstance(raw, dict) and "data" in raw:
+                        ix_data = raw.get("data", [])
+                    elif isinstance(raw, list):
+                        ix_data = raw
+
+            # Build mappings: ixlan_id -> ix_id, ix_id -> ix_name
+            ixlan_to_ix = {}
+            for rec in ixlan_data:
+                try:
+                    rid = rec.get("id")
+                    ix_id = rec.get("ix_id")
+                    if rid is not None and ix_id is not None:
+                        ixlan_to_ix[rid] = ix_id
+                except Exception:
+                    continue
+
+            ix_id_to_name = {}
+            for rec in ix_data:
+                try:
+                    ixid = rec.get("id")
+                    name = rec.get("name_long") or rec.get("name")
+                    if ixid is not None and name:
+                        ix_id_to_name[ixid] = name
+                except Exception:
+                    continue
+
+            # Combine prefixes to IXP name
+            prefix_map: dict[str, str] = {}
+            for rec in ixpfx_data:
+                try:
+                    prefix = rec.get("prefix") or rec.get("network")
+                    ixlan_id = rec.get("ixlan_id")
+                    if not prefix:
+                        continue
+                    ix_id = ixlan_to_ix.get(ixlan_id)
+                    ix_name = None
+                    if ix_id is not None:
+                        ix_name = ix_id_to_name.get(ix_id)
+                    # Fallback: some ixpfx entries include ix_name or ixlan name
+                    if not ix_name:
+                        ix_name = rec.get("name") or rec.get("ixp_name")
+                    if not ix_name:
+                        ix_name = "IXP"
+                    # Normalize network
+                    try:
+                        net = ip_network(prefix, strict=False)
+                        prefix_map[str(net)] = ix_name
+                    except Exception:
+                        # store raw prefix if parsing fails
+                        prefix_map[prefix] = ix_name
+                except Exception:
+                    continue
+
+            # Build sorted list of tuples: (network_address_str, prefixlen, ix_name)
+            parsed = []
+            for pfx, name in prefix_map.items():
+                try:
+                    net = ip_network(pfx, strict=False)
+                    parsed.append((str(net.network_address), net.prefixlen, name))
+                except Exception:
+                    # try to skip invalid entries
+                    continue
+
+            # Sort by prefixlen desc
+            parsed.sort(key=lambda x: x[1], reverse=True)
+
+            # Persist parsed mapping as pickle for performance
+            tmp_pickle = IP_ENRICHMENT_DATA_DIR / "ixp_data.pickle.tmp"
+            final_pickle = IP_ENRICHMENT_DATA_DIR / "ixp_data.pickle"
+            try:
+                with open(tmp_pickle, "wb") as f:
+                    pickle.dump(parsed, f, protocol=pickle.HIGHEST_PROTOCOL)
+                import os
+
+                os.replace(tmp_pickle, final_pickle)
+                log.info("Saved combined IXP prefix mapping (%d prefixes) -> %s", len(parsed), final_pickle)
+                # Also update in-memory list for immediate use
+                self.ixp_networks = [(ip_address(net), prefixlen, name) for net, prefixlen, name in parsed]
+                return True
+            except Exception as e:
+                log.warning("Failed to persist optimized pickle: %s", e)
+                return False
+
+        except Exception as e:
+            log.warning("Failed to combine PeeringDB datasets: %s", e)
+            return False
 
     async def _query_bgp_tools_bulk(self, ips: t.List[str]) -> t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]]:
         """Query bgp.tools for multiple IPs using a single websocket connection when possible.
@@ -1274,7 +1286,7 @@ def get_data_status() -> dict:
     status = {
         "data_directory": str(IP_ENRICHMENT_DATA_DIR),
         "files_exist": {
-            "ixp_data": IXP_DATA_FILE.exists(),
+            "ixp_data_pickle": IXP_PICKLE_FILE.exists(),
             "last_update": LAST_UPDATE_FILE.exists(),
         },
         "last_update": None,
