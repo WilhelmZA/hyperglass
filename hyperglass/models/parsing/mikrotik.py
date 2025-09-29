@@ -576,7 +576,7 @@ class MikrotikTracerouteTable(MikrotikBase):
 
                     # Convert timing values
                     def parse_rtt(rtt_str: str) -> t.Optional[float]:
-                        if rtt_str in ("timeout", "-", "0ms"):
+                        if rtt_str in ("timeout", "-", "0ms", "*"):
                             return None
                         # Remove 'ms' suffix and convert to float
                         rtt_clean = re.sub(r"ms$", "", rtt_str)
@@ -700,6 +700,7 @@ class MikrotikTracerouteTable(MikrotikBase):
                     loss_pct=hop.loss_pct,
                     sent_count=hop.sent_count,
                     last_rtt=hop.last_rtt,
+                    avg_rtt=hop.avg_rtt,    # Add missing avg_rtt field for frontend
                     best_rtt=hop.best_rtt,
                     worst_rtt=hop.worst_rtt,
                     # BGP enrichment fields will be populated by enrichment plugin
