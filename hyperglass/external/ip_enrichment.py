@@ -422,14 +422,21 @@ class IPEnrichmentService:
                     (str(net), prefixlen, name) for net, prefixlen, name in self.ixp_networks
                 ]
 
-                with open(CIDR_DATA_FILE, "w") as f:
-                    json.dump(cidr_file_data, f, separators=(",", ":"))  # Compact JSON
-                with open(ASN_DATA_FILE, "w") as f:
+                import os
+                # Write to .tmp files first
+                with open(CIDR_DATA_FILE + ".tmp", "w") as f:
+                    json.dump(cidr_file_data, f, separators=(",", ":"))
+                with open(ASN_DATA_FILE + ".tmp", "w") as f:
                     json.dump(self.asn_info, f, separators=(",", ":"))
-                with open(IXP_DATA_FILE, "w") as f:
+                with open(IXP_DATA_FILE + ".tmp", "w") as f:
                     json.dump(ixp_file_data, f, separators=(",", ":"))
-                with open(LAST_UPDATE_FILE, "w") as f:
+                with open(LAST_UPDATE_FILE + ".tmp", "w") as f:
                     f.write(datetime.now().isoformat())
+                # Atomically rename .tmp files to final files
+                os.replace(CIDR_DATA_FILE + ".tmp", CIDR_DATA_FILE)
+                os.replace(ASN_DATA_FILE + ".tmp", ASN_DATA_FILE)
+                os.replace(IXP_DATA_FILE + ".tmp", IXP_DATA_FILE)
+                os.replace(LAST_UPDATE_FILE + ".tmp", LAST_UPDATE_FILE)
 
                 cache_duration_actual = (datetime.now() - cache_start).total_seconds()
 

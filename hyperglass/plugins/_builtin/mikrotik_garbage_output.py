@@ -185,5 +185,12 @@ class MikrotikGarbageOutput(OutputPlugin):
             cleaned_output = "\n".join(filtered_lines)
             cleaned_outputs.append(cleaned_output)
 
-        log.debug(f"MikrotikGarbageOutput cleaned {len(output)} output blocks.")
+        # Minimal debug logging: log number of cleaned blocks and if any aggregation occurred
+        if len(output) > 0:
+            log.debug(f"MikrotikGarbageOutput processed {len(output)} output blocks.")
+        # If any aggregation line was added, log that event
+        for cleaned in cleaned_outputs:
+            if "... (" in cleaned:
+                log.debug("Aggregated excessive trailing timeout hops in traceroute output.")
+                break
         return tuple(cleaned_outputs)

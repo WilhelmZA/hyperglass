@@ -278,7 +278,7 @@ class MikrotikBGPTable(MikrotikBase):
         inst.paths = _extract_paths(lines)
         inst.routes = _extract_route_entries(lines)
 
-        _log.debug(f"Parsed {len(inst.routes)} MikroTik routes")
+            # _log.debug(f"Parsed {len(inst.routes)} MikroTik routes")
         return inst
 
     def bgp_table(self) -> BGPRouteTable:
@@ -339,14 +339,9 @@ class MikrotikTracerouteTable(MikrotikBase):
 
         We need to find the LAST/NEWEST table and use that as the final result.
         """
-        _log = log.bind(parser="MikrotikTracerouteTable")
-
-        # DEBUG: Log the raw input
-        _log.debug(f"=== RAW MIKROTIK TRACEROUTE INPUT ===")
-        _log.debug(f"Target: {target}, Source: {source}")
-        _log.debug(f"Raw text length: {len(text)} characters")
-        _log.debug(f"Raw text:\n{repr(text)}")
-        _log.debug(f"=== END RAW INPUT ===")
+    _log = log.bind(parser="MikrotikTracerouteTable")
+    # Minimal debug logging: log input summary
+    _log.debug(f"Parsing MikroTik traceroute: target={target}, source={source}, text_length={len(text)}")
 
         # Try to extract target from the traceroute command in the output
         # Look for patterns like: "tool traceroute src-address=192.168.1.1 timeout=1 duration=30 count=3 8.8.8.8"
@@ -367,7 +362,8 @@ class MikrotikTracerouteTable(MikrotikBase):
                         # This looks like a target (IP or hostname)
                         if len(part) > 3:  # Reasonable minimum length
                             extracted_target = part
-                            _log.debug(f"Extracted target from command: {extracted_target}")
+                            # Only log if target changes
+                            pass
                             break
                 break
         
@@ -376,12 +372,9 @@ class MikrotikTracerouteTable(MikrotikBase):
             _log.info(f"Updated target from '{target}' to '{extracted_target}' based on command output")
             target = extracted_target
 
-        lines = text.strip().split("\n")
-        _log.debug(f"Split into {len(lines)} lines")
+    lines = text.strip().split("\n")
 
-        # DEBUG: Log each line with line numbers
-        for i, line in enumerate(lines):
-            _log.debug(f"Line {i:2d}: {repr(line)}")
+        # Remove per-line debug logging
 
         # Find all table starts - handle both formats:
         # Format 1: "Columns: ADDRESS, LOSS, SENT..." (newer format with hop numbers)
@@ -395,7 +388,6 @@ class MikrotikTracerouteTable(MikrotikBase):
                 and not line.strip().startswith(("1", "2", "3", "4", "5", "6", "7", "8", "9"))
             ):
                 table_starts.append(i)
-                _log.debug(f"Found table start at line {i}: {repr(line)}")
 
         if not table_starts:
             _log.warning("No traceroute table headers found in output")
@@ -403,15 +395,12 @@ class MikrotikTracerouteTable(MikrotikBase):
 
         # Take the LAST table (newest/final results)
         last_table_start = table_starts[-1]
-        _log.debug(
-            f"Found {len(table_starts)} tables, using the last one starting at line {last_table_start}"
-        )
+        # Only log summary
+        _log.debug(f"Found {len(table_starts)} tables, using last at line {last_table_start}")
 
         # Determine format by checking the header line
-        header_line = lines[last_table_start].strip()
-        is_columnar_format = "Columns:" in header_line
-        _log.debug(f"Header line: {repr(header_line)}")
-        _log.debug(f"Is columnar format: {is_columnar_format}")
+    header_line = lines[last_table_start].strip()
+    is_columnar_format = "Columns:" in header_line
 
         # Parse only the last table
         hops = []
@@ -426,7 +415,6 @@ class MikrotikTracerouteTable(MikrotikBase):
 
             # Skip empty lines
             if not line:
-                _log.debug(f"Line {i}: EMPTY - skipping")
                 continue
 
             # Skip the column header lines
@@ -435,17 +423,14 @@ class MikrotikTracerouteTable(MikrotikBase):
                 or ("ADDRESS" in line and "LOSS" in line and "SENT" in line)
                 or line.startswith("#")
             ):
-                in_data_section = True
-                _log.debug(f"Line {i}: HEADER - entering data section: {repr(line)}")
+                # _log.debug(f"Found {len(table_starts)} tables, using last at line {last_table_start}")
                 continue
 
             # Skip paging prompts
             if "-- [Q quit|C-z pause]" in line:
-                _log.debug(f"Line {i}: PAGING PROMPT - breaking: {repr(line)}")
                 break  # End of this table
 
             if in_data_section and line:
-                _log.debug(f"Line {i}: PROCESSING DATA LINE: {repr(line)}")
                 try:
                     # Define helper function for RTT parsing
                     def parse_rtt(rtt_str: str) -> t.Optional[float]:
@@ -467,7 +452,6 @@ class MikrotikTracerouteTable(MikrotikBase):
                     ):
                         # This is a timeout/continuation hop
                         parts = line.split()
-                        _log.debug(f"Line {i}: Timeout/continuation line, parts: {parts}")
 
                         if len(parts) >= 2 and parts[0].endswith("%"):
                             ip_address = None
@@ -499,15 +483,15 @@ class MikrotikTracerouteTable(MikrotikBase):
                             )
                             hops.append(hop)
                             current_hop_number += 1
-                            _log.debug(f"Line {i}: Created timeout hop {hop.hop_number}")
+                            # Only log summary, skip per-hop debug
                             continue
 
                     if is_columnar_format:
                         # New format: "1  10.0.0.41         0%     1  0.5ms   0.5   0.5   0.5      0"
                         parts = line.split()
-                        _log.debug(f"Line {i}: Columnar format, parts: {parts}")
+                        # Only log summary, skip per-hop debug
                         if len(parts) < 3:
-                            _log.debug(f"Line {i}: Too few parts ({len(parts)}), skipping")
+                            # Only log summary, skip per-hop debug
                             continue
 
                         hop_number = int(parts[0])
@@ -532,15 +516,15 @@ class MikrotikTracerouteTable(MikrotikBase):
                             best_rtt_str = "timeout"
                             worst_rtt_str = "timeout"
                         else:
-                            _log.debug(f"Line {i}: Doesn't match columnar patterns, skipping")
+                            # Only log summary, skip per-hop debug
                             continue
                     else:
                         # Old format: "196.60.8.198                       0%    1  17.1ms    17.1    17.1    17.1       0"
                         # We need to deduplicate by taking the LAST occurrence of each IP
                         parts = line.split()
-                        _log.debug(f"Line {i}: Old format, parts: {parts}")
+                        # Only log summary, skip per-hop debug
                         if len(parts) < 6:
-                            _log.debug(f"Line {i}: Too few parts ({len(parts)}), skipping")
+                            # Only log summary, skip per-hop debug
                             continue
 
                         ip_address = parts[0] if not parts[0].endswith("%") else None
@@ -607,19 +591,16 @@ class MikrotikTracerouteTable(MikrotikBase):
                     )
 
                     hops.append(hop_obj)
-                    _log.debug(
-                        f"Line {i}: Created hop {final_hop_number}: {ip_address} - {loss_pct}% - {sent_count} sent"
-                    )
 
                 except (ValueError, IndexError) as e:
-                    _log.debug(f"Failed to parse line '{line}': {e}")
+                    _log.warning(f"Failed to parse line '{line}': {e}")
                     continue
 
         _log.debug(f"Before deduplication: {len(hops)} hops")
 
         # For old format, we need to deduplicate by IP and take only final stats
         if not is_columnar_format and hops:
-            _log.debug(f"Old format detected - deduplicating {len(hops)} total entries")
+            _log.debug(f"Deduplicating old format traceroute: {len(hops)} entries before deduplication")
 
             # Group by IP address and take the HIGHEST SENT count (final stats)
             ip_to_final_hop = {}
@@ -638,16 +619,12 @@ class MikrotikTracerouteTable(MikrotikBase):
                 if ip_key not in hop_order:
                     hop_order.append(ip_key)
                     ip_to_max_sent[ip_key] = 0
-                    _log.debug(f"New IP discovered: {ip_key}")
 
                 # Keep hop with highest SENT count (most recent/final stats)
                 if hop.sent_count and hop.sent_count >= ip_to_max_sent[ip_key]:
                     ip_to_max_sent[ip_key] = hop.sent_count
                     ip_to_final_hop[ip_key] = hop
-                    _log.debug(f"Updated {ip_key}: SENT={hop.sent_count} (final stats)")
 
-            _log.debug(f"IP order: {hop_order}")
-            _log.debug(f"Final IP stats: {[(ip, ip_to_max_sent[ip]) for ip in hop_order]}")
 
             # Rebuild hops list with final stats and correct hop numbers
             final_hops = []
@@ -655,12 +632,8 @@ class MikrotikTracerouteTable(MikrotikBase):
                 final_hop = ip_to_final_hop[ip_key]
                 final_hop.hop_number = i  # Correct hop numbering
                 final_hops.append(final_hop)
-                _log.debug(
-                    f"Final hop {i}: {ip_key} - Loss: {final_hop.loss_pct}% - Sent: {final_hop.sent_count}"
-                )
 
             hops = final_hops
-            _log.debug(f"Deduplication complete: {len(hops)} unique hops with final stats")
 
         # Filter excessive timeout hops ONLY at the end (no more valid hops after)
         # Find the last hop with a valid IP address
@@ -674,15 +647,12 @@ class MikrotikTracerouteTable(MikrotikBase):
         
         for i, hop in enumerate(hops):
             if i > last_valid_hop_index and hop.ip_address is None and hop.loss_pct == 100:
-                # This is a trailing timeout hop (after the last valid hop)
                 trailing_timeouts += 1
-                if trailing_timeouts <= 3:  # Only keep first 3 trailing timeouts
+                if trailing_timeouts <= 3:
                     filtered_hops.append(hop)
-                    _log.debug(f"Keeping trailing timeout hop {hop.hop_number} (#{trailing_timeouts})")
-                else:
-                    _log.debug(f"Filtering out trailing timeout hop {hop.hop_number} (#{trailing_timeouts})")
+                elif trailing_timeouts == 4:
+                    _log.debug("Aggregated excessive trailing timeout hops in traceroute output.")
             else:
-                # This is either a valid hop or a timeout hop with valid hops after it
                 filtered_hops.append(hop)
                 if hop.ip_address is not None:
                     _log.debug(f"Keeping valid hop {hop.hop_number}: {hop.ip_address}")
@@ -692,17 +662,7 @@ class MikrotikTracerouteTable(MikrotikBase):
         # Renumber the filtered hops
         for i, hop in enumerate(filtered_hops, 1):
             hop.hop_number = i
-            
         hops = filtered_hops
-        if last_valid_hop_index >= 0:
-            _log.debug(f"Last valid hop was at index {last_valid_hop_index}, filtered trailing timeouts")
-        _log.debug(f"After timeout filtering: {len(hops)} hops")
-
-        _log.debug(f"After processing: {len(hops)} final hops")
-        for hop in hops:
-            _log.debug(
-                f"Final hop {hop.hop_number}: {hop.ip_address} - {hop.loss_pct}% loss - {hop.sent_count} sent"
-            )
 
         result = MikrotikTracerouteTable(target=target, source=source, hops=hops)
         _log.info(f"Parsed {len(hops)} hops from MikroTik traceroute final table")
