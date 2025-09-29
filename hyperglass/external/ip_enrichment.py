@@ -42,33 +42,50 @@ class _ProcessFileLock:
         self.lock_path = lock_path
         self.timeout = timeout
         self.poll_interval = poll_interval
-        self._fd = None
+        self._lock_dir: t.Optional[str] = None
+        # Small startup jitter (seconds) to reduce thundering herd on many
+        # worker processes starting at the same time.
+        self._startup_jitter = 0.25
 
     def _acquire_blocking(self) -> None:
-        # Ensure the lock file exists
-        fd = open(self.lock_path, "w+")
+        # Use an atomic directory creation as the lock primitive. mkdir is
+        # atomic on POSIX filesystems and works reliably across processes
+        # (and in many container / overlayfs setups where fcntl.flock may be
+        # unreliable). We'll create a lock directory alongside the intended
+        # lock file path and remove it on release.
+        import os
+
+        lock_dir = str(self.lock_path) + ".lck"
+        import random
+
+        # Small random sleep before the first attempt to spread mkdir calls
+        time.sleep(random.uniform(0, self._startup_jitter))
         start = time.time()
+
         while True:
             try:
-                fcntl.flock(fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                # Keep the file descriptor open for the life of the lock
-                self._fd = fd
+                # Atomic attempt to create the directory; if it succeeds we
+                # hold the lock. If it already exists, mkdir will raise
+                # FileExistsError and we'll retry until timeout.
+                os.mkdir(lock_dir)
+                self._lock_dir = lock_dir
                 return
-            except BlockingIOError:
+            except FileExistsError:
                 if (time.time() - start) >= self.timeout:
-                    fd.close()
                     raise TimeoutError(f"Timed out waiting for lock {self.lock_path}")
                 time.sleep(self.poll_interval)
 
     def _release_blocking(self) -> None:
+        import os
+
         try:
-            if self._fd:
-                fcntl.flock(self._fd.fileno(), fcntl.LOCK_UN)
+            if self._lock_dir:
                 try:
-                    self._fd.close()
+                    os.rmdir(self._lock_dir)
                 except Exception:
+                    # Best effort; ignore errors removing the lock dir
                     pass
-                self._fd = None
+                self._lock_dir = None
         except Exception:
             # Nothing we can do on release failure
             pass
@@ -109,6 +126,10 @@ IXP_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "ixp_data.json"
 LAST_UPDATE_FILE = IP_ENRICHMENT_DATA_DIR / "last_update.txt"
 COMBINED_CACHE_FILE = IP_ENRICHMENT_DATA_DIR / "combined_cache.pickle"
 
+# Backoff marker file written when upstream rate-limits us (HTTP 429). The
+# file contains an ISO timestamp until which downloads should be suppressed.
+DOWNLOAD_BACKOFF_FILE = IP_ENRICHMENT_DATA_DIR / "download_backoff.txt"
+
 # Raw data files for debugging/inspection
 RAW_TABLE_FILE = IP_ENRICHMENT_DATA_DIR / "table.jsonl"
 RAW_ASNS_FILE = IP_ENRICHMENT_DATA_DIR / "asns.csv"
@@ -122,8 +143,11 @@ PEERINGDB_IXPFX_URL = "https://www.peeringdb.com/api/ixpfx"
 DEFAULT_CACHE_DURATION = 24 * 60 * 60
 
 
-# Initialize process-wide download lock (now that data dir path constants are defined)
-_download_lock = _ProcessFileLock(IP_ENRICHMENT_DATA_DIR / "download.lock")
+# Lazily-created process-wide download lock. Create this after the data
+# directory is ensured to exist to avoid open() failing due to a missing
+# parent directory and to ensure the lock file lives under the same path
+# for all workers.
+_download_lock: t.Optional[_ProcessFileLock] = None
 
 
 def get_cache_duration() -> int:
@@ -143,6 +167,23 @@ def should_refresh_data(force_refresh: bool = False) -> tuple[bool, str]:
     """Check if data should be refreshed and return reason."""
     if force_refresh:
         return True, "Force refresh requested"
+
+    # If a backoff marker exists and it's still in the future, skip refreshes
+    try:
+        if DOWNLOAD_BACKOFF_FILE.exists():
+            with open(DOWNLOAD_BACKOFF_FILE, "r") as f:
+                retry_until = datetime.fromisoformat(f.read().strip())
+            if datetime.now() < retry_until:
+                return False, f"Backoff active until {retry_until.isoformat()}"
+            else:
+                # Expired backoff - remove the file
+                try:
+                    DOWNLOAD_BACKOFF_FILE.unlink()
+                except Exception:
+                    pass
+    except Exception:
+        # If anything goes wrong reading backoff, ignore and proceed
+        pass
 
     if not LAST_UPDATE_FILE.exists():
         return True, "No timestamp file found"
@@ -343,6 +384,13 @@ class IPEnrichmentService:
         # Create data directory if it doesn't exist
         IP_ENRICHMENT_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+        # Lazily instantiate the process-wide download lock now that the
+        # data directory exists and is guaranteed to be the same path for
+        # all worker processes.
+        global _download_lock
+        if _download_lock is None:
+            _download_lock = _ProcessFileLock(IP_ENRICHMENT_DATA_DIR / "download.lock")
+
         # Check if refresh is needed
         should_refresh, reason = should_refresh_data(force_refresh)
 
@@ -452,6 +500,20 @@ class IPEnrichmentService:
                         log.debug("✅ BGP data download successful")
                     except Exception as e:
                         log.error(f"❌ BGP data download failed: {e}")
+                        # If the error looks like a 429 from upstream, write a
+                        # backoff marker so other workers don't hammer upstream
+                        try:
+                            if "429" in str(e) or "Too Many Requests" in str(e):
+                                # Backoff for 5 minutes
+                                backoff_until = datetime.now() + timedelta(minutes=5)
+                                try:
+                                    with open(DOWNLOAD_BACKOFF_FILE, "w") as bf:
+                                        bf.write(backoff_until.isoformat())
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+
                         # BGP data is critical - if this fails, we can't continue
                         raise Exception(f"Critical BGP data download failed: {e}")
 
