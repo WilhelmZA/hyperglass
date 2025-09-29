@@ -988,9 +988,10 @@ async def network_info(*targets: str) -> TargetData:
 
         # Process each target without reloading data
         for target in query_targets:
-            ip_info = _service.lookup_ip_direct(
-                target
-            )  # Use direct lookup that doesn't reload data
+            # Use the async lookup which will perform on-demand bgp.tools queries
+            # for IPs not found in local tables. `lookup_ip_direct` intentionally
+            # avoids remote lookups and therefore would not query bgp.tools.
+            ip_info = await _service.lookup_ip(target)
 
             # Convert to TargetDetail format
             if ip_info.is_ixp and ip_info.ixp_name:
