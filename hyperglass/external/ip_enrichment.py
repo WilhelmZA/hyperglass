@@ -54,9 +54,11 @@ class _ProcessFileLock:
         # unreliable). We'll create a lock directory alongside the intended
         # lock file path and remove it on release.
         import os
+        import random
+        import json
+        import shutil
 
         lock_dir = str(self.lock_path) + ".lck"
-        import random
 
         # Small random sleep before the first attempt to spread mkdir calls
         time.sleep(random.uniform(0, self._startup_jitter))
@@ -68,24 +70,79 @@ class _ProcessFileLock:
                 # hold the lock. If it already exists, mkdir will raise
                 # FileExistsError and we'll retry until timeout.
                 os.mkdir(lock_dir)
+
+                # Write a small owner metadata file to help debugging stale locks
+                try:
+                    owner = {"pid": os.getpid(), "created": datetime.now().isoformat()}
+                    with open(os.path.join(lock_dir, "owner.json"), "w") as f:
+                        json.dump(owner, f)
+                except Exception:
+                    # Not critical; proceed even if writing metadata fails
+                    pass
+
                 self._lock_dir = lock_dir
+                log.debug(f"Acquired process lock {lock_dir} (pid={os.getpid()})")
                 return
             except FileExistsError:
+                # If the existing lock looks stale (owner file older than timeout)
+                # try to remove it and acquire again. This helps recover from
+                # processes that crashed without releasing the lock.
+                try:
+                    owner_file = os.path.join(lock_dir, "owner.json")
+                    mtime = None
+                    if os.path.exists(owner_file):
+                        mtime = os.path.getmtime(owner_file)
+                    else:
+                        mtime = os.path.getmtime(lock_dir)
+
+                    # If owner file/dir mtime is older than timeout, remove it
+                    if (time.time() - mtime) >= self.timeout:
+                        log.warning(f"Removing stale lock directory {lock_dir}")
+                        try:
+                            shutil.rmtree(lock_dir)
+                        except Exception:
+                            # If we can't remove it, we'll continue to wait until
+                            # the timeout is reached by this acquisition attempt.
+                            pass
+                        # After attempted cleanup, loop and try mkdir again
+                        continue
+                except Exception:
+                    # Ignore issues during stale-check and continue waiting
+                    pass
+
                 if (time.time() - start) >= self.timeout:
                     raise TimeoutError(f"Timed out waiting for lock {self.lock_path}")
                 time.sleep(self.poll_interval)
 
     def _release_blocking(self) -> None:
         import os
+        import shutil
 
         try:
             if self._lock_dir:
                 try:
-                    os.rmdir(self._lock_dir)
+                    owner_file = os.path.join(self._lock_dir, "owner.json")
+                    if os.path.exists(owner_file):
+                        try:
+                            os.remove(owner_file)
+                        except Exception:
+                            pass
+
+                    # Attempt to remove the directory. If it's empty, rmdir will
+                    # succeed; if not, fall back to recursive removal as a best-effort.
+                    try:
+                        os.rmdir(self._lock_dir)
+                    except Exception:
+                        try:
+                            shutil.rmtree(self._lock_dir)
+                        except Exception:
+                            log.debug(f"Failed to fully remove lock dir {self._lock_dir}")
+
+                    log.debug(f"Released process lock {self._lock_dir}")
+                    self._lock_dir = None
                 except Exception:
-                    # Best effort; ignore errors removing the lock dir
+                    # Best-effort; ignore errors removing the lock dir
                     pass
-                self._lock_dir = None
         except Exception:
             # Nothing we can do on release failure
             pass
@@ -120,23 +177,15 @@ except ImportError:
 
 # File paths for persistent storage
 IP_ENRICHMENT_DATA_DIR = Path("/etc/hyperglass/ip_enrichment")
-CIDR_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "cidr_data.json"
-ASN_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "asn_data.json"
+# Only persist PeeringDB IXP prefixes; per-IP lookups use bgp.tools on-demand
 IXP_DATA_FILE = IP_ENRICHMENT_DATA_DIR / "ixp_data.json"
 LAST_UPDATE_FILE = IP_ENRICHMENT_DATA_DIR / "last_update.txt"
-COMBINED_CACHE_FILE = IP_ENRICHMENT_DATA_DIR / "combined_cache.pickle"
 
 # Backoff marker file written when upstream rate-limits us (HTTP 429). The
 # file contains an ISO timestamp until which downloads should be suppressed.
 DOWNLOAD_BACKOFF_FILE = IP_ENRICHMENT_DATA_DIR / "download_backoff.txt"
 
-# Raw data files for debugging/inspection
-RAW_TABLE_FILE = IP_ENRICHMENT_DATA_DIR / "table.jsonl"
-RAW_ASNS_FILE = IP_ENRICHMENT_DATA_DIR / "asns.csv"
-
-# Data URLs
-BGP_TOOLS_TABLE_URL = "https://bgp.tools/table.jsonl"
-BGP_TOOLS_ASNS_URL = "https://bgp.tools/asns.csv"
+# PeeringDB API URL for IXP prefixes
 PEERINGDB_IXPFX_URL = "https://www.peeringdb.com/api/ixpfx"
 
 # Cache duration (24 hours default, configurable)
@@ -164,7 +213,9 @@ def get_cache_duration() -> int:
 
 
 def should_refresh_data(force_refresh: bool = False) -> tuple[bool, str]:
-    """Check if data should be refreshed and return reason."""
+    """Decide whether to refresh IXP data. Only PeeringDB IXP prefixes are
+    considered relevant for startup refresh; BGP.tools bulk files are not used.
+    """
     if force_refresh:
         return True, "Force refresh requested"
 
@@ -176,78 +227,38 @@ def should_refresh_data(force_refresh: bool = False) -> tuple[bool, str]:
             if datetime.now() < retry_until:
                 return False, f"Backoff active until {retry_until.isoformat()}"
             else:
-                # Expired backoff - remove the file
                 try:
                     DOWNLOAD_BACKOFF_FILE.unlink()
                 except Exception:
                     pass
     except Exception:
-        # If anything goes wrong reading backoff, ignore and proceed
         pass
 
-    if not LAST_UPDATE_FILE.exists():
-        return True, "No timestamp file found"
+    # If we have an existing IXP file and no timestamp, prefer using the file
+    if IXP_DATA_FILE.exists() and not LAST_UPDATE_FILE.exists():
+        return False, "ixp_data.json exists and no timestamp present; skipping refresh"
 
-    # Check each required file individually - if ANY are missing, refresh ALL
-    required_files = [
-        (CIDR_DATA_FILE, "cidr_data.json"),
-        (ASN_DATA_FILE, "asn_data.json"),
-        (IXP_DATA_FILE, "ixp_data.json"),
-    ]
+    # If IXP file is missing, refresh is needed
+    if not IXP_DATA_FILE.exists():
+        return True, "No ixp_data.json present"
 
-    missing_files = []
-    for file_path, file_name in required_files:
-        if not file_path.exists():
-            missing_files.append(file_name)
-
-    if missing_files:
-        return True, f"Missing data files: {', '.join(missing_files)}"
-
-    # Check file age
+    # Otherwise check timestamp age
     try:
         with open(LAST_UPDATE_FILE, "r") as f:
             cached_time = datetime.fromisoformat(f.read().strip())
-
         age_seconds = (datetime.now() - cached_time).total_seconds()
         cache_duration = get_cache_duration()
-
         if age_seconds >= cache_duration:
             age_hours = age_seconds / 3600
             return True, f"Data expired (age: {age_hours:.1f}h, max: {cache_duration/3600:.1f}h)"
-
     except Exception as e:
+        # If reading timestamp fails, prefer a refresh so we don't rely on stale data
         return True, f"Failed to read timestamp: {e}"
 
     return False, "Data is fresh"
 
 
-def validate_data_files() -> tuple[bool, str]:
-    """Validate that data files contain reasonable data."""
-    try:
-        # Check CIDR data
-        if CIDR_DATA_FILE.exists():
-            with open(CIDR_DATA_FILE, "r") as f:
-                cidr_data = json.load(f)
-            if not isinstance(cidr_data, list) or len(cidr_data) < 1000:
-                return (
-                    False,
-                    f"CIDR data invalid or too small: {len(cidr_data) if isinstance(cidr_data, list) else 'not a list'}",
-                )
-
-        # Check ASN data
-        if ASN_DATA_FILE.exists():
-            with open(ASN_DATA_FILE, "r") as f:
-                asn_data = json.load(f)
-            if not isinstance(asn_data, dict) or len(asn_data) < 100:
-                return (
-                    False,
-                    f"ASN data invalid or too small: {len(asn_data) if isinstance(asn_data, dict) else 'not a dict'}",
-                )
-
-        return True, "Data files are valid"
-
-    except Exception as e:
-        return False, f"Data validation failed: {e}"
+# validate_data_files removed - legacy BGP.tools bulk files are no longer used
 
 
 # Simple result classes
@@ -362,11 +373,20 @@ class IPEnrichmentService:
             if IXP_DATA_FILE.exists():
                 with open(IXP_DATA_FILE, "r") as f:
                     ixp_data = json.load(f)
-                self.ixp_networks = [
-                    (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
-                ]
-                log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk")
-                return True
+
+                # Treat an existing but empty IXP file as invalid - attempt a
+                # refresh instead of silently accepting an empty list ("[]").
+                if not ixp_data or (isinstance(ixp_data, list) and len(ixp_data) == 0):
+                    log.warning(
+                        "Existing IXP data file '%s' is empty; will attempt to refresh",
+                        IXP_DATA_FILE,
+                    )
+                else:
+                    self.ixp_networks = [
+                        (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
+                    ]
+                    log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk")
+                    return True
         except Exception as e:
             log.warning(f"Failed to load existing IXP data: {e}")
 
@@ -380,11 +400,20 @@ class IPEnrichmentService:
                 if IXP_DATA_FILE.exists():
                     with open(IXP_DATA_FILE, "r") as f:
                         ixp_data = json.load(f)
-                    self.ixp_networks = [
-                        (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
-                    ]
-                    log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk (post-lock)")
-                    return True
+
+                    if not ixp_data or (isinstance(ixp_data, list) and len(ixp_data) == 0):
+                        log.warning(
+                            "Existing IXP data file '%s' is empty after lock wait; will attempt to refresh",
+                            IXP_DATA_FILE,
+                        )
+                    else:
+                        self.ixp_networks = [
+                            (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
+                        ]
+                        log.info(
+                            f"Loaded {len(self.ixp_networks)} IXP prefixes from disk (post-lock)"
+                        )
+                        return True
             except Exception:
                 pass
 
@@ -626,9 +655,14 @@ class IPEnrichmentService:
 
     async def lookup_ip(self, ip_str: str) -> IPInfo:
         """Lookup an IP address and return ASN or IXP information."""
-        if not await self.ensure_data_loaded():
-            log.warning("IP enrichment data not available")
-            return IPInfo(ip_str)
+        # Try to load IXP data, but continue even if the load fails. We still
+        # want to perform on-demand bgp.tools lookups for IPs when local data
+        # is missing; failing to load the IXP file should not prevent remote
+        # lookups.
+        try:
+            await self.ensure_data_loaded()
+        except Exception:
+            log.debug("ensure_data_loaded raised an exception; continuing with on-demand lookups")
 
         # Ensure lookup optimization is done
         self._optimize_lookups()
@@ -719,16 +753,26 @@ class IPEnrichmentService:
 
     async def lookup_asn_name(self, asn: int) -> str:
         """Get the organization name for an ASN."""
-        if not await self.ensure_data_loaded():
-            return f"AS{asn}"
+        # Attempt to load data but don't fail if we can't; fall back to
+        # returning the numeric ASN string if we have no cached name.
+        try:
+            await self.ensure_data_loaded()
+        except Exception:
+            log.debug(
+                "ensure_data_loaded raised an exception while getting ASN name; using cached data if present"
+            )
 
         asn_data = self.asn_info.get(asn, {})
         return asn_data.get("name", f"AS{asn}")
 
     async def lookup_asn_country(self, asn: int) -> str:
         """Get the country code for an ASN."""
-        if not await self.ensure_data_loaded():
-            return ""
+        try:
+            await self.ensure_data_loaded()
+        except Exception:
+            log.debug(
+                "ensure_data_loaded raised an exception while getting ASN country; using cached data if present"
+            )
 
         asn_data = self.asn_info.get(asn, {})
         return asn_data.get("country", "")
@@ -858,19 +902,12 @@ def get_data_status() -> dict:
     status = {
         "data_directory": str(IP_ENRICHMENT_DATA_DIR),
         "files_exist": {
-            "cidr_data": CIDR_DATA_FILE.exists(),
-            "asn_data": ASN_DATA_FILE.exists(),
             "ixp_data": IXP_DATA_FILE.exists(),
             "last_update": LAST_UPDATE_FILE.exists(),
-            "combined_cache": COMBINED_CACHE_FILE.exists(),
-            "raw_table": RAW_TABLE_FILE.exists(),
-            "raw_asns": RAW_ASNS_FILE.exists(),
         },
         "last_update": None,
         "age_hours": None,
         "data_counts": {
-            "cidr_entries": len(_service.cidr_networks),
-            "asn_entries": len(_service.asn_info),
             "ixp_networks": len(_service.ixp_networks),
         },
     }
