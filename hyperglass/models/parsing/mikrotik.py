@@ -751,9 +751,6 @@ class MikrotikTracerouteTable(MikrotikBase):
                 allocated=None,
             )
             
-            # DEBUG: Check what values we actually have
-            print(f"DEBUG TracerouteHop {hop.ip_address}: hop.avg_rtt={hop.avg_rtt}, created_hop.avg_rtt={created_hop.avg_rtt}, rtt1={created_hop.rtt1}")
-            
             converted_hops.append(created_hop)
 
         return TracerouteResult(
