@@ -37,21 +37,18 @@ def parse_mikrotik_traceroute(
     _log = log.bind(plugin=TraceroutePluginMikrotik.__name__)
     combined_output = "\n".join(out_list)
 
-    # DEBUG: Log the raw output we're about to parse
-    _log.debug(f"=== MIKROTIK TRACEROUTE PLUGIN RAW INPUT ===")
-    _log.debug(f"Target: {target}, Source: {source}")
-    _log.debug(f"Output pieces: {len(out_list)}")
-    for i, piece in enumerate(out_list):
-        _log.debug(f"Output piece {i}: {repr(piece[:200])}...")  # Truncate for readability
-    _log.debug(f"Combined output length: {len(combined_output)}")
-
-    # Check if this looks like cleaned or raw output
+    # Minimal summary of the input - avoid dumping full raw output to logs
     contains_paging = "-- [Q quit|C-z pause]" in combined_output
     contains_multiple_tables = combined_output.count("ADDRESS") > 1
-    _log.debug(f"Contains paging prompts: {contains_paging}")
-    _log.debug(f"Contains multiple ADDRESS headers: {contains_multiple_tables}")
-    _log.debug(f"First 500 chars: {repr(combined_output[:500])}")
-    _log.debug(f"=== END PLUGIN RAW INPUT ===")
+    _log.debug(
+        "Received traceroute plugin input",
+        target=target,
+        source=source,
+        pieces=len(out_list),
+        combined_len=len(combined_output),
+        contains_paging=contains_paging,
+        multiple_tables=contains_multiple_tables,
+    )
 
     try:
         # Pass the entire combined output to the parser at once
@@ -62,20 +59,13 @@ def parse_mikrotik_traceroute(
         # This is the processed output from MikrotikGarbageOutput plugin, not the original raw router output
         result.raw_output = combined_output
 
-        # DEBUG: Log the final structured result
-        _log.debug(f"=== FINAL STRUCTURED TRACEROUTE RESULT ===")
-        _log.debug(f"Successfully parsed {len(validated.hops)} traceroute hops")
-        _log.debug(f"Target: {result.target}, Source: {result.source}")
-        for hop in result.hops:
-            _log.debug(
-                f"Hop {hop.hop_number}: {hop.ip_address} - Loss: {hop.loss_pct}% - Sent: {hop.sent_count}"
-            )
-        _log.debug(f"AS Path: {result.as_path_summary}")
+        # Concise structured logging for result
         _log.debug(
-            f"Cleaned raw output length: {len(result.raw_output) if result.raw_output else 0} characters"
+            "Parsed traceroute result",
+            hops=len(validated.hops),
+            target=result.target,
+            source=result.source,
         )
-        _log.debug(f"Copy button will show CLEANED output (after MikrotikGarbageOutput processing)")
-        _log.debug(f"=== END STRUCTURED RESULT ===")
 
     except ValidationError as err:
         _log.critical(err)
