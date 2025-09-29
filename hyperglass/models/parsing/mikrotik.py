@@ -711,6 +711,8 @@ class MikrotikTracerouteTable(MikrotikBase):
     def traceroute_result(self):
         """Convert to TracerouteResult format."""
         from hyperglass.models.data.traceroute import TracerouteResult, TracerouteHop
+        from hyperglass.log import log
+        _log = log.bind(parser="MikrotikTracerouteTable")
 
         converted_hops = []
         for hop in self.hops:
@@ -722,6 +724,9 @@ class MikrotikTracerouteTable(MikrotikBase):
                 # For truncated IPs, store for display but set ip_address to None for validation
                 display_ip = hop.ip_address
                 ip_address = None
+
+            # Debug: Log the values we're about to use
+            _log.debug(f"Creating TracerouteHop for {hop.ip_address}: last_rtt={hop.last_rtt}, avg_rtt={hop.avg_rtt}, best_rtt={hop.best_rtt}, worst_rtt={hop.worst_rtt}")
 
             converted_hops.append(
                 TracerouteHop(
