@@ -348,6 +348,34 @@ class MikrotikTracerouteTable(MikrotikBase):
         _log.debug(f"Raw text:\n{repr(text)}")
         _log.debug(f"=== END RAW INPUT ===")
 
+        # Try to extract target from the traceroute command in the output
+        # Look for patterns like: "tool traceroute src-address=192.168.1.1 timeout=1 duration=30 count=3 8.8.8.8"
+        lines = text.split('\n')
+        extracted_target = target  # Default to passed target
+        
+        for line in lines[:10]:  # Check first 10 lines for command
+            line = line.strip()
+            if line.startswith('tool traceroute') or 'traceroute' in line:
+                # Extract target from command line - it's typically the last argument
+                parts = line.split()
+                for part in reversed(parts):
+                    # Skip parameters with = signs and common flags
+                    if ('=' not in part and 
+                        not part.startswith('-') and 
+                        not part.startswith('[') and
+                        part not in ['tool', 'traceroute', 'src-address', 'timeout', 'duration', 'count']):
+                        # This looks like a target (IP or hostname)
+                        if len(part) > 3:  # Reasonable minimum length
+                            extracted_target = part
+                            _log.debug(f"Extracted target from command: {extracted_target}")
+                            break
+                break
+        
+        # Use extracted target if found, otherwise keep the passed target
+        if extracted_target != target:
+            _log.info(f"Updated target from '{target}' to '{extracted_target}' based on command output")
+            target = extracted_target
+
         lines = text.strip().split("\n")
         _log.debug(f"Split into {len(lines)} lines")
 
@@ -665,9 +693,9 @@ class MikrotikTracerouteTable(MikrotikBase):
                     ip_address=ip_address,  # None for truncated IPs
                     display_ip=display_ip,  # Truncated IP for display
                     hostname=hop.hostname,
-                    rtt1=hop.best_rtt,
-                    rtt2=hop.avg_rtt,
-                    rtt3=hop.worst_rtt,
+                    rtt1=hop.last_rtt,     # LAST column -> RTT1
+                    rtt2=hop.avg_rtt,      # AVG column -> RTT2 (this is correct)
+                    rtt3=hop.best_rtt,     # BEST column -> RTT3
                     # MikroTik-specific statistics
                     loss_pct=hop.loss_pct,
                     sent_count=hop.sent_count,
