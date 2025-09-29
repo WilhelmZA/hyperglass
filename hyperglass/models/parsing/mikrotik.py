@@ -725,9 +725,6 @@ class MikrotikTracerouteTable(MikrotikBase):
                 display_ip = hop.ip_address
                 ip_address = None
 
-            # Debug: Log the values we're about to use
-            _log.debug(f"Creating TracerouteHop for {hop.ip_address}: last_rtt={hop.last_rtt}, avg_rtt={hop.avg_rtt}, best_rtt={hop.best_rtt}, worst_rtt={hop.worst_rtt}")
-
             created_hop = TracerouteHop(
                 hop_number=hop.hop_number,
                 ip_address=ip_address,  # None for truncated IPs
@@ -754,8 +751,8 @@ class MikrotikTracerouteTable(MikrotikBase):
                 allocated=None,
             )
             
-            # Debug: Test the computed avg_rtt property
-            _log.debug(f"Created TracerouteHop for {hop.ip_address}: computed avg_rtt={created_hop.avg_rtt}, rtt1={created_hop.rtt1}, rtt2={created_hop.rtt2}, rtt3={created_hop.rtt3}")
+            # DEBUG: Check what values we actually have
+            print(f"DEBUG TracerouteHop {hop.ip_address}: hop.avg_rtt={hop.avg_rtt}, created_hop.avg_rtt={created_hop.avg_rtt}, rtt1={created_hop.rtt1}")
             
             converted_hops.append(created_hop)
 
