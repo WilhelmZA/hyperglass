@@ -728,33 +728,36 @@ class MikrotikTracerouteTable(MikrotikBase):
             # Debug: Log the values we're about to use
             _log.debug(f"Creating TracerouteHop for {hop.ip_address}: last_rtt={hop.last_rtt}, avg_rtt={hop.avg_rtt}, best_rtt={hop.best_rtt}, worst_rtt={hop.worst_rtt}")
 
-            converted_hops.append(
-                TracerouteHop(
-                    hop_number=hop.hop_number,
-                    ip_address=ip_address,  # None for truncated IPs
-                    display_ip=display_ip,  # Truncated IP for display
-                    hostname=hop.hostname,
-                    # Set RTT values to ensure avg_rtt property returns MikroTik's AVG value
-                    # Since avg_rtt = (rtt1 + rtt2 + rtt3) / 3, we set all to the MikroTik AVG
-                    rtt1=hop.avg_rtt,      # Set to AVG so computed average is correct
-                    rtt2=hop.avg_rtt,      # Set to AVG so computed average is correct  
-                    rtt3=hop.avg_rtt,      # Set to AVG so computed average is correct
-                    # MikroTik-specific statistics (preserve original values)
-                    loss_pct=hop.loss_pct,
-                    sent_count=hop.sent_count,
-                    last_rtt=hop.last_rtt,     # Preserve LAST value
-                    best_rtt=hop.best_rtt,     # Preserve BEST value
-                    worst_rtt=hop.worst_rtt,   # Preserve WORST value
-                    # BGP enrichment fields will be populated by enrichment plugin
-                    # For truncated IPs, these will remain None/empty
-                    asn=None,
-                    org=None,
-                    prefix=None,
-                    country=None,
-                    rir=None,
-                    allocated=None,
-                )
+            created_hop = TracerouteHop(
+                hop_number=hop.hop_number,
+                ip_address=ip_address,  # None for truncated IPs
+                display_ip=display_ip,  # Truncated IP for display
+                hostname=hop.hostname,
+                # Set RTT values to ensure avg_rtt property returns MikroTik's AVG value
+                # Since avg_rtt = (rtt1 + rtt2 + rtt3) / 3, we set all to the MikroTik AVG
+                rtt1=hop.avg_rtt,      # Set to AVG so computed average is correct
+                rtt2=hop.avg_rtt,      # Set to AVG so computed average is correct  
+                rtt3=hop.avg_rtt,      # Set to AVG so computed average is correct
+                # MikroTik-specific statistics (preserve original values)
+                loss_pct=hop.loss_pct,
+                sent_count=hop.sent_count,
+                last_rtt=hop.last_rtt,     # Preserve LAST value
+                best_rtt=hop.best_rtt,     # Preserve BEST value
+                worst_rtt=hop.worst_rtt,   # Preserve WORST value
+                # BGP enrichment fields will be populated by enrichment plugin
+                # For truncated IPs, these will remain None/empty
+                asn=None,
+                org=None,
+                prefix=None,
+                country=None,
+                rir=None,
+                allocated=None,
             )
+            
+            # Debug: Test the computed avg_rtt property
+            _log.debug(f"Created TracerouteHop for {hop.ip_address}: computed avg_rtt={created_hop.avg_rtt}, rtt1={created_hop.rtt1}, rtt2={created_hop.rtt2}, rtt3={created_hop.rtt3}")
+            
+            converted_hops.append(created_hop)
 
         return TracerouteResult(
             target=self.target,
