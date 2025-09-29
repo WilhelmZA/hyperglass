@@ -356,18 +356,20 @@ class IPEnrichmentService:
         # Acquire the download lock to ensure only one worker downloads at a time
         async with _download_lock:
             log.debug("🔒 Acquired download lock - checking if data is still needed...")
-            
+
             # Check again if refresh is still needed (another worker might have downloaded while waiting)
             should_refresh_again, refresh_reason = should_refresh_data(force_refresh)
             if not should_refresh_again:
-                log.info("📋 Another worker completed the download while waiting - using existing data")
+                log.info(
+                    "📋 Another worker completed the download while waiting - using existing data"
+                )
                 # Try to load the now-available data
                 if self._load_combined_cache():
                     log.info("✅ Successfully loaded data downloaded by another worker")
                     return True
 
             log.info("🚀 Proceeding with fresh download (no other worker completed it)")
-            
+
             try:
                 log.info("🌐 Starting fresh IP enrichment data download...")
                 download_start = datetime.now()
@@ -396,7 +398,9 @@ class IPEnrichmentService:
                         log.error(f"❌ IXP data download failed: {e}")
                         # IXP data is optional - clear any partial data and continue
                         self.ixp_networks = []
-                        log.warning("Continuing without IXP data - IXP detection will be unavailable")
+                        log.warning(
+                            "Continuing without IXP data - IXP detection will be unavailable"
+                        )
 
                 download_duration = (datetime.now() - download_start).total_seconds()
 
@@ -416,13 +420,15 @@ class IPEnrichmentService:
 
                 # Convert IP addresses to strings for JSON serialization
                 cidr_file_data = [
-                    (str(net), prefixlen, asn, cidr) for net, prefixlen, asn, cidr in self.cidr_networks
+                    (str(net), prefixlen, asn, cidr)
+                    for net, prefixlen, asn, cidr in self.cidr_networks
                 ]
                 ixp_file_data = [
                     (str(net), prefixlen, name) for net, prefixlen, name in self.ixp_networks
                 ]
 
                 import os
+
                 # Write to .tmp files first
                 with open(CIDR_DATA_FILE + ".tmp", "w") as f:
                     json.dump(cidr_file_data, f, separators=(",", ":"))

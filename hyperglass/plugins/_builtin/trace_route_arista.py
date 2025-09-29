@@ -104,7 +104,7 @@ class AristaTracerouteTable(TracerouteResult):
             r"^\s*(\d+)\s+\*\s+\*\s+(.+?)\s+\(([^)]+)\)(?:\s+<[^>]+>)?\s+(\d+(?:\.\d+)?)\s*ms"
         )
 
-        # Pattern for mixed timeout start: " 9  ae22.cr11-lon2.ip6.gtt.net (2001:668:0:3:ffff:1:0:3471)  201.979 ms * 2c0f:fa90:0:8::5 (2c0f:fa90:0:8::5)  179.438 ms"  
+        # Pattern for mixed timeout start: " 9  ae22.cr11-lon2.ip6.gtt.net (2001:668:0:3:ffff:1:0:3471)  201.979 ms * 2c0f:fa90:0:8::5 (2c0f:fa90:0:8::5)  179.438 ms"
         mixed_timeout_start_pattern = re.compile(
             r"^\s*(\d+)\s+(.+?)\s+\(([^)]+)\)(?:\s+<[^>]+>)?\s+(\d+(?:\.\d+)?)\s*ms\s+\*\s+(.+?)\s+\(([^)]+)\)(?:\s+<[^>]+>)?\s+(\d+(?:\.\d+)?)\s*ms"
         )
@@ -184,7 +184,9 @@ class AristaTracerouteTable(TracerouteResult):
                 ip_address = partial_timeout_match.group(3)
                 rtt1 = float(partial_timeout_match.group(4))
 
-                _log.debug(f"Line {i:2d}: PARTIAL TIMEOUT - {hop_number}: * * {hostname} ({ip_address}) {rtt1}ms")
+                _log.debug(
+                    f"Line {i:2d}: PARTIAL TIMEOUT - {hop_number}: * * {hostname} ({ip_address}) {rtt1}ms"
+                )
 
                 hops.append(
                     TracerouteHop(
@@ -224,10 +226,12 @@ class AristaTracerouteTable(TracerouteResult):
                 ip3 = triple_multipath_match.group(9)
                 rtt3 = float(triple_multipath_match.group(10))
 
-                _log.debug(f"Line {i:2d}: TRIPLE MULTIPATH - {hop_number}: {hostname1}/{hostname2}/{hostname3}")
+                _log.debug(
+                    f"Line {i:2d}: TRIPLE MULTIPATH - {hop_number}: {hostname1}/{hostname2}/{hostname3}"
+                )
 
                 display_hostname = f"{hostname1} / {hostname2} / {hostname3}"
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -262,7 +266,7 @@ class AristaTracerouteTable(TracerouteResult):
                 hostname2 = complex_multipath_match.group(5).strip()
                 ip2 = complex_multipath_match.group(6)
                 rtt2 = float(complex_multipath_match.group(7))
-                
+
                 # Check for third IP or timeout
                 rtt3 = None
                 hostname3 = None
@@ -271,14 +275,16 @@ class AristaTracerouteTable(TracerouteResult):
                     hostname3 = complex_multipath_match.group(8).strip()
                     rtt3 = float(complex_multipath_match.group(10))
 
-                _log.debug(f"Line {i:2d}: COMPLEX MULTIPATH - {hop_number}: {hostname1}/{hostname2}{('/' + hostname3) if hostname3 else ''}")
+                _log.debug(
+                    f"Line {i:2d}: COMPLEX MULTIPATH - {hop_number}: {hostname1}/{hostname2}{('/' + hostname3) if hostname3 else ''}"
+                )
 
                 display_hostname = f"{hostname1} / {hostname2}"
                 if hostname3:
                     display_hostname += f" / {hostname3}"
-                
+
                 rtts = [x for x in [rtt1, rtt2, rtt3] if x is not None]
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -314,10 +320,12 @@ class AristaTracerouteTable(TracerouteResult):
                 ip2 = mixed_timeout_start_match.group(6)
                 rtt2 = float(mixed_timeout_start_match.group(7))
 
-                _log.debug(f"Line {i:2d}: MIXED TIMEOUT START - {hop_number}: {hostname1} * {hostname2}")
+                _log.debug(
+                    f"Line {i:2d}: MIXED TIMEOUT START - {hop_number}: {hostname1} * {hostname2}"
+                )
 
                 display_hostname = f"{hostname1} / * / {hostname2}"
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -350,7 +358,7 @@ class AristaTracerouteTable(TracerouteResult):
                 ip1 = mpls_hop_match.group(3)
                 rtt1 = float(mpls_hop_match.group(4))
                 rtt2 = float(mpls_hop_match.group(5)) if mpls_hop_match.group(5) else None
-                
+
                 # Check for second MPLS hop in same line
                 hostname2 = None
                 ip2 = None
@@ -360,14 +368,16 @@ class AristaTracerouteTable(TracerouteResult):
                     ip2 = mpls_hop_match.group(7)
                     rtt3 = float(mpls_hop_match.group(8))
 
-                _log.debug(f"Line {i:2d}: MPLS HOP - {hop_number}: {hostname1} (MPLS){(' + ' + hostname2) if hostname2 else ''}")
+                _log.debug(
+                    f"Line {i:2d}: MPLS HOP - {hop_number}: {hostname1} (MPLS){(' + ' + hostname2) if hostname2 else ''}"
+                )
 
                 display_hostname = hostname1
                 if hostname2:
                     display_hostname += f" / {hostname2}"
-                
+
                 rtts = [x for x in [rtt1, rtt2, rtt3] if x is not None]
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -404,11 +414,13 @@ class AristaTracerouteTable(TracerouteResult):
                 ip2 = multi_match.group(7)
                 rtt3 = float(multi_match.group(8))
 
-                _log.debug(f"Line {i:2d}: MULTI HOP - {hop_number}: {hostname1} ({ip1}) and {hostname2} ({ip2})")
+                _log.debug(
+                    f"Line {i:2d}: MULTI HOP - {hop_number}: {hostname1} ({ip1}) and {hostname2} ({ip2})"
+                )
 
                 # For multi-hop, we'll create one hop with the first IP and include the second in display
                 display_hostname = f"{hostname1} / {hostname2}"
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -444,10 +456,12 @@ class AristaTracerouteTable(TracerouteResult):
                 rtt2 = float(hop_match.group(5)) if hop_match.group(5) else None
                 rtt3 = float(hop_match.group(6)) if hop_match.group(6) else None
 
-                _log.debug(f"Line {i:2d}: NORMAL HOP - {hop_number}: {hostname} ({ip_address}) RTTs: {rtt1}, {rtt2}, {rtt3}")
+                _log.debug(
+                    f"Line {i:2d}: NORMAL HOP - {hop_number}: {hostname} ({ip_address}) RTTs: {rtt1}, {rtt2}, {rtt3}"
+                )
 
                 rtts = [x for x in [rtt1, rtt2, rtt3] if x is not None]
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -483,10 +497,12 @@ class AristaTracerouteTable(TracerouteResult):
                 rtt2 = float(ip_match.group(5)) if ip_match.group(5) else None
                 rtt3 = float(ip_match.group(6)) if ip_match.group(6) else None
 
-                _log.debug(f"Line {i:2d}: IP-ONLY HOP - {hop_number}: {ip_address} RTTs: {rtt1}, {rtt2}, {rtt3}")
+                _log.debug(
+                    f"Line {i:2d}: IP-ONLY HOP - {hop_number}: {ip_address} RTTs: {rtt1}, {rtt2}, {rtt3}"
+                )
 
                 rtts = [x for x in [rtt1, rtt2, rtt3] if x is not None]
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -552,27 +568,29 @@ class AristaTracerouteTable(TracerouteResult):
             if hop.is_timeout:
                 _log.debug(f"Final hop {hop.hop_number}: * (timeout)")
             else:
-                _log.debug(f"Final hop {hop.hop_number}: {hop.ip_address} ({hop.hostname}) - RTTs: {hop.rtt1}/{hop.rtt2}/{hop.rtt3}")
+                _log.debug(
+                    f"Final hop {hop.hop_number}: {hop.ip_address} ({hop.hostname}) - RTTs: {hop.rtt1}/{hop.rtt2}/{hop.rtt3}"
+                )
 
         _log.info(f"Parsed {len(hops)} hops from Arista traceroute")
 
         # Extract packet size and max hops from header if available
         max_hops = 30  # Default from your examples
         packet_size = 60  # Default from your examples
-        
-        for line in text.split('\n'):
-            if 'hops max' in line and 'byte packets' in line:
+
+        for line in text.split("\n"):
+            if "hops max" in line and "byte packets" in line:
                 # Example: "traceroute to 177.72.245.178 (177.72.245.178), 30 hops max, 60 byte packets"
                 parts = line.split()
                 for i, part in enumerate(parts):
-                    if part == 'hops':
+                    if part == "hops":
                         try:
-                            max_hops = int(parts[i-1])
+                            max_hops = int(parts[i - 1])
                         except (ValueError, IndexError):
                             pass
-                    elif part == 'byte':
+                    elif part == "byte":
                         try:
-                            packet_size = int(parts[i-1])
+                            packet_size = int(parts[i - 1])
                         except (ValueError, IndexError):
                             pass
                 break

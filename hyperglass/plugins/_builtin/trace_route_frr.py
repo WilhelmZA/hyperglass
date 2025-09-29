@@ -266,7 +266,9 @@ class FrrTracerouteTable(TracerouteResult):
                 rtt1 = float(partial_multi_match.group(4))
                 rtt2 = float(partial_multi_match.group(5)) if partial_multi_match.group(5) else None
 
-                _log.debug(f"Line {i:2d}: PARTIAL-MULTI HOP - {hop_number}: * {hostname} ({ip_address})")
+                _log.debug(
+                    f"Line {i:2d}: PARTIAL-MULTI HOP - {hop_number}: * {hostname} ({ip_address})"
+                )
 
                 rtts = [x for x in [rtt1, rtt2] if x is not None]
 
@@ -302,9 +304,15 @@ class FrrTracerouteTable(TracerouteResult):
                 hostname = partial_timeout_match.group(2).strip()
                 ip_address = partial_timeout_match.group(3)
                 rtt1 = float(partial_timeout_match.group(4))
-                rtt2 = float(partial_timeout_match.group(5)) if partial_timeout_match.group(5) else None
+                rtt2 = (
+                    float(partial_timeout_match.group(5))
+                    if partial_timeout_match.group(5)
+                    else None
+                )
 
-                _log.debug(f"Line {i:2d}: PARTIAL-TIMEOUT HOP - {hop_number}: {hostname} ({ip_address}) with timeout")
+                _log.debug(
+                    f"Line {i:2d}: PARTIAL-TIMEOUT HOP - {hop_number}: {hostname} ({ip_address}) with timeout"
+                )
 
                 rtts = [x for x in [rtt1, rtt2] if x is not None]
 
@@ -343,7 +351,9 @@ class FrrTracerouteTable(TracerouteResult):
                 rtt2 = float(hop_match.group(5)) if hop_match.group(5) else None
                 rtt3 = float(hop_match.group(6)) if hop_match.group(6) else None
 
-                _log.debug(f"Line {i:2d}: NORMAL HOP - {hop_number}: {hostname} ({ip_address}) RTTs: {rtt1}, {rtt2}, {rtt3}")
+                _log.debug(
+                    f"Line {i:2d}: NORMAL HOP - {hop_number}: {hostname} ({ip_address}) RTTs: {rtt1}, {rtt2}, {rtt3}"
+                )
 
                 rtts = [x for x in [rtt1, rtt2, rtt3] if x is not None]
 
@@ -382,7 +392,9 @@ class FrrTracerouteTable(TracerouteResult):
                 rtt2 = float(ip_match.group(5)) if ip_match.group(5) else None
                 rtt3 = float(ip_match.group(6)) if ip_match.group(6) else None
 
-                _log.debug(f"Line {i:2d}: IP-ONLY HOP - {hop_number}: {ip_address} RTTs: {rtt1}, {rtt2}, {rtt3}")
+                _log.debug(
+                    f"Line {i:2d}: IP-ONLY HOP - {hop_number}: {ip_address} RTTs: {rtt1}, {rtt2}, {rtt3}"
+                )
 
                 rtts = [x for x in [rtt1, rtt2, rtt3] if x is not None]
 
@@ -451,27 +463,29 @@ class FrrTracerouteTable(TracerouteResult):
             if hop.is_timeout:
                 _log.debug(f"Final hop {hop.hop_number}: * (timeout)")
             else:
-                _log.debug(f"Final hop {hop.hop_number}: {hop.ip_address} ({hop.hostname or 'no-hostname'}) - RTTs: {hop.rtt1}/{hop.rtt2}/{hop.rtt3}")
+                _log.debug(
+                    f"Final hop {hop.hop_number}: {hop.ip_address} ({hop.hostname or 'no-hostname'}) - RTTs: {hop.rtt1}/{hop.rtt2}/{hop.rtt3}"
+                )
 
         _log.info(f"Parsed {len(hops)} hops from FRR traceroute")
 
         # Extract packet size and max hops from header if available
         max_hops = 30  # Default from your examples
         packet_size = 60  # Default from your examples (IPv4)
-        
-        for line in text.split('\n'):
-            if 'hops max' in line and 'byte packets' in line:
+
+        for line in text.split("\n"):
+            if "hops max" in line and "byte packets" in line:
                 # Example: "traceroute to syd.proof.ovh.net (51.161.209.134), 30 hops max, 60 byte packets"
                 parts = line.split()
                 for i, part in enumerate(parts):
-                    if part == 'hops':
+                    if part == "hops":
                         try:
-                            max_hops = int(parts[i-1])
+                            max_hops = int(parts[i - 1])
                         except (ValueError, IndexError):
                             pass
-                    elif part == 'byte':
+                    elif part == "byte":
                         try:
-                            packet_size = int(parts[i-1])
+                            packet_size = int(parts[i - 1])
                         except (ValueError, IndexError):
                             pass
                 break

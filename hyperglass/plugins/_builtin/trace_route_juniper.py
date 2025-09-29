@@ -182,7 +182,9 @@ class JuniperTracerouteTable(TracerouteResult):
                 hostname = partial_timeout_match.group(2).strip()
                 rtt1 = float(partial_timeout_match.group(4))
 
-                _log.debug(f"Line {i:2d}: PARTIAL TIMEOUT HOP - {hop_number}: * * {hostname} ({ip_address}) {rtt1}ms")
+                _log.debug(
+                    f"Line {i:2d}: PARTIAL TIMEOUT HOP - {hop_number}: * * {hostname} ({ip_address}) {rtt1}ms"
+                )
 
                 hops.append(
                     TracerouteHop(
@@ -220,20 +222,22 @@ class JuniperTracerouteTable(TracerouteResult):
                 ip2 = ipv6_multipath_match.group(6)
                 hostname2 = ipv6_multipath_match.group(5).strip()
                 rtt2 = float(ipv6_multipath_match.group(7))
-                
+
                 rtt3 = None
                 if ipv6_multipath_match.group(10):  # Third IP/RTT pair
                     rtt3 = float(ipv6_multipath_match.group(10))
 
-                _log.debug(f"Line {i:2d}: IPv6 MULTIPATH HOP - {hop_number}: {hostname1}/{hostname2} ({ip1}/{ip2})")
+                _log.debug(
+                    f"Line {i:2d}: IPv6 MULTIPATH HOP - {hop_number}: {hostname1}/{hostname2} ({ip1}/{ip2})"
+                )
 
                 display_hostname = f"{hostname1} / {hostname2}"
                 if ipv6_multipath_match.group(8):  # Third hostname
                     hostname3 = ipv6_multipath_match.group(8).strip()
                     display_hostname += f" / {hostname3}"
-                
+
                 rtts = [x for x in [rtt1, rtt2, rtt3] if x is not None]
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -272,11 +276,13 @@ class JuniperTracerouteTable(TracerouteResult):
                 rtt2 = float(multipath_match.group(7))
                 rtt3 = float(multipath_match.group(8)) if multipath_match.group(8) else None
 
-                _log.debug(f"Line {i:2d}: MULTIPATH HOP - {hop_number}: {hostname1}/{hostname2} ({ip1}/{ip2})")
+                _log.debug(
+                    f"Line {i:2d}: MULTIPATH HOP - {hop_number}: {hostname1}/{hostname2} ({ip1}/{ip2})"
+                )
 
                 display_hostname = f"{hostname1} / {hostname2}"
                 rtts = [x for x in [rtt1, rtt2, rtt3] if x is not None]
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -310,14 +316,24 @@ class JuniperTracerouteTable(TracerouteResult):
                 hostname = timeout_with_ip_match.group(2).strip()
                 ip_address = timeout_with_ip_match.group(3)
                 rtt1 = float(timeout_with_ip_match.group(4))
-                rtt2 = float(timeout_with_ip_match.group(5)) if timeout_with_ip_match.group(5) else None
-                rtt3 = float(timeout_with_ip_match.group(6)) if timeout_with_ip_match.group(6) else None
+                rtt2 = (
+                    float(timeout_with_ip_match.group(5))
+                    if timeout_with_ip_match.group(5)
+                    else None
+                )
+                rtt3 = (
+                    float(timeout_with_ip_match.group(6))
+                    if timeout_with_ip_match.group(6)
+                    else None
+                )
 
-                _log.debug(f"Line {i:2d}: TIMEOUT WITH IP - {hop_number}: * {hostname} ({ip_address})")
+                _log.debug(
+                    f"Line {i:2d}: TIMEOUT WITH IP - {hop_number}: * {hostname} ({ip_address})"
+                )
 
                 rtts = [x for x in [rtt1, rtt2, rtt3] if x is not None]
                 loss_pct = int((3 - len(rtts)) / 3 * 100) if len(rtts) > 0 else 100
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -353,11 +369,13 @@ class JuniperTracerouteTable(TracerouteResult):
                 rtt1 = float(mixed_timeout_match.group(4))
                 rtt2 = float(mixed_timeout_match.group(5)) if mixed_timeout_match.group(5) else None
 
-                _log.debug(f"Line {i:2d}: MIXED TIMEOUT - {hop_number}: {hostname} ({ip_address}) with *")
+                _log.debug(
+                    f"Line {i:2d}: MIXED TIMEOUT - {hop_number}: {hostname} ({ip_address}) with *"
+                )
 
                 rtts = [x for x in [rtt1, rtt2] if x is not None]
                 loss_pct = int((3 - len(rtts)) / 3 * 100)
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -394,10 +412,12 @@ class JuniperTracerouteTable(TracerouteResult):
                 rtt2 = float(hop_match.group(5)) if hop_match.group(5) else None
                 rtt3 = float(hop_match.group(6)) if hop_match.group(6) else None
 
-                _log.debug(f"Line {i:2d}: NORMAL HOP - {hop_number}: {hostname} ({ip_address}) RTTs: {rtt1}, {rtt2}, {rtt3}")
+                _log.debug(
+                    f"Line {i:2d}: NORMAL HOP - {hop_number}: {hostname} ({ip_address}) RTTs: {rtt1}, {rtt2}, {rtt3}"
+                )
 
                 rtts = [x for x in [rtt1, rtt2, rtt3] if x is not None]
-                
+
                 hops.append(
                     TracerouteHop(
                         hop_number=hop_number,
@@ -464,27 +484,29 @@ class JuniperTracerouteTable(TracerouteResult):
             if hop.is_timeout:
                 _log.debug(f"Final hop {hop.hop_number}: * (timeout)")
             else:
-                _log.debug(f"Final hop {hop.hop_number}: {hop.ip_address} ({hop.hostname or 'no-hostname'}) - RTTs: {hop.rtt1}/{hop.rtt2}/{hop.rtt3}")
+                _log.debug(
+                    f"Final hop {hop.hop_number}: {hop.ip_address} ({hop.hostname or 'no-hostname'}) - RTTs: {hop.rtt1}/{hop.rtt2}/{hop.rtt3}"
+                )
 
         _log.info(f"Parsed {len(hops)} hops from Juniper traceroute")
 
         # Extract packet size and max hops from header if available
         max_hops = 30  # Default for Juniper
         packet_size = 52  # Default from your examples
-        
-        for line in text.split('\n'):
-            if 'hops max' in line and 'byte packets' in line:
+
+        for line in text.split("\n"):
+            if "hops max" in line and "byte packets" in line:
                 # Example: "traceroute to 51.161.209.134 (51.161.209.134) from 196.201.112.49, 30 hops max, 52 byte packets"
                 parts = line.split()
                 for i, part in enumerate(parts):
-                    if part == 'hops':
+                    if part == "hops":
                         try:
-                            max_hops = int(parts[i-1])
+                            max_hops = int(parts[i - 1])
                         except (ValueError, IndexError):
                             pass
-                    elif part == 'byte':
+                    elif part == "byte":
                         try:
-                            packet_size = int(parts[i-1])
+                            packet_size = int(parts[i - 1])
                         except (ValueError, IndexError):
                             pass
                 break

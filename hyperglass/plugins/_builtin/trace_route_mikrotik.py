@@ -99,7 +99,7 @@ class TraceroutePluginMikrotik(OutputPlugin):
         # Extract target from query
         target = getattr(query, "target", "unknown")
         source = getattr(query, "source", "unknown")
-        
+
         # Try to get target from query_target which is more reliable
         if hasattr(query, "query_target") and query.query_target:
             target = str(query.query_target)
