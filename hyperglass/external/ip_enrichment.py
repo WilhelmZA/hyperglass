@@ -429,20 +429,27 @@ class IPEnrichmentService:
 
                 import os
 
+                # Prepare .tmp path objects (avoid concatenating Path + str)
+                tmp_cidr = CIDR_DATA_FILE.with_name(CIDR_DATA_FILE.name + ".tmp")
+                tmp_asn = ASN_DATA_FILE.with_name(ASN_DATA_FILE.name + ".tmp")
+                tmp_ixp = IXP_DATA_FILE.with_name(IXP_DATA_FILE.name + ".tmp")
+                tmp_last = LAST_UPDATE_FILE.with_name(LAST_UPDATE_FILE.name + ".tmp")
+
                 # Write to .tmp files first
-                with open(CIDR_DATA_FILE + ".tmp", "w") as f:
+                with open(tmp_cidr, "w") as f:
                     json.dump(cidr_file_data, f, separators=(",", ":"))
-                with open(ASN_DATA_FILE + ".tmp", "w") as f:
+                with open(tmp_asn, "w") as f:
                     json.dump(self.asn_info, f, separators=(",", ":"))
-                with open(IXP_DATA_FILE + ".tmp", "w") as f:
+                with open(tmp_ixp, "w") as f:
                     json.dump(ixp_file_data, f, separators=(",", ":"))
-                with open(LAST_UPDATE_FILE + ".tmp", "w") as f:
+                with open(tmp_last, "w") as f:
                     f.write(datetime.now().isoformat())
+
                 # Atomically rename .tmp files to final files
-                os.replace(CIDR_DATA_FILE + ".tmp", CIDR_DATA_FILE)
-                os.replace(ASN_DATA_FILE + ".tmp", ASN_DATA_FILE)
-                os.replace(IXP_DATA_FILE + ".tmp", IXP_DATA_FILE)
-                os.replace(LAST_UPDATE_FILE + ".tmp", LAST_UPDATE_FILE)
+                os.replace(tmp_cidr, CIDR_DATA_FILE)
+                os.replace(tmp_asn, ASN_DATA_FILE)
+                os.replace(tmp_ixp, IXP_DATA_FILE)
+                os.replace(tmp_last, LAST_UPDATE_FILE)
 
                 cache_duration_actual = (datetime.now() - cache_start).total_seconds()
 
