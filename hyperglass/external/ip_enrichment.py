@@ -1305,21 +1305,64 @@ async def lookup_asns_bulk(asns: t.List[t.Union[str, int]]) -> t.Dict[str, t.Dic
     await _service.ensure_data_loaded()
 
     results = {}
+
+    # Normalize ASN list to strings and filter invalids
+    requested: list[str] = []
     for asn in asns:
-        # Skip non-numeric ASNs like "IXP"
-        if asn == "IXP" or asn is None:
+        if asn is None:
+            continue
+        if str(asn) == "IXP":
+            continue
+        try:
+            _ = int(asn)
+            requested.append(str(asn))
+        except (ValueError, TypeError):
             continue
 
+    # Ensure we have the data loaded
+    # Identify ASNs missing a human-friendly name so we can attempt a live WHOIS
+    missing: list[str] = []
+    for asn in requested:
+        try:
+            ai = _service.asn_info.get(int(asn), {})
+            name = ai.get("name") if isinstance(ai, dict) else None
+            if not name or name == f"AS{asn}":
+                missing.append(asn)
+        except Exception:
+            missing.append(asn)
+
+    # If we have missing ASNs, try a live bgp.tools WHOIS bulk query to fetch org names
+    if missing and hasattr(_service, "_query_bgp_tools_bulk"):
+        try:
+            log.debug("lookup_asns_bulk: querying bgp.tools for missing ASNs: %s", missing)
+            queries = [f"AS{a}" for a in missing]
+            resp = await _service._query_bgp_tools_bulk(queries)
+            # resp maps query -> (asn_int, org, prefix)
+            for asn in missing:
+                q = f"AS{asn}"
+                entry = resp.get(q) or resp.get(str(asn))
+                if entry:
+                    _, org, _ = entry
+                    if org:
+                        try:
+                            _service.asn_info[int(asn)] = {"name": org, "country": ""}
+                            log.debug("lookup_asns_bulk: updated asn_info[%s] = %s", asn, org)
+                        except Exception:
+                            pass
+        except Exception as e:
+            log.debug("lookup_asns_bulk: bgp.tools lookup failed: %s", e)
+
+    # Build final results from asn_info (may include newly-populated entries)
+    for asn in requested:
         try:
             asn_int = int(asn)
             asn_data = _service.asn_info.get(asn_int, {})
-            results[str(asn)] = {
+            results[asn] = {
                 "name": asn_data.get("name", f"AS{asn}"),
                 "country": asn_data.get("country", ""),
             }
-        except (ValueError, TypeError):
-            # Skip invalid ASN values
-            continue
+        except Exception:
+            results[asn] = {"name": f"AS{asn}", "country": ""}
 
     return results
 
