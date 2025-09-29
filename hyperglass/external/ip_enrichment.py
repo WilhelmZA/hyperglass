@@ -234,9 +234,10 @@ def should_refresh_data(force_refresh: bool = False) -> tuple[bool, str]:
     except Exception:
         pass
 
-    # If we have an existing IXP file and no timestamp, prefer using the file
-    if IXP_DATA_FILE.exists() and not LAST_UPDATE_FILE.exists():
-        return False, "ixp_data.json exists and no timestamp present; skipping refresh"
+    # If an IXP file exists, prefer it and do not perform automatic refreshes
+    # unless the caller explicitly requested a force refresh.
+    if IXP_DATA_FILE.exists() and not force_refresh:
+        return False, "ixp_data.json exists; skipping automatic refresh"
 
     # If IXP file is missing, refresh is needed
     if not IXP_DATA_FILE.exists():
@@ -363,32 +364,73 @@ class IPEnrichmentService:
         if _download_lock is None:
             _download_lock = _ProcessFileLock(IP_ENRICHMENT_DATA_DIR / "download.lock")
 
+        # Immediate guard: if any IXP file already exists on disk and the
+        # caller did not request a forced refresh, prefer it and skip any
+        # network downloads. This ensures we never auto-download when a file
+        # has been provided (even if it's empty) unless explicitly requested.
+        try:
+            if IXP_DATA_FILE.exists() and not force_refresh:
+                try:
+                    with open(IXP_DATA_FILE, "r") as f:
+                        ixp_data = json.load(f)
+                    if ixp_data and isinstance(ixp_data, list) and len(ixp_data) > 0:
+                        self.ixp_networks = [
+                            (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
+                        ]
+                        log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk (early guard)")
+                    else:
+                        log.warning(
+                            "ixp_data.json exists but is empty or invalid; honoring existing file and skipping automatic download"
+                        )
+                except Exception as e:
+                    log.warning(f"Failed to read existing ixp_data.json: {e}; honoring file existence and skipping automatic download")
+                return True
+        except Exception:
+            # Ignore filesystem errors and continue to refresh logic
+            pass
+
         # If a backoff is active, don't try to refresh
         should_refresh, reason = should_refresh_data(force_refresh)
 
-        # If an IXP file exists, load it - we only need IXP prefixes to identify
-        # IXPs at runtime. Don't force a full refresh just because other bulk
-        # files (cidr/asn) are missing; use whatever IXP data is present on disk.
+        # If an IXP file exists, prefer it and avoid downloads unless forced.
         try:
             if IXP_DATA_FILE.exists():
-                with open(IXP_DATA_FILE, "r") as f:
-                    ixp_data = json.load(f)
+                try:
+                    st = IXP_DATA_FILE.stat()
+                    size = getattr(st, "st_size", None)
+                except Exception:
+                    size = None
 
-                # Treat an existing but empty IXP file as invalid - attempt a
-                # refresh instead of silently accepting an empty list ("[]").
-                if not ixp_data or (isinstance(ixp_data, list) and len(ixp_data) == 0):
-                    log.warning(
-                        "Existing IXP data file '%s' is empty; will attempt to refresh",
-                        IXP_DATA_FILE,
-                    )
+                # If file size indicates non-empty typical JSON array (size>2) try to load
+                if size is not None and size > 2:
+                    try:
+                        with open(IXP_DATA_FILE, "r") as f:
+                            ixp_data = json.load(f)
+                    except Exception as e:
+                        log.warning(f"Failed to parse existing IXP data file: {e}")
+                        ixp_data = None
+
+                    if ixp_data and isinstance(ixp_data, list) and len(ixp_data) > 0:
+                        self.ixp_networks = [
+                            (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
+                        ]
+                        log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk (size={size})")
+                        return True
+                    else:
+                        log.warning(
+                            "Existing IXP data file '%s' appears empty or invalid (size=%s); will attempt to refresh",
+                            IXP_DATA_FILE,
+                            size,
+                        )
                 else:
-                    self.ixp_networks = [
-                        (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
-                    ]
-                    log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk")
-                    return True
+                    log.debug(f"IXP data file exists but size indicates empty or very small (size={size})")
         except Exception as e:
             log.warning(f"Failed to load existing IXP data: {e}")
+
+        # If we're currently under a backoff or refresh is not required, skip downloading
+        if not should_refresh:
+            log.info(f"Skipping IXP refresh: {reason}")
+            return False
 
         # Acquire lock and refresh IXP list only
         async with _download_lock:
