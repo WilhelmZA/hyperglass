@@ -662,6 +662,42 @@ class MikrotikTracerouteTable(MikrotikBase):
             hops = final_hops
             _log.debug(f"Deduplication complete: {len(hops)} unique hops with final stats")
 
+        # Filter excessive timeout hops ONLY at the end (no more valid hops after)
+        # Find the last hop with a valid IP address
+        last_valid_hop_index = -1
+        for i, hop in enumerate(hops):
+            if hop.ip_address is not None and hop.loss_pct < 100:
+                last_valid_hop_index = i
+        
+        filtered_hops = []
+        trailing_timeouts = 0
+        
+        for i, hop in enumerate(hops):
+            if i > last_valid_hop_index and hop.ip_address is None and hop.loss_pct == 100:
+                # This is a trailing timeout hop (after the last valid hop)
+                trailing_timeouts += 1
+                if trailing_timeouts <= 3:  # Only keep first 3 trailing timeouts
+                    filtered_hops.append(hop)
+                    _log.debug(f"Keeping trailing timeout hop {hop.hop_number} (#{trailing_timeouts})")
+                else:
+                    _log.debug(f"Filtering out trailing timeout hop {hop.hop_number} (#{trailing_timeouts})")
+            else:
+                # This is either a valid hop or a timeout hop with valid hops after it
+                filtered_hops.append(hop)
+                if hop.ip_address is not None:
+                    _log.debug(f"Keeping valid hop {hop.hop_number}: {hop.ip_address}")
+                else:
+                    _log.debug(f"Keeping intermediate timeout hop {hop.hop_number} (has valid hops after)")
+        
+        # Renumber the filtered hops
+        for i, hop in enumerate(filtered_hops, 1):
+            hop.hop_number = i
+            
+        hops = filtered_hops
+        if last_valid_hop_index >= 0:
+            _log.debug(f"Last valid hop was at index {last_valid_hop_index}, filtered trailing timeouts")
+        _log.debug(f"After timeout filtering: {len(hops)} hops")
+
         _log.debug(f"After processing: {len(hops)} final hops")
         for hop in hops:
             _log.debug(
@@ -693,16 +729,17 @@ class MikrotikTracerouteTable(MikrotikBase):
                     ip_address=ip_address,  # None for truncated IPs
                     display_ip=display_ip,  # Truncated IP for display
                     hostname=hop.hostname,
-                    rtt1=hop.last_rtt,     # LAST column -> RTT1
-                    rtt2=hop.avg_rtt,      # AVG column -> RTT2 (this is correct)
-                    rtt3=hop.best_rtt,     # BEST column -> RTT3
-                    # MikroTik-specific statistics
+                    # Set RTT values to ensure avg_rtt property returns MikroTik's AVG value
+                    # Since avg_rtt = (rtt1 + rtt2 + rtt3) / 3, we set all to the MikroTik AVG
+                    rtt1=hop.avg_rtt,      # Set to AVG so computed average is correct
+                    rtt2=hop.avg_rtt,      # Set to AVG so computed average is correct  
+                    rtt3=hop.avg_rtt,      # Set to AVG so computed average is correct
+                    # MikroTik-specific statistics (preserve original values)
                     loss_pct=hop.loss_pct,
                     sent_count=hop.sent_count,
-                    last_rtt=hop.last_rtt,
-                    avg_rtt=hop.avg_rtt,    # Add missing avg_rtt field for frontend
-                    best_rtt=hop.best_rtt,
-                    worst_rtt=hop.worst_rtt,
+                    last_rtt=hop.last_rtt,     # Preserve LAST value
+                    best_rtt=hop.best_rtt,     # Preserve BEST value
+                    worst_rtt=hop.worst_rtt,   # Preserve WORST value
                     # BGP enrichment fields will be populated by enrichment plugin
                     # For truncated IPs, these will remain None/empty
                     asn=None,
