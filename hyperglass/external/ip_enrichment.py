@@ -23,6 +23,9 @@ from pathlib import Path
 from hyperglass.log import log
 from hyperglass.state import use_state
 
+# Global download coordination lock to prevent multiple workers from downloading simultaneously
+_download_lock = asyncio.Lock()
+
 # Optional dependencies - graceful fallback if not available
 try:
     import httpx
@@ -343,98 +346,113 @@ class IPEnrichmentService:
                 should_refresh = True
                 reason = f"Failed to load files: {e}"
 
-        # Download fresh data
+        # Download fresh data - use global lock to prevent multiple workers downloading simultaneously
         log.info(f"Refreshing IP enrichment data: {reason}")
 
         if not httpx:
             log.error("httpx not available - cannot download IP enrichment data")
             return False
 
-        try:
-            log.info("🌐 Starting fresh IP enrichment data download...")
-            download_start = datetime.now()
+        # Acquire the download lock to ensure only one worker downloads at a time
+        async with _download_lock:
+            log.debug("🔒 Acquired download lock - checking if data is still needed...")
+            
+            # Check again if refresh is still needed (another worker might have downloaded while waiting)
+            should_refresh_again, refresh_reason = should_refresh_data(force_refresh)
+            if not should_refresh_again:
+                log.info("📋 Another worker completed the download while waiting - using existing data")
+                # Try to load the now-available data
+                if self._load_combined_cache():
+                    log.info("✅ Successfully loaded data downloaded by another worker")
+                    return True
 
-            async with httpx.AsyncClient(timeout=300) as client:
-                # Track which downloads succeeded
-                bgp_success = False
-                ixp_success = False
+            log.info("🚀 Proceeding with fresh download (no other worker completed it)")
+            
+            try:
+                log.info("🌐 Starting fresh IP enrichment data download...")
+                download_start = datetime.now()
 
-                # Try to download BGP data (required)
-                try:
-                    await self._download_bgp_data(client)
-                    bgp_success = True
-                    log.debug("✅ BGP data download successful")
-                except Exception as e:
-                    log.error(f"❌ BGP data download failed: {e}")
-                    # BGP data is critical - if this fails, we can't continue
-                    raise Exception(f"Critical BGP data download failed: {e}")
+                async with httpx.AsyncClient(timeout=300) as client:
+                    # Track which downloads succeeded
+                    bgp_success = False
+                    ixp_success = False
 
-                # Try to download IXP data (optional but preferred)
-                try:
-                    await self._download_ixp_data(client)
-                    ixp_success = True
-                    log.debug("✅ IXP data download successful")
-                except Exception as e:
-                    log.error(f"❌ IXP data download failed: {e}")
-                    # IXP data is optional - clear any partial data and continue
-                    self.ixp_networks = []
-                    log.warning("Continuing without IXP data - IXP detection will be unavailable")
+                    # Try to download BGP data (required)
+                    try:
+                        await self._download_bgp_data(client)
+                        bgp_success = True
+                        log.debug("✅ BGP data download successful")
+                    except Exception as e:
+                        log.error(f"❌ BGP data download failed: {e}")
+                        # BGP data is critical - if this fails, we can't continue
+                        raise Exception(f"Critical BGP data download failed: {e}")
 
-            download_duration = (datetime.now() - download_start).total_seconds()
+                    # Try to download IXP data (optional but preferred)
+                    try:
+                        await self._download_ixp_data(client)
+                        ixp_success = True
+                        log.debug("✅ IXP data download successful")
+                    except Exception as e:
+                        log.error(f"❌ IXP data download failed: {e}")
+                        # IXP data is optional - clear any partial data and continue
+                        self.ixp_networks = []
+                        log.warning("Continuing without IXP data - IXP detection will be unavailable")
 
-            if not bgp_success:
-                # This shouldn't happen due to the raise above, but be explicit
-                raise Exception("BGP data download failed - cannot continue")
+                download_duration = (datetime.now() - download_start).total_seconds()
 
-            log.info(
-                f"📊 Download summary: BGP data: ✅, IXP data: {'✅' if ixp_success else '❌'}"
-            )
+                if not bgp_success:
+                    # This shouldn't happen due to the raise above, but be explicit
+                    raise Exception("BGP data download failed - cannot continue")
 
-            # Continue with saving even if IXP failed...
+                log.info(
+                    f"📊 Download summary: BGP data: ✅, IXP data: {'✅' if ixp_success else '❌'}"
+                )
 
-            # Save the data to persistent files
-            log.debug("💾 Saving IP enrichment data to persistent files...")
-            cache_start = datetime.now()
+                # Continue with saving even if IXP failed...
 
-            # Convert IP addresses to strings for JSON serialization
-            cidr_file_data = [
-                (str(net), prefixlen, asn, cidr) for net, prefixlen, asn, cidr in self.cidr_networks
-            ]
-            ixp_file_data = [
-                (str(net), prefixlen, name) for net, prefixlen, name in self.ixp_networks
-            ]
+                # Save the data to persistent files
+                log.debug("💾 Saving IP enrichment data to persistent files...")
+                cache_start = datetime.now()
 
-            with open(CIDR_DATA_FILE, "w") as f:
-                json.dump(cidr_file_data, f, separators=(",", ":"))  # Compact JSON
-            with open(ASN_DATA_FILE, "w") as f:
-                json.dump(self.asn_info, f, separators=(",", ":"))
-            with open(IXP_DATA_FILE, "w") as f:
-                json.dump(ixp_file_data, f, separators=(",", ":"))
-            with open(LAST_UPDATE_FILE, "w") as f:
-                f.write(datetime.now().isoformat())
+                # Convert IP addresses to strings for JSON serialization
+                cidr_file_data = [
+                    (str(net), prefixlen, asn, cidr) for net, prefixlen, asn, cidr in self.cidr_networks
+                ]
+                ixp_file_data = [
+                    (str(net), prefixlen, name) for net, prefixlen, name in self.ixp_networks
+                ]
 
-            cache_duration_actual = (datetime.now() - cache_start).total_seconds()
+                with open(CIDR_DATA_FILE, "w") as f:
+                    json.dump(cidr_file_data, f, separators=(",", ":"))  # Compact JSON
+                with open(ASN_DATA_FILE, "w") as f:
+                    json.dump(self.asn_info, f, separators=(",", ":"))
+                with open(IXP_DATA_FILE, "w") as f:
+                    json.dump(ixp_file_data, f, separators=(",", ":"))
+                with open(LAST_UPDATE_FILE, "w") as f:
+                    f.write(datetime.now().isoformat())
 
-            self.last_update = datetime.now()
+                cache_duration_actual = (datetime.now() - cache_start).total_seconds()
 
-            # Optimize lookups and create pickle cache for ultra-fast loading
-            self._lookup_optimized = False
-            self._optimize_lookups()
-            self._save_combined_cache()
+                self.last_update = datetime.now()
 
-            log.info(f"✅ IP enrichment data loaded successfully!")
-            log.info(
-                f"📊 Data summary: {len(self.cidr_networks)} CIDR entries, "
-                f"{len(self.asn_info)} ASN entries, {len(self.ixp_networks)} IXP networks"
-            )
-            log.debug(
-                f"⏱️  Download time: {download_duration:.1f}s, Save time: {cache_duration_actual:.1f}s"
-            )
-            return True
+                # Optimize lookups and create pickle cache for ultra-fast loading
+                self._lookup_optimized = False
+                self._optimize_lookups()
+                self._save_combined_cache()
 
-        except Exception as e:
-            log.error(f"Failed to download IP enrichment data: {e}")
-            return False
+                log.info(f"✅ IP enrichment data loaded successfully!")
+                log.info(
+                    f"📊 Data summary: {len(self.cidr_networks)} CIDR entries, "
+                    f"{len(self.asn_info)} ASN entries, {len(self.ixp_networks)} IXP networks"
+                )
+                log.debug(
+                    f"⏱️  Download time: {download_duration:.1f}s, Save time: {cache_duration_actual:.1f}s"
+                )
+                return True
+
+            except Exception as e:
+                log.error(f"Failed to download IP enrichment data: {e}")
+                return False
 
     async def _download_bgp_data(self, client) -> None:
         """Download BGP.tools data."""
