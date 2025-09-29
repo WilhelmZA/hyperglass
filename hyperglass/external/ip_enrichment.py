@@ -297,12 +297,16 @@ class IPEnrichmentService:
 
         # Combined cache for ultra-fast loading
         self._combined_cache: t.Optional[t.Dict[str, t.Any]] = None
+        # Per-IP in-memory cache for bgp.tools lookups: ip -> (asn, asn_name, prefix, expires_at)
+        self._per_ip_cache: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str], float]] = {}
+        # Small in-memory cache for per-IP lookups to avoid repeated websocket
+        # queries during runtime. Maps ip_str -> (asn, asn_name, prefix)
+        self._ip_cache: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]] = {}
 
     def _optimize_lookups(self):
         """Convert IP networks to integer format for faster lookups."""
         if self._lookup_optimized:
             return
-
         log.debug("Optimizing IP lookup structures...")
         optimize_start = datetime.now()
 
@@ -311,76 +315,31 @@ class IPEnrichmentService:
 
         for net_addr, prefixlen, asn, cidr_string in self.cidr_networks:
             if isinstance(net_addr, IPv4Address):
-                # Convert IPv4 to integer for fast bitwise operations
                 net_int = int(net_addr)
                 mask_bits = 32 - prefixlen
                 self._ipv4_networks.append((net_int, mask_bits, asn, cidr_string))
             else:
-                # Convert IPv6 to integer
                 net_int = int(net_addr)
                 mask_bits = 128 - prefixlen
                 self._ipv6_networks.append((net_int, mask_bits, asn, cidr_string))
 
-        # Sort by mask bits (ascending) for longest-match-first
         self._ipv4_networks.sort(key=lambda x: x[1])
         self._ipv6_networks.sort(key=lambda x: x[1])
 
         optimize_time = (datetime.now() - optimize_start).total_seconds()
         log.debug(
-            f"Optimized lookups: {len(self._ipv4_networks)} IPv4, {len(self._ipv6_networks)} IPv6 "
-            f"networks in {optimize_time:.2f}s"
+            f"Optimized lookups: {len(self._ipv4_networks)} IPv4, {len(self._ipv6_networks)} IPv6 (took {optimize_time:.2f}s)"
         )
         self._lookup_optimized = True
 
-    def _save_combined_cache(self):
-        """Save all data structures to a single pickle file for ultra-fast loading."""
-        try:
-            cache_data = {
-                "cidr_networks": self.cidr_networks,
-                "asn_info": self.asn_info,
-                "ixp_networks": self.ixp_networks,
-                "ipv4_networks": self._ipv4_networks,
-                "ipv6_networks": self._ipv6_networks,
-                "last_update": self.last_update,
-                "lookup_optimized": self._lookup_optimized,
-            }
-
-            with open(COMBINED_CACHE_FILE, "wb") as f:
-                pickle.dump(cache_data, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-            log.debug(
-                f"Saved combined cache with {len(self.cidr_networks)} CIDR entries to pickle file"
-            )
-        except Exception as e:
-            log.error(f"Failed to save combined cache: {e}")
-
-    def _load_combined_cache(self) -> bool:
-        """Load all data structures from pickle file."""
-        if not COMBINED_CACHE_FILE.exists():
-            return False
-
-        try:
-            with open(COMBINED_CACHE_FILE, "rb") as f:
-                cache_data = pickle.load(f)
-
-            self.cidr_networks = cache_data["cidr_networks"]
-            self.asn_info = cache_data["asn_info"]
-            self.ixp_networks = cache_data["ixp_networks"]
-            self._ipv4_networks = cache_data["ipv4_networks"]
-            self._ipv6_networks = cache_data["ipv6_networks"]
-            self.last_update = cache_data["last_update"]
-            self._lookup_optimized = cache_data["lookup_optimized"]
-
-            log.debug(
-                f"Loaded combined cache with {len(self.cidr_networks)} CIDR entries from pickle file"
-            )
-            return True
-        except Exception as e:
-            log.error(f"Failed to load combined cache: {e}")
-            return False
-
     async def ensure_data_loaded(self, force_refresh: bool = False) -> bool:
-        """Ensure data is loaded and fresh from persistent files."""
+        """Ensure data is loaded and fresh from persistent files.
+
+        New behavior: only load PeeringDB IXP prefixes at startup. Do NOT bulk
+        download BGP.tools CIDR or ASN data. Per-IP ASN lookups will query the
+        bgp.tools API (websocket preferred) on-demand.
+        """
+
         # Create data directory if it doesn't exist
         IP_ENRICHMENT_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -391,325 +350,77 @@ class IPEnrichmentService:
         if _download_lock is None:
             _download_lock = _ProcessFileLock(IP_ENRICHMENT_DATA_DIR / "download.lock")
 
-        # Check if refresh is needed
+        # If a backoff is active, don't try to refresh
         should_refresh, reason = should_refresh_data(force_refresh)
 
-        if not should_refresh:
-            # Validate existing data files
-            is_valid, validation_msg = validate_data_files()
-            if not is_valid:
-                should_refresh = True
-                reason = f"Data validation failed: {validation_msg}"
-
-        if not should_refresh:
-            # Try to load from ultra-fast pickle cache first
-            if self._load_combined_cache():
-                age_hours = (
-                    (datetime.now() - self.last_update).total_seconds() / 3600
-                    if self.last_update
-                    else 0
-                )
-                log.info(f"Loading IP enrichment data from pickle cache (age: {age_hours:.1f}h)")
-                log.debug(
-                    f"Cache contains: {len(self.cidr_networks)} CIDR entries, "
-                    f"{len(self.asn_info)} ASN entries, {len(self.ixp_networks)} IXP networks"
-                )
-                return True
-
-            # Fallback to JSON files if pickle cache failed
-            try:
-                with open(CIDR_DATA_FILE, "r") as f:
-                    cidr_data = json.load(f)
-                with open(ASN_DATA_FILE, "r") as f:
-                    asn_data = json.load(f)
+        # If IXP file exists and not expired, load it
+        try:
+            if IXP_DATA_FILE.exists() and not should_refresh:
                 with open(IXP_DATA_FILE, "r") as f:
                     ixp_data = json.load(f)
-                with open(LAST_UPDATE_FILE, "r") as f:
-                    cached_time = datetime.fromisoformat(f.read().strip())
-
-                age_hours = (datetime.now() - cached_time).total_seconds() / 3600
-                log.info(f"Loading IP enrichment data from JSON files (age: {age_hours:.1f}h)")
-                log.debug(
-                    f"Files contain: {len(cidr_data)} CIDR entries, "
-                    f"{len(asn_data)} ASN entries, {len(ixp_data)} IXP networks"
-                )
-
-                # Convert string IP addresses back to IP objects
-                self.cidr_networks = [
-                    (ip_address(net), prefixlen, asn, cidr)
-                    for net, prefixlen, asn, cidr in cidr_data
-                ]
-                # ASN data has integer keys that become strings in JSON
-                self.asn_info = {int(k): v for k, v in asn_data.items()}
                 self.ixp_networks = [
                     (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
                 ]
-                self.last_update = cached_time
-
-                # Reset optimization flag so it gets rebuilt with new data
-                self._lookup_optimized = False
-
-                # Save to pickle cache for next time
-                self._optimize_lookups()
-                self._save_combined_cache()
-
+                log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk")
                 return True
+        except Exception as e:
+            log.warning(f"Failed to load existing IXP data: {e}")
 
-            except Exception as e:
-                log.warning(f"Failed to load existing data files: {e} - will refresh")
-                should_refresh = True
-                reason = f"Failed to load files: {e}"
-
-        # Download fresh data - use global lock to prevent multiple workers downloading simultaneously
-        log.info(f"Refreshing IP enrichment data: {reason}")
-
-        if not httpx:
-            log.error("httpx not available - cannot download IP enrichment data")
-            return False
-
-        # Acquire the download lock to ensure only one worker downloads at a time
+        # Acquire lock and refresh IXP list only
         async with _download_lock:
-            log.debug("🔒 Acquired download lock - checking if data is still needed...")
-
-            # Check again if refresh is still needed (another worker might have downloaded while waiting)
-            should_refresh_again, refresh_reason = should_refresh_data(force_refresh)
-            if not should_refresh_again:
-                log.info(
-                    "📋 Another worker completed the download while waiting - using existing data"
-                )
-                # Try to load the now-available data
-                if self._load_combined_cache():
-                    log.info("✅ Successfully loaded data downloaded by another worker")
-                    return True
-
-            log.info("🚀 Proceeding with fresh download (no other worker completed it)")
-
+            # Double-check in case another worker refreshed
             try:
-                log.info("🌐 Starting fresh IP enrichment data download...")
-                download_start = datetime.now()
+                if IXP_DATA_FILE.exists() and not should_refresh:
+                    with open(IXP_DATA_FILE, "r") as f:
+                        ixp_data = json.load(f)
+                    self.ixp_networks = [
+                        (ip_address(net), prefixlen, name) for net, prefixlen, name in ixp_data
+                    ]
+                    log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from disk (post-lock)")
+                    return True
+            except Exception:
+                pass
 
-                async with httpx.AsyncClient(timeout=300) as client:
-                    # Track which downloads succeeded
-                    bgp_success = False
-                    ixp_success = False
-
-                    # Try to download BGP data (required)
-                    try:
-                        await self._download_bgp_data(client)
-                        bgp_success = True
-                        log.debug("✅ BGP data download successful")
-                    except Exception as e:
-                        log.error(f"❌ BGP data download failed: {e}")
-                        # If the error looks like a 429 from upstream, write a
-                        # backoff marker so other workers don't hammer upstream
-                        try:
-                            if "429" in str(e) or "Too Many Requests" in str(e):
-                                # Backoff for 5 minutes
-                                backoff_until = datetime.now() + timedelta(minutes=5)
-                                try:
-                                    with open(DOWNLOAD_BACKOFF_FILE, "w") as bf:
-                                        bf.write(backoff_until.isoformat())
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-
-                        # BGP data is critical - if this fails, we can't continue
-                        raise Exception(f"Critical BGP data download failed: {e}")
-
-                    # Try to download IXP data (optional but preferred)
-                    try:
-                        await self._download_ixp_data(client)
-                        ixp_success = True
-                        log.debug("✅ IXP data download successful")
-                    except Exception as e:
-                        log.error(f"❌ IXP data download failed: {e}")
-                        # IXP data is optional - clear any partial data and continue
-                        self.ixp_networks = []
-                        log.warning(
-                            "Continuing without IXP data - IXP detection will be unavailable"
-                        )
-
-                download_duration = (datetime.now() - download_start).total_seconds()
-
-                if not bgp_success:
-                    # This shouldn't happen due to the raise above, but be explicit
-                    raise Exception("BGP data download failed - cannot continue")
-
-                log.info(
-                    f"📊 Download summary: BGP data: ✅, IXP data: {'✅' if ixp_success else '❌'}"
-                )
-
-                # Continue with saving even if IXP failed...
-
-                # Save the data to persistent files
-                log.debug("💾 Saving IP enrichment data to persistent files...")
-                cache_start = datetime.now()
-
-                # Convert IP addresses to strings for JSON serialization
-                cidr_file_data = [
-                    (str(net), prefixlen, asn, cidr)
-                    for net, prefixlen, asn, cidr in self.cidr_networks
-                ]
-                ixp_file_data = [
-                    (str(net), prefixlen, name) for net, prefixlen, name in self.ixp_networks
-                ]
-
-                import os
-
-                # Prepare .tmp path objects (avoid concatenating Path + str)
-                tmp_cidr = CIDR_DATA_FILE.with_name(CIDR_DATA_FILE.name + ".tmp")
-                tmp_asn = ASN_DATA_FILE.with_name(ASN_DATA_FILE.name + ".tmp")
-                tmp_ixp = IXP_DATA_FILE.with_name(IXP_DATA_FILE.name + ".tmp")
-                tmp_last = LAST_UPDATE_FILE.with_name(LAST_UPDATE_FILE.name + ".tmp")
-
-                # Write to .tmp files first
-                with open(tmp_cidr, "w") as f:
-                    json.dump(cidr_file_data, f, separators=(",", ":"))
-                with open(tmp_asn, "w") as f:
-                    json.dump(self.asn_info, f, separators=(",", ":"))
-                with open(tmp_ixp, "w") as f:
-                    json.dump(ixp_file_data, f, separators=(",", ":"))
-                with open(tmp_last, "w") as f:
-                    f.write(datetime.now().isoformat())
-
-                # Atomically rename .tmp files to final files
-                os.replace(tmp_cidr, CIDR_DATA_FILE)
-                os.replace(tmp_asn, ASN_DATA_FILE)
-                os.replace(tmp_ixp, IXP_DATA_FILE)
-                os.replace(tmp_last, LAST_UPDATE_FILE)
-
-                cache_duration_actual = (datetime.now() - cache_start).total_seconds()
-
-                self.last_update = datetime.now()
-
-                # Optimize lookups and create pickle cache for ultra-fast loading
-                self._lookup_optimized = False
-                self._optimize_lookups()
-                self._save_combined_cache()
-
-                log.info(f"✅ IP enrichment data loaded successfully!")
-                log.info(
-                    f"📊 Data summary: {len(self.cidr_networks)} CIDR entries, "
-                    f"{len(self.asn_info)} ASN entries, {len(self.ixp_networks)} IXP networks"
-                )
-                log.debug(
-                    f"⏱️  Download time: {download_duration:.1f}s, Save time: {cache_duration_actual:.1f}s"
-                )
-                return True
-
-            except Exception as e:
-                log.error(f"Failed to download IP enrichment data: {e}")
+            if not httpx:
+                log.error("httpx not available - cannot download PeeringDB IXP prefixes")
                 return False
 
-    async def _download_bgp_data(self, client) -> None:
-        """Download BGP.tools data."""
-        log.info("📥 Downloading BGP.tools CIDR table from bgp.tools...")
-        download_start = datetime.now()
-        response = await client.get(BGP_TOOLS_TABLE_URL)
-        response.raise_for_status()
-        download_time = (datetime.now() - download_start).total_seconds()
-
-        # Save raw file for debugging
-        with open(RAW_TABLE_FILE, "w") as f:
-            f.write(response.text)
-
-        # Process JSONL data
-        process_start = datetime.now()
-        cidr_count = 0
-        total_lines = len(response.text.strip().split("\n"))
-        log.debug(f"Processing {total_lines} lines from CIDR table...")
-
-        for line in response.text.strip().split("\n"):
-            if line.strip():
-                try:
-                    entry = json.loads(line)
-                    cidr = entry.get("CIDR")
-                    asn = entry.get("ASN")
-                    if cidr and asn:
-                        network = ip_network(cidr, strict=False)
-                        self.cidr_networks.append(
-                            (network.network_address, network.prefixlen, asn, cidr)
-                        )
-                        cidr_count += 1
-                except Exception as e:
-                    log.debug(f"Failed to parse CIDR line: {line[:100]} - {e}")
-                    continue
-
-        process_time = (datetime.now() - process_start).total_seconds()
-        log.info(
-            f"✅ Downloaded {cidr_count}/{total_lines} CIDR entries "
-            f"(download: {download_time:.1f}s, process: {process_time:.1f}s)"
-        )
-
-        # Sort by prefix length (descending) for longest-match lookup
-        sort_start = datetime.now()
-        self.cidr_networks.sort(key=lambda x: x[1], reverse=True)
-        sort_time = (datetime.now() - sort_start).total_seconds()
-        log.debug(f"Sorted CIDR entries by prefix length in {sort_time:.1f}s")
-
-        # Download ASN names
-        log.info("📥 Downloading BGP.tools ASN names from bgp.tools...")
-        download_start = datetime.now()
-        response = await client.get(BGP_TOOLS_ASNS_URL)
-        response.raise_for_status()
-        download_time = (datetime.now() - download_start).total_seconds()
-
-        # Save raw file for debugging
-        with open(RAW_ASNS_FILE, "w") as f:
-            f.write(response.text)
-
-        # Process CSV data
-        process_start = datetime.now()
-        lines = response.text.strip().split("\n")
-        if not lines:
-            log.error("Empty ASN data received")
-            return
-
-        # Debug: log the first few lines to see the format
-        log.debug(f"ASN CSV header: {lines[0] if lines else 'NO HEADER'}")
-        if len(lines) > 1:
-            log.debug(f"ASN CSV first data line: {lines[1]}")
-
-        reader = csv.DictReader(lines)
-        asn_count = 0
-        total_asns = 0
-        failed_count = 0
-
-        for row in reader:
-            total_asns += 1
             try:
-                asn_str = row.get("asn", "").strip()
-                name = row.get("name", "").strip()
-                country = row.get("cc", "").strip()  # Country code from CC column
+                async with httpx.AsyncClient(timeout=30) as client:
+                    await self._download_ixp_data(client)
 
-                if not asn_str:
-                    failed_count += 1
-                    continue
+                # Persist IXP data
+                ixp_file_data = [(str(net), prefixlen, name) for net, prefixlen, name in self.ixp_networks]
+                tmp_ixp = IXP_DATA_FILE.with_name(IXP_DATA_FILE.name + ".tmp")
+                with open(tmp_ixp, "w") as f:
+                    json.dump(ixp_file_data, f, separators=(",", ":"))
+                import os
 
-                # Handle ASN formats like "AS12345" or just "12345"
-                if asn_str.upper().startswith("AS"):
-                    asn = int(asn_str[2:])
-                else:
-                    asn = int(asn_str)
+                os.replace(tmp_ixp, IXP_DATA_FILE)
 
-                if asn > 0 and name:
-                    self.asn_info[asn] = {"name": name, "country": country}
-                    asn_count += 1
-                else:
-                    failed_count += 1
+                # Update last update marker
+                tmp_last = LAST_UPDATE_FILE.with_name(LAST_UPDATE_FILE.name + ".tmp")
+                with open(tmp_last, "w") as f:
+                    f.write(datetime.now().isoformat())
+                os.replace(tmp_last, LAST_UPDATE_FILE)
 
+                self.last_update = datetime.now()
+                log.info(f"Refreshed and saved {len(self.ixp_networks)} IXP prefixes")
+                return True
             except Exception as e:
-                failed_count += 1
-                if failed_count < 5:  # Only log first few failures
-                    log.debug(f"Failed to parse ASN row {total_asns}: {row} - {e}")
-                continue
+                log.error(f"Failed to refresh IXP prefixes: {e}")
+                # If rate limited, write a short backoff file to avoid repeated retries
+                try:
+                    if "429" in str(e) or "Too Many Requests" in str(e):
+                        retry_until = datetime.now() + timedelta(minutes=60)
+                        with open(DOWNLOAD_BACKOFF_FILE.with_name(DOWNLOAD_BACKOFF_FILE.name + ".tmp"), "w") as f:
+                            f.write(retry_until.isoformat())
+                        import os
 
-        process_time = (datetime.now() - process_start).total_seconds()
-        log.info(
-            f"✅ Downloaded {asn_count}/{total_asns} ASN entries with country codes "
-            f"(download: {download_time:.1f}s, process: {process_time:.1f}s, failed: {failed_count})"
-        )
+                        os.replace(DOWNLOAD_BACKOFF_FILE.with_name(DOWNLOAD_BACKOFF_FILE.name + ".tmp"), DOWNLOAD_BACKOFF_FILE)
+                except Exception:
+                    pass
+                return False
 
     async def _download_ixp_data(self, client) -> None:
         """Download PeeringDB IXP prefixes data - simplified approach using only IXPFX."""
@@ -796,6 +507,88 @@ class IPEnrichmentService:
         log.info("ASN lookups will still work, but IXP networks won't be identified")
         self.ixp_networks = []
 
+    async def _query_bgp_tools_for_ip(self, ip_str: str) -> t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]:
+        """Query bgp.tools for a single IP. Prefer websocket API; fallback to httpx.
+
+        Returns (asn_int, asn_name, prefix) or (None, None, None) on failure.
+        """
+        # Check cache first
+        if ip_str in self._ip_cache:
+            return self._ip_cache[ip_str]
+
+        # Try websocket API if websockets package is available
+        try:
+            import websockets
+            import asyncio as _asyncio
+
+            uri = "wss://bgp.tools/ws"
+            payload = {"query": "whois", "prefix": ip_str}
+
+            async def ws_query():
+                try:
+                    async with websockets.connect(uri, ping_interval=None) as ws:
+                        await ws.send(json.dumps(payload))
+                        resp = await ws.recv()
+                        return json.loads(resp)
+                except Exception:
+                    return None
+
+            loop = asyncio.get_running_loop()
+            resp = await ws_query()
+        except Exception:
+            resp = None
+
+        # HTTP fallback: bgp.tools also exposes a direct lookup endpoint
+        if resp is None:
+            try:
+                if not httpx:
+                    return (None, None, None)
+                url = f"https://bgp.tools/api/whois/{ip_str}"
+                async with httpx.AsyncClient(timeout=15) as client:
+                    r = await client.get(url)
+                    if r.status_code != 200:
+                        return (None, None, None)
+                    resp = r.json()
+            except Exception:
+                return (None, None, None)
+
+        # Parse response - expected keys depend on API; handle common forms
+        try:
+            # Example response might contain ASN and org
+            asn = None
+            org = None
+            prefix = None
+
+            if isinstance(resp, dict):
+                # Attempt common fields
+                if "asn" in resp:
+                    try:
+                        asn = int(resp.get("asn"))
+                    except Exception:
+                        asn = None
+                if "org" in resp:
+                    org = resp.get("org")
+                if "prefix" in resp:
+                    prefix = resp.get("prefix")
+
+                # Some APIs return nested structures
+                if not asn and resp.get("data"):
+                    data = resp.get("data")
+                    if isinstance(data, dict):
+                        if "asn" in data:
+                            try:
+                                asn = int(data.get("asn"))
+                            except Exception:
+                                asn = None
+                        org = org or data.get("org") or data.get("as_name")
+                        prefix = prefix or data.get("prefix")
+
+            # Cache result
+            self._ip_cache[ip_str] = (asn, org, prefix)
+            return (asn, org, prefix)
+        except Exception:
+            return (None, None, None)
+
     async def lookup_ip(self, ip_str: str) -> IPInfo:
         """Lookup an IP address and return ASN or IXP information."""
         if not await self.ensure_data_loaded():
@@ -846,6 +639,31 @@ class IPEnrichmentService:
                     return IPInfo(
                         ip_str, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country
                     )
+        # Not found in local tables - do an on-demand query to bgp.tools
+        try:
+            asn, asn_name, prefix = await self._query_bgp_tools_for_ip(ip_str)
+            if asn:
+                # Update asn_info cache (best-effort)
+                try:
+                    self.asn_info[int(asn)] = {"name": asn_name or f"AS{asn}", "country": ""}
+                except Exception:
+                    pass
+                return IPInfo(ip_str, asn=asn, asn_name=asn_name, prefix=prefix)
+        except Exception:
+            pass
+        # Not found locally - try one-off query
+        try:
+            asn, asn_name, prefix = asyncio.get_event_loop().run_until_complete(
+                self._query_bgp_tools_for_ip(ip_str)
+            )
+            if asn:
+                try:
+                    self.asn_info[int(asn)] = {"name": asn_name or f"AS{asn}", "country": ""}
+                except Exception:
+                    pass
+                return IPInfo(ip_str, asn=asn, asn_name=asn_name, prefix=prefix)
+        except Exception:
+            pass
         else:
             # Use optimized IPv6 lookup
             for net_int, mask_bits, asn, cidr_string in self._ipv6_networks:
