@@ -551,6 +551,19 @@ class IPEnrichmentService:
                     log.warning(
                         "Downloaded 0 IXP prefixes; keeping existing optimized pickle if present"
                     )
+                    # Even if no prefixes were combined, write a last-update
+                    # marker so startup logic can see that a refresh was
+                    # attempted and avoid endless retries.
+                    try:
+                        tmp_last = LAST_UPDATE_FILE.with_name(LAST_UPDATE_FILE.name + ".tmp")
+                        with open(tmp_last, "w") as f:
+                            f.write(datetime.now().isoformat())
+                        import os
+
+                        os.replace(tmp_last, LAST_UPDATE_FILE)
+                        self.last_update = datetime.now()
+                    except Exception:
+                        log.debug("Failed to write last-update marker after empty IXP refresh")
                     return False
 
                 # Update last update marker
@@ -594,15 +607,64 @@ class IPEnrichmentService:
             "ix": "https://www.peeringdb.com/api/ix",
         }
 
+        # Helper: fetch a URL with retries, exponential backoff, jitter, and
+        # honoring Retry-After when present to avoid PeeringDB rate limits.
+        async def _fetch_with_backoff(url: str, attempts: int = 5, base: float = 1.0):
+            import random
+
+            for attempt in range(1, attempts + 1):
+                try:
+                    log.debug("Downloading PeeringDB endpoint %s (attempt %d)", url, attempt)
+                    resp = await client.get(url, timeout=30)
+
+                    # If rate-limited, respect Retry-After header if provided.
+                    if resp.status_code == 429:
+                        retry_after = resp.headers.get("Retry-After")
+                        try:
+                            wait = int(retry_after) if retry_after is not None else None
+                        except Exception:
+                            wait = None
+                        if wait is None:
+                            # Exponential backoff with jitter
+                            wait = base * (2 ** (attempt - 1)) + random.uniform(0, 1)
+                        log.warning(
+                            "PeeringDB rate limited (429). Waiting %.1fs before retrying %s",
+                            wait,
+                            url,
+                        )
+                        await asyncio.sleep(wait)
+                        continue
+
+                    resp.raise_for_status()
+                    try:
+                        return resp.json()
+                    except Exception:
+                        # Could not parse JSON - treat as failure
+                        log.warning("Failed to parse JSON from %s", url)
+                        return None
+
+                except Exception as e:
+                    # On last attempt, return None; otherwise backoff and retry
+                    if attempt == attempts:
+                        log.warning("Failed to download %s after %d attempts: %s", url, attempts, e)
+                        return None
+                    wait = base * (2 ** (attempt - 1)) + random.uniform(0, 1)
+                    log.debug("Download failed for %s (attempt %d) - retrying in %.1fs: %s", url, attempt, wait, e)
+                    await asyncio.sleep(wait)
+
         # Download each endpoint to .temp -> .json atomically
         for name, url in endpoints.items():
             temp_path = IP_ENRICHMENT_DATA_DIR / f"{name}.temp"
             final_path = IP_ENRICHMENT_DATA_DIR / f"{name}.json"
             try:
-                log.debug("Downloading PeeringDB endpoint %s", url)
-                resp = await client.get(url, timeout=30)
-                resp.raise_for_status()
-                data = resp.json()
+                data = await _fetch_with_backoff(url)
+                if not data:
+                    log.warning(
+                        "Failed to download %s (no data); will use existing %s if present",
+                        url,
+                        final_path,
+                    )
+                    continue
 
                 # Write to temp file first
                 try:
