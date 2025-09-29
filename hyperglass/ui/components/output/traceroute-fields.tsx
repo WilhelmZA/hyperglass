@@ -60,8 +60,9 @@ export const ASNField = (props: ASNFieldProps): JSX.Element => {
   // the visualiser renders a friendly label. Keep the tooltip labeled as
   // "IXP - <name>" for clarity.
   let asnDisplay = asn; // default: "12345" or "IXP"
-  if (asn === 'IXP' && org && org !== 'None') {
-    asnDisplay = org; // show the IXP name in-line
+  // For table display we want IXPs to appear as the literal "IXP".
+  if (asn === 'IXP') {
+    asnDisplay = 'IXP';
   }
   const tooltipLabel = org && org !== 'None'
     ? (asn === 'IXP' ? `IXP - ${org}` : `${asnDisplay} - ${org}`)
