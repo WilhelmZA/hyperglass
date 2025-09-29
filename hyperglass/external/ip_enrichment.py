@@ -41,7 +41,7 @@ class _ProcessFileLock:
         self._startup_jitter = 0.25
 
     def _acquire_blocking(self) -> None:
-    # Use atomic mkdir on a .lck directory as the lock primitive.
+        # Use atomic mkdir on a .lck directory as the lock primitive.
         import os
         import random
         import json
@@ -49,7 +49,7 @@ class _ProcessFileLock:
 
         lock_dir = str(self.lock_path) + ".lck"
 
-    # Small jitter before first attempt to reduce concurrent mkdirs
+        # Small jitter before first attempt to reduce concurrent mkdirs
         time.sleep(random.uniform(0, self._startup_jitter))
         start = time.time()
 
@@ -357,14 +357,21 @@ class IPEnrichmentService:
                             parsed = pickle.load(f)
                         if parsed and isinstance(parsed, list) and len(parsed) > 0:
                             self.ixp_networks = [
-                                (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
+                                (ip_address(net), prefixlen, name)
+                                for net, prefixlen, name in parsed
                             ]
-                            log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from optimized pickle (fast-path)")
+                            log.info(
+                                f"Loaded {len(self.ixp_networks)} IXP prefixes from optimized pickle (fast-path)"
+                            )
                             return True
                         else:
-                            log.warning("Optimized pickle exists but appears empty or invalid; falling back to JSON/load or refresh")
+                            log.warning(
+                                "Optimized pickle exists but appears empty or invalid; falling back to JSON/load or refresh"
+                            )
                     except Exception as e:
-                        log.warning(f"Failed to load optimized pickle {pickle_path}: {e}; falling back")
+                        log.warning(
+                            f"Failed to load optimized pickle {pickle_path}: {e}; falling back"
+                        )
             except Exception:
                 # Non-fatal; continue to JSON/download logic
                 pass
@@ -381,14 +388,21 @@ class IPEnrichmentService:
                             parsed = pickle.load(f)
                         if parsed and isinstance(parsed, list) and len(parsed) > 0:
                             self.ixp_networks = [
-                                (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
+                                (ip_address(net), prefixlen, name)
+                                for net, prefixlen, name in parsed
                             ]
-                            log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from optimized pickle (early guard)")
+                            log.info(
+                                f"Loaded {len(self.ixp_networks)} IXP prefixes from optimized pickle (early guard)"
+                            )
                             return True
                         else:
-                            log.warning("Optimized pickle exists but appears empty or invalid; will attempt to refresh")
+                            log.warning(
+                                "Optimized pickle exists but appears empty or invalid; will attempt to refresh"
+                            )
                     except Exception as e:
-                        log.warning(f"Failed to read optimized pickle: {e}; will attempt to refresh")
+                        log.warning(
+                            f"Failed to read optimized pickle: {e}; will attempt to refresh"
+                        )
             except Exception:
                 # Ignore filesystem errors and continue to refresh logic
                 pass
@@ -422,7 +436,9 @@ class IPEnrichmentService:
                         self.ixp_networks = [
                             (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
                         ]
-                        log.info(f"Loaded {len(self.ixp_networks)} IXP prefixes from optimized pickle (size={size})")
+                        log.info(
+                            f"Loaded {len(self.ixp_networks)} IXP prefixes from optimized pickle (size={size})"
+                        )
                         return True
                     else:
                         log.warning(
@@ -430,7 +446,9 @@ class IPEnrichmentService:
                             size,
                         )
                 else:
-                    log.debug(f"Optimized pickle exists but size indicates empty or very small (size={size})")
+                    log.debug(
+                        f"Optimized pickle exists but size indicates empty or very small (size={size})"
+                    )
         except Exception as e:
             log.warning(f"Failed to load existing optimized IXP data: {e}")
 
@@ -465,9 +483,13 @@ class IPEnrichmentService:
                                     with open(pickle_path, "rb") as f:
                                         parsed = pickle.load(f)
                                     self.ixp_networks = [
-                                        (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
+                                        (ip_address(net), prefixlen, name)
+                                        for net, prefixlen, name in parsed
                                     ]
-                                    log.info("Loaded %d IXP prefixes from generated pickle", len(self.ixp_networks))
+                                    log.info(
+                                        "Loaded %d IXP prefixes from generated pickle",
+                                        len(self.ixp_networks),
+                                    )
                                     return True
                                 except Exception as e:
                                     log.warning(f"Failed to load generated pickle: {e}")
@@ -494,7 +516,9 @@ class IPEnrichmentService:
                         with open(IXP_PICKLE_FILE, "rb") as f:
                             parsed = pickle.load(f)
                     except Exception as e:
-                        log.warning(f"Existing optimized pickle is invalid after lock wait: {e}; will attempt to refresh")
+                        log.warning(
+                            f"Existing optimized pickle is invalid after lock wait: {e}; will attempt to refresh"
+                        )
                         parsed = None
 
                     if not parsed or (isinstance(parsed, list) and len(parsed) == 0):
@@ -524,7 +548,9 @@ class IPEnrichmentService:
                 # update the last-update marker. The combined pickle is already
                 # written by _combine_peeringdb_files invoked by _download_ixp_data.
                 if not self.ixp_networks or len(self.ixp_networks) == 0:
-                    log.warning("Downloaded 0 IXP prefixes; keeping existing optimized pickle if present")
+                    log.warning(
+                        "Downloaded 0 IXP prefixes; keeping existing optimized pickle if present"
+                    )
                     return False
 
                 # Update last update marker
@@ -542,6 +568,7 @@ class IPEnrichmentService:
                 log.error("Failed to refresh IXP prefixes: %s", e)
                 # No persistent backoff behavior; log and return failure.
                 return False
+
     # end async with _ensure_lock
 
     async def _download_ixp_data(self, client) -> None:
@@ -580,7 +607,7 @@ class IPEnrichmentService:
                 # Write to temp file first
                 try:
                     with open(temp_path, "w") as f:
-                        json.dump(data, f, separators=(',', ':'))
+                        json.dump(data, f, separators=(",", ":"))
                     # Atomic replace
                     import os
 
@@ -594,7 +621,9 @@ class IPEnrichmentService:
                     except Exception:
                         pass
             except Exception as e:
-                log.warning("Failed to download %s: %s; will use existing %s if present", url, e, final_path)
+                log.warning(
+                    "Failed to download %s: %s; will use existing %s if present", url, e, final_path
+                )
 
         # After downloads, combine on-disk JSON files into the optimized pickle
         # The actual combine logic is implemented in _combine_peeringdb_files so
@@ -620,7 +649,9 @@ class IPEnrichmentService:
         # Use TCP WHOIS bulk mode on bgp.tools:43. We'll perform a blocking
         # socket WHOIS request in a thread executor to keep this function async.
 
-        def _whois_blocking(single_ips: t.List[str]) -> t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]]:
+        def _whois_blocking(
+            single_ips: t.List[str],
+        ) -> t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]]:
             out: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]] = {}
             host = "bgp.tools"
             port = 43
@@ -688,7 +719,9 @@ class IPEnrichmentService:
                     # Map results back to the original query keys. For numeric
                     # inputs we sent 'AS{n}', but callers may provide 'n'. Ensure
                     # we return entries keyed by the original queries.
-                    mapped: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]] = {}
+                    mapped: t.Dict[
+                        str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]
+                    ] = {}
                     for orig, sent in zip(single_ips, send_keys):
                         if sent in out:
                             mapped[orig] = out[sent]
@@ -826,9 +859,15 @@ class IPEnrichmentService:
                 import os
 
                 os.replace(tmp_pickle, final_pickle)
-                log.info("Saved combined IXP prefix mapping (%d prefixes) -> %s", len(parsed), final_pickle)
+                log.info(
+                    "Saved combined IXP prefix mapping (%d prefixes) -> %s",
+                    len(parsed),
+                    final_pickle,
+                )
                 # Also update in-memory list for immediate use
-                self.ixp_networks = [(ip_address(net), prefixlen, name) for net, prefixlen, name in parsed]
+                self.ixp_networks = [
+                    (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
+                ]
                 return True
             except Exception as e:
                 log.warning("Failed to persist optimized pickle: %s", e)
@@ -838,7 +877,9 @@ class IPEnrichmentService:
             log.warning("Failed to combine PeeringDB datasets: %s", e)
             return False
 
-    async def _query_bgp_tools_bulk(self, ips: t.List[str]) -> t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]]:
+    async def _query_bgp_tools_bulk(
+        self, ips: t.List[str]
+    ) -> t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]]:
         """Query bgp.tools for multiple IPs using a single websocket connection when possible.
 
         Returns a mapping ip -> (asn, asn_name, prefix).
@@ -849,7 +890,9 @@ class IPEnrichmentService:
         # blocking socket work in a thread executor so async callers are not
         # blocked.
 
-        def _whois_bulk_blocking(bulk_ips: t.List[str]) -> t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]]:
+        def _whois_bulk_blocking(
+            bulk_ips: t.List[str],
+        ) -> t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]]:
             host = "bgp.tools"
             port = 43
             out: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]] = {}
@@ -909,7 +952,9 @@ class IPEnrichmentService:
                                 out[ipcol] = (asn, org, prefix)
 
                     # Map results back to original query keys
-                    mapped: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]] = {}
+                    mapped: t.Dict[
+                        str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]
+                    ] = {}
                     for orig, sent in zip(bulk_ips, send_keys):
                         if sent in out:
                             mapped[orig] = out[sent]
@@ -983,7 +1028,9 @@ class IPEnrichmentService:
                         asn_data = self.asn_info.get(asn, {})
                         asn_name = asn_data.get("name", f"AS{asn}")
                         country = asn_data.get("country", "")
-                        results[ip] = IPInfo(ip, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country)
+                        results[ip] = IPInfo(
+                            ip, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country
+                        )
                         matched = True
                         break
             else:
@@ -992,7 +1039,9 @@ class IPEnrichmentService:
                         asn_data = self.asn_info.get(asn, {})
                         asn_name = asn_data.get("name", f"AS{asn}")
                         country = asn_data.get("country", "")
-                        results[ip] = IPInfo(ip, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country)
+                        results[ip] = IPInfo(
+                            ip, asn=asn, asn_name=asn_name, prefix=cidr_string, country=country
+                        )
                         matched = True
                         break
 
