@@ -1284,6 +1284,7 @@ async def lookup_ip(ip_address: str) -> IPInfo:
 
 async def lookup_asn_name(asn: int) -> str:
     """Get the organization name for an ASN number."""
+    # ASN lookups do not require loading PeeringDB data; perform direct lookup
     return await _service.lookup_asn_name(asn)
 
 
@@ -1302,8 +1303,9 @@ async def lookup_asns_bulk(asns: t.List[t.Union[str, int]]) -> t.Dict[str, t.Dic
         Dict mapping ASN string to {"name": org_name, "country": country_code}
         Example: {"12345": {"name": "Example ISP", "country": "US"}}
     """
-    await _service.ensure_data_loaded()
-
+    # Do NOT load PeeringDB data for ASN-only lookups; these use bgp.tools WHOIS
+    # and the in-memory `_service.asn_info` cache only. This avoids triggering
+    # PeeringDB downloads when callers only need ASN org names.
     results = {}
 
     # Normalize ASN list to strings and filter invalids

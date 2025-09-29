@@ -183,18 +183,43 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                 else:
                     raw_output = str(output)
 
-                # Only cache successful results
-                await loop.run_in_executor(
-                    None, partial(cache.set_map_item, cache_key, "output", raw_output)
-                )
-                await loop.run_in_executor(
-                    None, partial(cache.set_map_item, cache_key, "timestamp", timestamp)
-                )
-                await loop.run_in_executor(
-                    None, partial(cache.expire, cache_key, expire_in=_state.params.cache.timeout)
-                )
+                # Detect semantically-empty structured outputs and avoid caching them.
+                # Examples:
+                # - BGPRouteTable: {'count': 0, 'routes': []}
+                # - TracerouteResult: {'hops': []}
+                skip_cache_empty = False
+                try:
+                    if json_output and isinstance(raw_output, dict):
+                        # BGP route table empty
+                        if "count" in raw_output and "routes" in raw_output:
+                            if raw_output.get("count", 0) == 0 or not raw_output.get("routes"):
+                                skip_cache_empty = True
+                        # Traceroute result empty
+                        if "hops" in raw_output and (not raw_output.get("hops")):
+                            skip_cache_empty = True
+                except Exception:
+                    # If any unexpected shape is encountered, don't skip caching by
+                    # accident — fall back to normal behavior.
+                    skip_cache_empty = False
 
-                _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
+                if not skip_cache_empty:
+                    # Only cache successful, non-empty results
+                    await loop.run_in_executor(
+                        None, partial(cache.set_map_item, cache_key, "output", raw_output)
+                    )
+                    await loop.run_in_executor(
+                        None, partial(cache.set_map_item, cache_key, "timestamp", timestamp)
+                    )
+                    await loop.run_in_executor(
+                        None,
+                        partial(cache.expire, cache_key, expire_in=_state.params.cache.timeout),
+                    )
+
+                    _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
+                else:
+                    _log.bind(cache_key=cache_key).warning(
+                        "Structured output was empty (e.g. 0 routes / 0 hops) - skipping cache to allow immediate retry"
+                    )
 
                 runtime = int(round(elapsedtime, 0))
 
