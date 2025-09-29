@@ -298,7 +298,9 @@ class IPEnrichmentService:
         # Combined cache for ultra-fast loading
         self._combined_cache: t.Optional[t.Dict[str, t.Any]] = None
         # Per-IP in-memory cache for bgp.tools lookups: ip -> (asn, asn_name, prefix, expires_at)
-        self._per_ip_cache: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str], float]] = {}
+        self._per_ip_cache: t.Dict[
+            str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str], float]
+        ] = {}
         # Small in-memory cache for per-IP lookups to avoid repeated websocket
         # queries during runtime. Maps ip_str -> (asn, asn_name, prefix)
         self._ip_cache: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]] = {}
@@ -353,9 +355,11 @@ class IPEnrichmentService:
         # If a backoff is active, don't try to refresh
         should_refresh, reason = should_refresh_data(force_refresh)
 
-        # If IXP file exists and not expired, load it
+        # If an IXP file exists, load it - we only need IXP prefixes to identify
+        # IXPs at runtime. Don't force a full refresh just because other bulk
+        # files (cidr/asn) are missing; use whatever IXP data is present on disk.
         try:
-            if IXP_DATA_FILE.exists() and not should_refresh:
+            if IXP_DATA_FILE.exists():
                 with open(IXP_DATA_FILE, "r") as f:
                     ixp_data = json.load(f)
                 self.ixp_networks = [
@@ -370,7 +374,10 @@ class IPEnrichmentService:
         async with _download_lock:
             # Double-check in case another worker refreshed
             try:
-                if IXP_DATA_FILE.exists() and not should_refresh:
+                # Double-check: if another worker already refreshed the IXP file
+                # while we were waiting for the lock, load it regardless of the
+                # general should_refresh flag.
+                if IXP_DATA_FILE.exists():
                     with open(IXP_DATA_FILE, "r") as f:
                         ixp_data = json.load(f)
                     self.ixp_networks = [
@@ -389,8 +396,28 @@ class IPEnrichmentService:
                 async with httpx.AsyncClient(timeout=30) as client:
                     await self._download_ixp_data(client)
 
-                # Persist IXP data
-                ixp_file_data = [(str(net), prefixlen, name) for net, prefixlen, name in self.ixp_networks]
+                # Persist IXP data only if we actually downloaded prefixes.
+                ixp_file_data = [
+                    (str(net), prefixlen, name) for net, prefixlen, name in self.ixp_networks
+                ]
+
+                if len(ixp_file_data) == 0:
+                    # If we have no prefixes from the download, do not overwrite an
+                    # existing on-disk IXP file (which may contain valid data). This
+                    # prevents a failed refresh (e.g., due to rate-limit) from
+                    # replacing a previously-good file with an empty list.
+                    if IXP_DATA_FILE.exists():
+                        log.warning(
+                            "Downloaded 0 IXP prefixes; keeping existing '%s' on disk",
+                            IXP_DATA_FILE,
+                        )
+                        return False
+                    else:
+                        log.warning(
+                            "Downloaded 0 IXP prefixes and no existing IXP file present; not persisting"
+                        )
+                        return False
+
                 tmp_ixp = IXP_DATA_FILE.with_name(IXP_DATA_FILE.name + ".tmp")
                 with open(tmp_ixp, "w") as f:
                     json.dump(ixp_file_data, f, separators=(",", ":"))
@@ -413,11 +440,17 @@ class IPEnrichmentService:
                 try:
                     if "429" in str(e) or "Too Many Requests" in str(e):
                         retry_until = datetime.now() + timedelta(minutes=60)
-                        with open(DOWNLOAD_BACKOFF_FILE.with_name(DOWNLOAD_BACKOFF_FILE.name + ".tmp"), "w") as f:
+                        with open(
+                            DOWNLOAD_BACKOFF_FILE.with_name(DOWNLOAD_BACKOFF_FILE.name + ".tmp"),
+                            "w",
+                        ) as f:
                             f.write(retry_until.isoformat())
                         import os
 
-                        os.replace(DOWNLOAD_BACKOFF_FILE.with_name(DOWNLOAD_BACKOFF_FILE.name + ".tmp"), DOWNLOAD_BACKOFF_FILE)
+                        os.replace(
+                            DOWNLOAD_BACKOFF_FILE.with_name(DOWNLOAD_BACKOFF_FILE.name + ".tmp"),
+                            DOWNLOAD_BACKOFF_FILE,
+                        )
                 except Exception:
                     pass
                 return False
@@ -507,7 +540,9 @@ class IPEnrichmentService:
         log.info("ASN lookups will still work, but IXP networks won't be identified")
         self.ixp_networks = []
 
-    async def _query_bgp_tools_for_ip(self, ip_str: str) -> t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]:
+    async def _query_bgp_tools_for_ip(
+        self, ip_str: str
+    ) -> t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]:
         """Query bgp.tools for a single IP. Prefer websocket API; fallback to httpx.
 
         Returns (asn_int, asn_name, prefix) or (None, None, None) on failure.

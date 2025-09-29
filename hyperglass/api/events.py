@@ -116,7 +116,9 @@ async def init_ip_enrichment(_: Litestar) -> None:
 
         async def _run_startup_download():
             try:
-                log.info("Startup process acquired IXP download responsibility; refreshing IXP data in background")
+                log.info(
+                    "Startup process acquired IXP download responsibility; refreshing IXP data in background"
+                )
                 success = await _service.ensure_data_loaded()
                 if success:
                     log.info("IP enrichment IXP data refreshed by startup process")
