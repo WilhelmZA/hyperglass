@@ -635,56 +635,32 @@ class IPEnrichmentService:
             "ix": "https://www.peeringdb.com/api/ix",
         }
 
-        # Helper: fetch a URL with retries, exponential backoff, jitter, and
-        # honoring Retry-After when present to avoid PeeringDB rate limits.
-        async def _fetch_with_backoff(url: str, attempts: int = 5, base: float = 1.0):
-            import random
+        # Helper: fetch a URL exactly once. Do NOT retry on 429 or other
+        # errors - if PeeringDB is rate limiting the caller should decide
+        # whether to retry later. This prevents the service from reattempting
+        # downloads automatically and potentially worsening global rate limits.
+        async def _fetch_with_backoff(url: str):
+            try:
+                log.debug("Downloading PeeringDB endpoint %s (single attempt)", url)
+                resp = await client.get(url, timeout=30)
 
-            for attempt in range(1, attempts + 1):
-                try:
-                    log.debug("Downloading PeeringDB endpoint %s (attempt %d)", url, attempt)
-                    resp = await client.get(url, timeout=30)
-
-                    # If rate-limited, respect Retry-After header if provided.
-                    if resp.status_code == 429:
-                        retry_after = resp.headers.get("Retry-After")
-                        try:
-                            wait = int(retry_after) if retry_after is not None else None
-                        except Exception:
-                            wait = None
-                        if wait is None:
-                            # Exponential backoff with jitter
-                            wait = base * (2 ** (attempt - 1)) + random.uniform(0, 1)
-                        log.warning(
-                            "PeeringDB rate limited (429). Waiting %.1fs before retrying %s",
-                            wait,
-                            url,
-                        )
-                        await asyncio.sleep(wait)
-                        continue
-
-                    resp.raise_for_status()
-                    try:
-                        return resp.json()
-                    except Exception:
-                        # Could not parse JSON - treat as failure
-                        log.warning("Failed to parse JSON from %s", url)
-                        return None
-
-                except Exception as e:
-                    # On last attempt, return None; otherwise backoff and retry
-                    if attempt == attempts:
-                        log.warning("Failed to download %s after %d attempts: %s", url, attempts, e)
-                        return None
-                    wait = base * (2 ** (attempt - 1)) + random.uniform(0, 1)
-                    log.debug(
-                        "Download failed for %s (attempt %d) - retrying in %.1fs: %s",
+                # Do not retry on 429 - treat as a failed download and return None
+                if resp.status_code != 200:
+                    log.warning(
+                        "PeeringDB download failed for %s: HTTP %s - not retrying",
                         url,
-                        attempt,
-                        wait,
-                        e,
+                        resp.status_code,
                     )
-                    await asyncio.sleep(wait)
+                    return None
+
+                try:
+                    return resp.json()
+                except Exception:
+                    log.warning("Failed to parse JSON from %s", url)
+                    return None
+            except Exception as e:
+                log.warning("PeeringDB download error for %s: %s - not retrying", url, e)
+                return None
 
         # Download each endpoint to .temp -> .json atomically
         for name, url in endpoints.items():

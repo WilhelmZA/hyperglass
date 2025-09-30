@@ -33,5 +33,4 @@ async def init_ip_enrichment(_: Litestar) -> None:
     # will be loaded on-demand when first required. Disabling the startup
     # refresh avoids concurrent multi-worker downloads and reduces the
     # likelihood of triggering PeeringDB rate limits during container start.
-    log.info("Startup IXP refresh disabled - IP enrichment will load on-demand")
     return
