@@ -22,15 +22,7 @@ async def enrich_output_with_ip_enrichment(output: OutputDataModel) -> OutputDat
     _log.debug("Starting IP enrichment")
 
     try:
-        if isinstance(output, BGPRouteTable):
-            if params.structured.ip_enrichment.enrich_next_hop:
-                _log.debug("Enriching BGP route table with next-hop information")
-                await output.enrich_with_ip_enrichment()
-                _log.info(f"Enriched {len(output.routes)} BGP routes with next-hop data")
-            else:
-                _log.debug("Next-hop enrichment disabled, skipping BGP enrichment")
-
-        elif isinstance(output, TracerouteResult):
+        if isinstance(output, TracerouteResult):
             if params.structured.ip_enrichment.enrich_traceroute:
                 _log.debug("Enriching traceroute hops with ASN information")
                 await output.enrich_with_ip_enrichment()

@@ -33,7 +33,6 @@ For devices with structured traceroute support (Arista EOS, FRRouting, Huawei VR
 | `structured.communities.names`    | Dict            |               | Dictionary mapping BGP community codes to friendly names (used by `name` mode).                                                       |
 | `structured.ip_enrichment.enabled`          | Boolean         | false         | Enable IP enrichment using offline BGP.tools and PeeringDB data for structured outputs.                                              |
 | `structured.ip_enrichment.cache_timeout`    | Integer         | 86400         | Cache timeout in seconds for IP enrichment data (minimum 24 hours/86400 seconds).                                                   |
-| `structured.ip_enrichment.enrich_next_hop`  | Boolean         | false         | Enrich BGP next-hop IP addresses with ASN and organization information.                                                              |
 | `structured.ip_enrichment.enrich_traceroute`| Boolean         | true          | Enrich traceroute hop IP addresses with ASN, organization, and IXP information.                                                      |
 
 ### RPKI Examples
@@ -116,9 +115,7 @@ structured:
 <Callout type="info" emoji="ℹ️">
     **IP Enrichment Requirements**
     
-    IP enrichment is currently supported for:
-    - **Traceroute**: MikroTik RouterOS and Huawei VRP platforms
-    - **BGP Routes**: When `enrich_next_hop` is enabled
+    IP enrichment is currently supported for traceroute outputs on supported platforms.
     
     The system uses offline data from BGP.tools (1.3M+ CIDR entries) and PeeringDB for maximum performance and reliability.
 </Callout>
@@ -142,14 +139,13 @@ structured:
         cache_timeout: 172800  # 48 hours
 ```
 
-#### Enable Full IP Enrichment (Traceroute + BGP Next-Hop)
+#### Enable IP Enrichment for Traceroute
 
-```yaml filename="config.yaml" copy {2-6}
+```yaml filename="config.yaml" copy {2-4}
 structured:
     ip_enrichment:
         enabled: true
         enrich_traceroute: true
-        enrich_next_hop: true
         cache_timeout: 86400  # 24 hours (minimum)
 ```
 
@@ -206,7 +202,6 @@ structured:
     ip_enrichment:
         enabled: true
         enrich_traceroute: true
-        enrich_next_hop: false  # Only enrich traceroute, not BGP
 ```
 
 #### Minimal Structured Traceroute (No IP Enrichment)

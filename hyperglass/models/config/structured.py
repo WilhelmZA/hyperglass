@@ -43,7 +43,6 @@ class StructuredIpEnrichment(HyperglassModel):
 
     enabled: bool = False
     cache_timeout: int = 86400  # 24 hours in seconds (minimum)
-    enrich_next_hop: bool = False
     enrich_traceroute: bool = True
 
     @field_validator("cache_timeout")
