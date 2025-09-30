@@ -130,7 +130,19 @@ class TraceroutePluginMikrotik(OutputPlugin):
         # Debug: emit the raw response exactly as returned by the router.
         # Do not transform, join, or normalize the output — log it verbatim.
         try:
-            _log.debug("Router raw output", raw=output)
+            # Ensure the router output is embedded in the log message body so it
+            # is visible regardless of the logger's formatter configuration.
+            if isinstance(output, (tuple, list)):
+                try:
+                    combined_raw = "\n".join(output)
+                except Exception:
+                    # Fall back to repr if join fails for non-string elements
+                    combined_raw = repr(output)
+            else:
+                combined_raw = output if isinstance(output, str) else repr(output)
+
+            # Log the full verbatim router response (DEBUG level).
+            _log.debug("Router raw output:\n{}", combined_raw)
         except Exception:
             # Don't let logging interfere with normal processing
             _log.exception("Failed to log router raw output")
