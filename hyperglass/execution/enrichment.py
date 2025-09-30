@@ -13,9 +13,9 @@ async def enrich_output_with_ip_enrichment(output: OutputDataModel) -> OutputDat
     """Enrich output data with IP enrichment information."""
     params = use_state("params")
 
-    # Check if IP enrichment is enabled in configuration
-    if not params.structured.ip_enrichment.enabled:
-        log.debug("IP enrichment disabled in configuration, skipping")
+    # If traceroute enrichment is not enabled, skip enrichment entirely
+    if not params.structured.ip_enrichment.enrich_traceroute:
+        log.debug("IP enrichment for traceroute disabled in configuration, skipping")
         return output
 
     _log = log.bind(enrichment="ip_enrichment")

@@ -31,8 +31,8 @@ For devices with structured traceroute support (Arista EOS, FRRouting, Huawei VR
 | `structured.communities.mode`     | String          | deny          | Use `deny` to deny any communities listed, `permit` to _only_ permit communities listed, or `name` to append friendly names.         |
 | `structured.communities.items`    | List of Strings |               | List of communities to match (used by `deny` and `permit` modes).                                                                     |
 | `structured.communities.names`    | Dict            |               | Dictionary mapping BGP community codes to friendly names (used by `name` mode).                                                       |
-| `structured.ip_enrichment.enabled`          | Boolean         | false         | Enable IP enrichment using offline BGP.tools and PeeringDB data for structured outputs.                                              |
 | `structured.ip_enrichment.cache_timeout`    | Integer         | 86400         | Cache timeout in seconds for IP enrichment data (minimum 24 hours/86400 seconds).                                                   |
+| `structured.ip_enrichment.enrich_traceroute`| Boolean         | true          | Enrich traceroute hop IP addresses with ASN, organization, and IXP information.                                                      |
 | `structured.ip_enrichment.enrich_traceroute`| Boolean         | true          | Enrich traceroute hop IP addresses with ASN, organization, and IXP information.                                                      |
 
 ### RPKI Examples
@@ -221,5 +221,5 @@ structured:
     - AS path visualization will be limited or unavailable
     - IXP detection will not function
     
-    For the full structured traceroute experience with rich metadata, `ip_enrichment.enabled: true` is required.
+    For the full structured traceroute experience with rich metadata, `ip_enrichment.enrich_traceroute: true` is required.
 </Callout>

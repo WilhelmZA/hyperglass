@@ -60,14 +60,14 @@ __all__ = (
 )
 
 
-@post('/api/aspath/enrich')
+@post("/api/aspath/enrich")
 async def aspath_enrich(data: dict) -> dict:
     """Enrich a list of ASNs with organization names on demand.
 
     Expected JSON payload: { "as_path": [123, 456, ...] }
     """
     try:
-        as_path = data.get('as_path', []) if isinstance(data, dict) else []
+        as_path = data.get("as_path", []) if isinstance(data, dict) else []
         if not as_path:
             return {"success": False, "error": "No as_path provided"}
 
@@ -191,7 +191,10 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                         from hyperglass.state import use_state
 
                         params = use_state("params")
-                        if getattr(params, "structured", None) and params.structured.ip_enrichment.enabled:
+                        if (
+                            getattr(params, "structured", None)
+                            and params.structured.ip_enrichment.enrich_traceroute
+                        ):
                             try:
                                 from hyperglass.external.ip_enrichment import (
                                     refresh_ip_enrichment_data,
@@ -201,7 +204,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                                     try:
                                         await refresh_ip_enrichment_data(force=False)
                                     except Exception as e:
-                                        _log.debug("Background IP enrichment refresh failed: %s", e)
+                                        _log.debug("Background IP enrichment refresh failed: {}", e)
 
                                 # Schedule background refresh and don't await it.
                                 asyncio.create_task(_bg_refresh())
@@ -336,13 +339,17 @@ async def ip_enrichment_refresh(force: bool = False) -> dict:
     """Manually refresh IP enrichment data."""
     try:
         from hyperglass.external.ip_enrichment import refresh_ip_enrichment_data
+
         # If enrichment is disabled in config, return a clear message
         try:
             from hyperglass.state import use_state
 
             params = use_state("params")
-            if not getattr(params, "structured", None) or not params.structured.ip_enrichment.enabled:
-                return {"success": False, "message": "IP enrichment is not enabled"}
+            if (
+                not getattr(params, "structured", None)
+                or not params.structured.ip_enrichment.enrich_traceroute
+            ):
+                return {"success": False, "message": "IP enrichment for traceroute is not enabled"}
         except Exception:
             # If config can't be read, proceed with refresh call and let it decide
             pass

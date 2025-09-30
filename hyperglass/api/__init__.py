@@ -15,7 +15,7 @@ from hyperglass.constants import __version__
 from hyperglass.exceptions import HyperglassError
 
 # Local
-from .events import check_redis, init_ip_enrichment
+from .events import check_redis
 from .routes import (
     info,
     query,
@@ -76,7 +76,7 @@ app = Litestar(
         ValidationException: validation_handler,
         Exception: default_handler,
     },
-    on_startup=[check_redis, init_ip_enrichment],
+    on_startup=[check_redis],
     debug=STATE.settings.debug,
     cors_config=create_cors_config(state=STATE),
     compression_config=COMPRESSION_CONFIG,

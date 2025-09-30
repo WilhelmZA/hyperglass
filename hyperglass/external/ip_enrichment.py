@@ -333,12 +333,12 @@ class IPEnrichmentService:
                             (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
                         ]
                         log.debug(
-                            "Loaded %d IXP prefixes from optimized pickle (non-blocking)",
+                            "Loaded {} IXP prefixes from optimized pickle (non-blocking)",
                             len(self.ixp_networks),
                         )
                         return True
                 except Exception as e:
-                    log.debug("Non-blocking pickle load failed: %s", e)
+                    log.debug("Non-blocking pickle load failed: {}", e)
         except Exception:
             pass
         return False
@@ -470,7 +470,7 @@ class IPEnrichmentService:
                         return True
                     else:
                         log.warning(
-                            "Existing optimized pickle appears empty or invalid (size=%s); will attempt to refresh",
+                            "Existing optimized pickle appears empty or invalid (size={}) ; will attempt to refresh",
                             size,
                         )
                 else:
@@ -529,7 +529,7 @@ class IPEnrichmentService:
                 # Non-fatal; proceed to skip refresh
                 pass
 
-            log.info("Skipping IXP refresh: %s", reason)
+            log.info("Skipping IXP refresh: {}", reason)
             return False
 
         # Acquire lock and refresh IXP list only
@@ -603,10 +603,10 @@ class IPEnrichmentService:
                 os.replace(tmp_last, LAST_UPDATE_FILE)
 
                 self.last_update = datetime.now()
-                log.info("Refreshed and saved %d IXP prefixes (pickle)", len(self.ixp_networks))
+                log.info("Refreshed and saved {} IXP prefixes (pickle)", len(self.ixp_networks))
                 return True
             except Exception as e:
-                log.error("Failed to refresh IXP prefixes: %s", e)
+                log.error("Failed to refresh IXP prefixes: {}", e)
                 # No persistent backoff behavior; log and return failure.
                 return False
 
@@ -641,13 +641,13 @@ class IPEnrichmentService:
         # downloads automatically and potentially worsening global rate limits.
         async def _fetch_with_backoff(url: str):
             try:
-                log.debug("Downloading PeeringDB endpoint %s (single attempt)", url)
+                log.debug("Downloading PeeringDB endpoint {} (single attempt)", url)
                 resp = await client.get(url, timeout=30)
 
                 # Do not retry on 429 - treat as a failed download and return None
                 if resp.status_code != 200:
                     log.warning(
-                        "PeeringDB download failed for %s: HTTP %s - not retrying",
+                        "PeeringDB download failed for {}: HTTP {} - not retrying",
                         url,
                         resp.status_code,
                     )
@@ -656,10 +656,10 @@ class IPEnrichmentService:
                 try:
                     return resp.json()
                 except Exception:
-                    log.warning("Failed to parse JSON from %s", url)
+                    log.warning("Failed to parse JSON from {}", url)
                     return None
             except Exception as e:
-                log.warning("PeeringDB download error for %s: %s - not retrying", url, e)
+                log.warning("PeeringDB download error for {}: {} - not retrying", url, e)
                 return None
 
         # Download each endpoint to .temp -> .json atomically
@@ -670,7 +670,7 @@ class IPEnrichmentService:
                 data = await _fetch_with_backoff(url)
                 if not data:
                     log.warning(
-                        "Failed to download %s (no data); will use existing %s if present",
+                        "Failed to download {} (no data); will use existing {} if present",
                         url,
                         final_path,
                     )
@@ -684,9 +684,9 @@ class IPEnrichmentService:
                     import os
 
                     os.replace(temp_path, final_path)
-                    log.info("Saved PeeringDB dataset %s -> %s", name, final_path)
+                    log.info("Saved PeeringDB dataset {} -> {}", name, final_path)
                 except Exception as e:
-                    log.warning("Failed to write %s: %s", temp_path, e)
+                    log.warning("Failed to write {}: {}", temp_path, e)
                     try:
                         if temp_path.exists():
                             temp_path.unlink()
@@ -694,7 +694,7 @@ class IPEnrichmentService:
                         pass
             except Exception as e:
                 log.warning(
-                    "Failed to download %s: %s; will use existing %s if present", url, e, final_path
+                    "Failed to download {}: {}; will use existing {} if present", url, e, final_path
                 )
 
         # After downloads, combine on-disk JSON files into the optimized pickle
@@ -705,7 +705,7 @@ class IPEnrichmentService:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, self._combine_peeringdb_files)
         except Exception as e:
-            log.warning("Failed to combine PeeringDB datasets after download: %s", e)
+            log.warning("Failed to combine PeeringDB datasets after download: {}", e)
 
     async def _query_bgp_tools_for_ip(
         self, ip_str: str
@@ -1414,7 +1414,7 @@ async def lookup_asns_bulk(asns: t.List[t.Union[str, int]]) -> t.Dict[str, t.Dic
     # If we have missing ASNs, try a live bgp.tools WHOIS bulk query to fetch org names
     if missing and hasattr(_service, "_query_bgp_tools_bulk"):
         try:
-            log.debug("lookup_asns_bulk: querying bgp.tools for missing ASNs: %s", missing)
+            log.debug("lookup_asns_bulk: querying bgp.tools for missing ASNs: {}", missing)
             queries = [f"AS{a}" for a in missing]
             resp = await _service._query_bgp_tools_bulk(queries)
             # resp maps query -> (asn_int, org, prefix)
@@ -1426,11 +1426,11 @@ async def lookup_asns_bulk(asns: t.List[t.Union[str, int]]) -> t.Dict[str, t.Dic
                     if org:
                         try:
                             _service.asn_info[int(asn)] = {"name": org, "country": ""}
-                            log.debug("lookup_asns_bulk: updated asn_info[%s] = %s", asn, org)
+                            log.debug("lookup_asns_bulk: updated asn_info[{}] = {}", asn, org)
                         except Exception:
                             pass
         except Exception as e:
-            log.debug("lookup_asns_bulk: bgp.tools lookup failed: %s", e)
+            log.debug("lookup_asns_bulk: bgp.tools lookup failed: {}", e)
 
     # Build final results from asn_info (may include newly-populated entries)
     for asn in requested:
@@ -1456,8 +1456,13 @@ async def refresh_ip_enrichment_data(force: bool = False) -> bool:
     # administratively turned off.
     try:
         params = use_state("params")
-        if not getattr(params, "structured", None) or not params.structured.ip_enrichment.enabled:
-            log.debug("IP enrichment is disabled in configuration; skipping manual refresh")
+        if (
+            not getattr(params, "structured", None)
+            or not params.structured.ip_enrichment.enrich_traceroute
+        ):
+            log.debug(
+                "IP enrichment for traceroute is disabled in configuration; skipping manual refresh"
+            )
             return False
     except Exception:
         # If we can't read config for some reason, proceed with refresh to
