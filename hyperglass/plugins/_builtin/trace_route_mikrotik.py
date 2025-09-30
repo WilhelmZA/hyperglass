@@ -46,7 +46,9 @@ def _clean_raw_output(output: t.Union[str, t.Sequence[str]], query: "Query"):
     return cleaned
 
 
-def _clean_traceroute_only(output: t.Union[str, t.Sequence[str]], query: "Query") -> t.Union[str, t.Tuple[str, ...]]:
+def _clean_traceroute_only(
+    output: t.Union[str, t.Sequence[str]], query: "Query"
+) -> t.Union[str, t.Tuple[str, ...]]:
     """Run only the traceroute-specific cleaner and return same-shaped result.
 
     This calls the internal _clean_traceroute_output method on the

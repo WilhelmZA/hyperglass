@@ -529,7 +529,11 @@ class TraceroutePluginFrr(OutputPlugin):
                 _params = use_state("params")
             except Exception:
                 _params = None
-            if _params and getattr(_params, "structured", None) and getattr(_params.structured, "enable_for_traceroute", None) is False:
+            if (
+                _params
+                and getattr(_params, "structured", None)
+                and getattr(_params.structured, "enable_for_traceroute", None) is False
+            ):
                 return output
         else:
             try:
