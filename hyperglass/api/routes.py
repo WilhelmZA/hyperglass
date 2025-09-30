@@ -61,13 +61,13 @@ __all__ = (
 
 
 @post('/api/aspath/enrich')
-async def aspath_enrich(body: dict) -> dict:
+async def aspath_enrich(data: dict) -> dict:
     """Enrich a list of ASNs with organization names on demand.
 
-    Expected body: { "as_path": [123, 456, ...] }
+    Expected JSON payload: { "as_path": [123, 456, ...] }
     """
     try:
-        as_path = body.get('as_path', []) if isinstance(body, dict) else []
+        as_path = data.get('as_path', []) if isinstance(data, dict) else []
         if not as_path:
             return {"success": False, "error": "No as_path provided"}
 
