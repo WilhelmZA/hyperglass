@@ -1450,6 +1450,20 @@ async def lookup_asns_bulk(asns: t.List[t.Union[str, int]]) -> t.Dict[str, t.Dic
 async def refresh_ip_enrichment_data(force: bool = False) -> bool:
     """Manually refresh IP enrichment data."""
     log.info(f"Manual refresh requested (force={force})")
+    # Respect configuration: if IP enrichment is disabled, do not attempt
+    # to refresh or download PeeringDB data. This prevents manual or UI-
+    # triggered refreshes from hitting the network when the feature is
+    # administratively turned off.
+    try:
+        params = use_state("params")
+        if not getattr(params, "structured", None) or not params.structured.ip_enrichment.enabled:
+            log.debug("IP enrichment is disabled in configuration; skipping manual refresh")
+            return False
+    except Exception:
+        # If we can't read config for some reason, proceed with refresh to
+        # avoid silently ignoring an admin's request.
+        pass
+
     return await _service.ensure_data_loaded(force_refresh=force)
 
 
@@ -1464,7 +1478,10 @@ def get_data_status() -> dict:
         "last_update": None,
         "age_hours": None,
         "data_counts": {
-            "ixp_networks": len(_service.ixp_networks),
+            # Prefer the in-memory count when available; otherwise try to
+            # inspect the optimized pickle on disk so status is accurate
+            # across multiple worker processes.
+            "ixp_networks": len(_service.ixp_networks) if _service.ixp_networks else None,
         },
     }
 
@@ -1475,6 +1492,22 @@ def get_data_status() -> dict:
                 status["last_update"] = last_update.isoformat()
                 status["age_hours"] = (datetime.now() - last_update).total_seconds() / 3600
         except Exception:
+            pass
+
+    # If in-memory count is empty (likely this worker hasn't loaded the
+    # pickle), attempt to read the optimized pickle on disk to compute a
+    # reliable count for the status endpoint without mutating service state.
+    if status["data_counts"].get("ixp_networks") in (None, 0) and IXP_PICKLE_FILE.exists():
+        try:
+            with open(IXP_PICKLE_FILE, "rb") as f:
+                parsed = pickle.load(f)
+            if isinstance(parsed, list):
+                status["data_counts"]["ixp_networks"] = len(parsed)
+            else:
+                status["data_counts"]["ixp_networks"] = 0
+        except Exception:
+            # If reading the pickle fails, leave the previously reported
+            # value (None or 0). This avoids crashing the status endpoint.
             pass
 
     return status

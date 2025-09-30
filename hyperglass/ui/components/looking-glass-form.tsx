@@ -87,7 +87,7 @@ export const LookingGlassForm = (): JSX.Element => {
     return tmp;
   }, [form.queryType, form.queryLocation, getDirective]);
 
-  function submitHandler(): void {
+  async function submitHandler(): Promise<void> {
     if (process.env.NODE_ENV === 'development') {
       console.table({
         'Query Location': form.queryLocation.toString(),
@@ -95,6 +95,28 @@ export const LookingGlassForm = (): JSX.Element => {
         'Query Target': form.queryTarget,
         'Selected Directive': directive?.name ?? null,
       });
+    }
+
+    // Attempt a short, non-blocking refresh of IXP data so lookups have
+    // the best chance of using up-to-date PeeringDB information. This is
+    // intentionally short and best-effort: failures/timeouts will be
+    // ignored and will not prevent the query from submitting.
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      await fetch('/api/admin/ip-enrichment/refresh', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      clearTimeout(timeout);
+    } catch (e) {
+      // Ignore refresh errors/timeouts - proceed with query submission
+      // but log in dev for debugging.
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.debug('IP enrichment refresh failed or timed out', e);
+      }
     }
 
     // Before submitting a query, make sure the greeting is acknowledged if required. This should
