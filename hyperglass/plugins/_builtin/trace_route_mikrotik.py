@@ -10,6 +10,7 @@ from pydantic import PrivateAttr, ValidationError
 from hyperglass.log import log
 from hyperglass.exceptions.private import ParsingError
 from hyperglass.models.parsing.mikrotik import MikrotikTracerouteTable
+from hyperglass.state import use_state
 
 # Local
 from .._output import OutputPlugin
@@ -25,6 +26,24 @@ def _normalize_output(output: t.Union[str, t.Sequence[str]]) -> t.List[str]:
     if isinstance(output, str):
         return [output]
     return list(output)
+
+
+def _clean_raw_output(output: t.Union[str, t.Sequence[str]], query: "Query"):
+    """Run the Mikrotik garbage-output cleaner and return same-shaped result.
+
+    If the original input was a single string, return a string. If it was a
+    sequence, return the tuple produced by the cleaner.
+    """
+    # Import locally to avoid any potential circular imports at module load.
+    from .mikrotik_garbage_output import MikrotikGarbageOutput
+
+    out_list = _normalize_output(output)
+    cleaner = MikrotikGarbageOutput()
+    cleaned = cleaner.process(output=tuple(out_list), query=query)
+
+    if isinstance(output, str):
+        return cleaned[0] if cleaned else ""
+    return cleaned
 
 
 def parse_mikrotik_traceroute(
@@ -97,9 +116,19 @@ class TraceroutePluginMikrotik(OutputPlugin):
         if hasattr(query, "device") and query.device:
             source = getattr(query.device, "name", source)
 
-        # If structured output is not enabled for this request, return raw output
-        # so the UI will display the device-provided text instead of a structured table.
-        if not (hasattr(query, "device") and getattr(query.device, "structured_output", False)):
-            return output
+        # Decide whether to return structured data or the raw output.
+        device = getattr(query, "device", None)
+        if device is not None:
+            if not getattr(device, "structured_output", False):
+                return _clean_raw_output(output, query)
+        else:
+            try:
+                params = use_state("params")
+            except Exception:
+                params = None
+            if not (params and getattr(params, "structured", None)):
+                return _clean_raw_output(output, query)
+            if getattr(params.structured, "enable_for_traceroute", None) is False:
+                return _clean_raw_output(output, query)
 
         return parse_mikrotik_traceroute(output, target, source)
