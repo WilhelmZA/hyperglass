@@ -163,6 +163,34 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                         structured=data.device.structured_output or False,
                     )
                 else:
+                    # Best-effort: if IP enrichment is enabled, schedule a
+                    # non-blocking background refresh so the service can
+                    # update PeeringDB caches without relying on the client.
+                    try:
+                        from hyperglass.state import use_state
+
+                        params = use_state("params")
+                        if getattr(params, "structured", None) and params.structured.ip_enrichment.enabled:
+                            try:
+                                from hyperglass.external.ip_enrichment import (
+                                    refresh_ip_enrichment_data,
+                                )
+
+                                async def _bg_refresh():
+                                    try:
+                                        await refresh_ip_enrichment_data(force=False)
+                                    except Exception as e:
+                                        _log.debug("Background IP enrichment refresh failed: %s", e)
+
+                                # Schedule background refresh and don't await it.
+                                asyncio.create_task(_bg_refresh())
+                            except Exception:
+                                # If import or scheduling fails, proceed without refresh
+                                pass
+                    except Exception:
+                        # If we can't access params, skip background refresh
+                        pass
+
                     # Pass request to execution module
                     output = await execute(data)
 

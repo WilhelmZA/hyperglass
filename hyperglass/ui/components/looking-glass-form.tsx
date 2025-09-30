@@ -97,27 +97,10 @@ export const LookingGlassForm = (): JSX.Element => {
       });
     }
 
-    // Attempt a short, non-blocking refresh of IXP data so lookups have
-    // the best chance of using up-to-date PeeringDB information. This is
-    // intentionally short and best-effort: failures/timeouts will be
-    // ignored and will not prevent the query from submitting.
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
-      await fetch('/api/admin/ip-enrichment/refresh', {
-        method: 'POST',
-        signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' },
-      });
-      clearTimeout(timeout);
-    } catch (e) {
-      // Ignore refresh errors/timeouts - proceed with query submission
-      // but log in dev for debugging.
-      if (process.env.NODE_ENV === 'development') {
-        // eslint-disable-next-line no-console
-        console.debug('IP enrichment refresh failed or timed out', e);
-      }
-    }
+    // Note: IP enrichment refresh is now handled server-side on query
+    // submission when enabled. Removing client-side best-effort refresh
+    // to centralize refresh logic and avoid redundant requests from many
+    // clients.
 
     // Before submitting a query, make sure the greeting is acknowledged if required. This should
     // be handled before loading the app, but people be sneaky.
