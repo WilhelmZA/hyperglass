@@ -124,14 +124,16 @@ class TraceroutePluginMikrotik(OutputPlugin):
 
         if hasattr(query, "device") and query.device:
             source = getattr(query.device, "name", source)
+        
+        _log = log.bind(plugin=TraceroutePluginMikrotik.__name__)
 
         # Debug: emit the raw response exactly as returned by the router.
         # Do not transform, join, or normalize the output — log it verbatim.
         try:
-            log.debug("Router raw output", raw=output)
+            _log.debug("Router raw output", raw=output)
         except Exception:
             # Don't let logging interfere with normal processing
-            log.exception("Failed to log router raw output")
+            _log.exception("Failed to log router raw output")
 
         try:
             params = use_state("params")
