@@ -315,6 +315,34 @@ class IPEnrichmentService:
         )
         self._lookup_optimized = True
 
+    def _try_load_pickle(self) -> bool:
+        """Attempt to load the optimized pickle from disk without triggering downloads.
+
+        This is a best-effort, non-blocking load used during runtime lookups so
+        we don't attempt network refreshes or acquire process locks while
+        serving user requests.
+        """
+        try:
+            pickle_path = IP_ENRICHMENT_DATA_DIR / "ixp_data.pickle"
+            if pickle_path.exists():
+                try:
+                    with open(pickle_path, "rb") as f:
+                        parsed = pickle.load(f)
+                    if parsed and isinstance(parsed, list) and len(parsed) > 0:
+                        self.ixp_networks = [
+                            (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
+                        ]
+                        log.debug(
+                            "Loaded %d IXP prefixes from optimized pickle (non-blocking)",
+                            len(self.ixp_networks),
+                        )
+                        return True
+                except Exception as e:
+                    log.debug("Non-blocking pickle load failed: %s", e)
+        except Exception:
+            pass
+        return False
+
     async def ensure_data_loaded(self, force_refresh: bool = False) -> bool:
         """Ensure data is loaded and fresh from persistent files.
 
@@ -649,7 +677,13 @@ class IPEnrichmentService:
                         log.warning("Failed to download %s after %d attempts: %s", url, attempts, e)
                         return None
                     wait = base * (2 ** (attempt - 1)) + random.uniform(0, 1)
-                    log.debug("Download failed for %s (attempt %d) - retrying in %.1fs: %s", url, attempt, wait, e)
+                    log.debug(
+                        "Download failed for %s (attempt %d) - retrying in %.1fs: %s",
+                        url,
+                        attempt,
+                        wait,
+                        e,
+                    )
                     await asyncio.sleep(wait)
 
         # Download each endpoint to .temp -> .json atomically
@@ -1047,8 +1081,12 @@ class IPEnrichmentService:
         """Bulk lookup for multiple IPs, using local data first and bgp.tools bulk queries for misses."""
         results: t.Dict[str, IPInfo] = {}
 
-        # Ensure IXP data loaded
-        await self.ensure_data_loaded()
+        # Try a fast, non-blocking load of the optimized pickle; do NOT
+        # attempt a network refresh or acquire the download lock here since
+        # this function is called during request handling. If the pickle
+        # cannot be loaded, proceed with bgp.tools lookups only.
+        if not self.ixp_networks:
+            self._try_load_pickle()
 
         # Prepare misses
         misses: t.List[str] = []
@@ -1134,9 +1172,11 @@ class IPEnrichmentService:
         # lookups.
         try:
             if not self.ixp_networks:
-                await self.ensure_data_loaded()
+                # Attempt a non-blocking pickle load only; don't trigger
+                # downloads or acquire locks while handling requests.
+                self._try_load_pickle()
         except Exception:
-            log.debug("ensure_data_loaded raised an exception; continuing with on-demand lookups")
+            log.debug("Non-blocking data load failed; continuing with on-demand lookups")
 
         # Ensure lookup optimization is done
         self._optimize_lookups()
