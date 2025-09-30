@@ -24,6 +24,7 @@ from .routes import (
     queries,
     ip_enrichment_status,
     ip_enrichment_refresh,
+    aspath_enrich,
 )
 from .middleware import COMPRESSION_CONFIG, create_cors_config
 from .error_handlers import app_handler, http_handler, default_handler, validation_handler
@@ -52,6 +53,7 @@ HANDLERS = [
     query,
     ip_enrichment_status,
     ip_enrichment_refresh,
+    aspath_enrich,
 ]
 
 if not STATE.settings.disable_ui:
