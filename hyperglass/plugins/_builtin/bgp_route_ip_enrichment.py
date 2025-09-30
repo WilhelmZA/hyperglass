@@ -49,12 +49,13 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
         else:
             _log.debug("BGP next-hop IP enrichment skipped (disabled in config)")
 
-        try:
-            # Always enrich AS path ASNs with organization names
-            await output.enrich_as_path_organizations()
-            _log.debug("BGP AS path organization enrichment completed")
-        except Exception as e:
-            _log.error(f"BGP AS path organization enrichment failed: {e}")
+        # NOTE: AS path organization enrichment is intentionally deferred
+        # until the user requests it (e.g., by clicking "Show ASPATH").
+        # Performing bulk ASN lookups during query execution can cause
+        # unexpected extra latency and unnecessary external requests.
+        _log.debug(
+            "Deferred AS path organization enrichment until user requests Show ASPATH"
+        )
 
     def process(self, *, output: "OutputDataModel", query: "Query") -> "OutputDataModel":
         """Enrich structured BGP route data with next-hop IP enrichment information."""
@@ -63,7 +64,7 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
             return output
 
         _log = log.bind(plugin=self.__class__.__name__)
-        _log.warning(f"🔍 BGP ROUTE PLUGIN STARTED - Processing {len(output.routes)} BGP routes")
+        _log.warning(f"BGP ROUTE PLUGIN STARTED - Processing {len(output.routes)} BGP routes")
 
         # Check if IP enrichment is enabled in config
         enrich_next_hop = True

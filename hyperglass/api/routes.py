@@ -60,6 +60,27 @@ __all__ = (
 )
 
 
+@post('/api/aspath/enrich')
+async def aspath_enrich(body: dict) -> dict:
+    """Enrich a list of ASNs with organization names on demand.
+
+    Expected body: { "as_path": [123, 456, ...] }
+    """
+    try:
+        as_path = body.get('as_path', []) if isinstance(body, dict) else []
+        if not as_path:
+            return {"success": False, "error": "No as_path provided"}
+
+        # Convert to strings and call the existing bulk lookup
+        from hyperglass.external.ip_enrichment import lookup_asns_bulk
+
+        asn_strings = [str(a) for a in as_path]
+        results = await lookup_asns_bulk(asn_strings)
+        return {"success": True, "asn_organizations": results}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @get("/api/devices/{id:str}", dependencies={"devices": Provide(get_devices)})
 async def device(devices: Devices, id: str) -> APIDevice:
     """Retrieve a device by ID."""
