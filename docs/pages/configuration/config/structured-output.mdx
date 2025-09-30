@@ -32,8 +32,9 @@ For devices with structured traceroute support (Arista EOS, FRRouting, Huawei VR
 | `structured.communities.items`    | List of Strings |               | List of communities to match (used by `deny` and `permit` modes).                                                                     |
 | `structured.communities.names`    | Dict            |               | Dictionary mapping BGP community codes to friendly names (used by `name` mode).                                                       |
 | `structured.ip_enrichment.cache_timeout`    | Integer         | 86400         | Cache timeout in seconds for IP enrichment data (minimum 24 hours/86400 seconds).                                                   |
-| `structured.ip_enrichment.enrich_traceroute`| Boolean         | true          | Enrich traceroute hop IP addresses with ASN, organization, and IXP information.                                                      |
-| `structured.ip_enrichment.enrich_traceroute`| Boolean         | true          | Enrich traceroute hop IP addresses with ASN, organization, and IXP information.                                                      |
+| `structured.ip_enrichment.enrich_traceroute`| Boolean         | true          | When `structured:` is present, enable IP enrichment of traceroute hops (ASN, org, IXP). This must be true for enrichment to run.   |
+| `structured.enable_for_traceroute`| Boolean         | (when structured present) true | When `structured:` is present this controls whether the structured traceroute table output is shown. Set to false to force raw router output. |
+| `structured.enable_for_bgp_route`| Boolean         | (when structured present) true | When `structured:` is present this controls whether the structured BGP route table output is shown. Set to false to force raw router output. |
 
 ### RPKI Examples
 
@@ -124,8 +125,10 @@ structured:
 
 ```yaml filename="config.yaml" copy {2-4}
 structured:
+    # Ensure `structured:` exists to enable structured output. By default the
+    # structured table output is enabled when this block is present. To disable
+    # the structured traceroute table, set `structured.enable_for_traceroute: false`.
     ip_enrichment:
-        enabled: true
         enrich_traceroute: true
 ```
 
@@ -134,7 +137,6 @@ structured:
 ```yaml filename="config.yaml" copy {2-5}
 structured:
     ip_enrichment:
-        enabled: true
         enrich_traceroute: true
         cache_timeout: 172800  # 48 hours
 ```
@@ -144,7 +146,6 @@ structured:
 ```yaml filename="config.yaml" copy {2-4}
 structured:
     ip_enrichment:
-        enabled: true
         enrich_traceroute: true
         cache_timeout: 86400  # 24 hours (minimum)
 ```
@@ -187,7 +188,6 @@ structured:
             "65000:1000": "Transit Routes"
             "65000:2000": "Peer Routes"
     ip_enrichment:
-        enabled: true
         enrich_traceroute: true
         cache_timeout: 86400
 ```
@@ -200,7 +200,6 @@ structured:
         mode: external
         backend: cloudflare
     ip_enrichment:
-        enabled: true
         enrich_traceroute: true
 ```
 
@@ -209,7 +208,7 @@ structured:
 ```yaml filename="config.yaml" copy {2-4}
 structured:
     ip_enrichment:
-        enabled: false  # Traceroute will show basic hop info without ASN/org data
+        enrich_traceroute: false  # Traceroute will show basic hop info without ASN/org data
 ```
 
 <Callout type="warning" emoji="⚠️">

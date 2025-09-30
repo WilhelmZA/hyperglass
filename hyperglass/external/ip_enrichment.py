@@ -1459,6 +1459,7 @@ async def refresh_ip_enrichment_data(force: bool = False) -> bool:
         if (
             not getattr(params, "structured", None)
             or not params.structured.ip_enrichment.enrich_traceroute
+            or getattr(params.structured, "enable_for_traceroute", None) is False
         ):
             log.debug(
                 "IP enrichment for traceroute is disabled in configuration; skipping manual refresh"

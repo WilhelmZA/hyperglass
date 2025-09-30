@@ -194,6 +194,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                         if (
                             getattr(params, "structured", None)
                             and params.structured.ip_enrichment.enrich_traceroute
+                            and getattr(params.structured, "enable_for_traceroute", None) is not False
                         ):
                             try:
                                 from hyperglass.external.ip_enrichment import (
@@ -348,6 +349,7 @@ async def ip_enrichment_refresh(force: bool = False) -> dict:
             if (
                 not getattr(params, "structured", None)
                 or not params.structured.ip_enrichment.enrich_traceroute
+                or getattr(params.structured, "enable_for_traceroute", None) is False
             ):
                 return {"success": False, "message": "IP enrichment for traceroute is not enabled"}
         except Exception:

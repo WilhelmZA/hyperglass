@@ -13,9 +13,14 @@ async def enrich_output_with_ip_enrichment(output: OutputDataModel) -> OutputDat
     """Enrich output data with IP enrichment information."""
     params = use_state("params")
 
-    # If traceroute enrichment is not enabled, skip enrichment entirely
-    if not params.structured.ip_enrichment.enrich_traceroute:
-        log.debug("IP enrichment for traceroute disabled in configuration, skipping")
+    # If structured block isn't present or traceroute enrichment explicitly disabled,
+    # skip enrichment entirely.
+    if (
+        not getattr(params, "structured", None)
+        or not params.structured.ip_enrichment.enrich_traceroute
+        or getattr(params.structured, "enable_for_traceroute", None) is False
+    ):
+        log.debug("IP enrichment for traceroute disabled or structured config missing, skipping")
         return output
 
     _log = log.bind(enrichment="ip_enrichment")
@@ -23,7 +28,13 @@ async def enrich_output_with_ip_enrichment(output: OutputDataModel) -> OutputDat
 
     try:
         if isinstance(output, TracerouteResult):
-            if params.structured.ip_enrichment.enrich_traceroute:
+            # Only enrich traceroute results when structured config exists,
+            # per-feature top-level flag isn't False, and ip_enrichment is enabled.
+            if (
+                getattr(params, "structured", None)
+                and params.structured.ip_enrichment.enrich_traceroute
+                and getattr(params.structured, "enable_for_traceroute", None) is not False
+            ):
                 _log.debug("Enriching traceroute hops with ASN information")
                 await output.enrich_with_ip_enrichment()
 
