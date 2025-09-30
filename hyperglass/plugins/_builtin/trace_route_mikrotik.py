@@ -7,7 +7,7 @@ import typing as t
 from pydantic import PrivateAttr, ValidationError
 
 # Project
-from hyperglass.log import log
+from hyperglass.log import log, log as _log
 from hyperglass.exceptions.private import ParsingError
 from hyperglass.models.parsing.mikrotik import MikrotikTracerouteTable
 from hyperglass.state import use_state
@@ -119,7 +119,6 @@ class TraceroutePluginMikrotik(OutputPlugin):
         # Decide whether to return structured data or the raw output.
         device = getattr(query, "device", None)
             # DEBUG: Log the structured_output and params flag for diagnosis
-            from hyperglass.log import log as _log
             try:
                 params = use_state("params")
             except Exception:
