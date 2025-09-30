@@ -27,25 +27,6 @@ def _normalize_output(output: t.Union[str, t.Sequence[str]]) -> t.List[str]:
         return [output]
     return list(output)
 
-
-def _clean_raw_output(output: t.Union[str, t.Sequence[str]], query: "Query"):
-    """Run the Mikrotik garbage-output cleaner and return same-shaped result.
-
-    If the original input was a single string, return a string. If it was a
-    sequence, return the tuple produced by the cleaner.
-    """
-    # Import locally to avoid any potential circular imports at module load.
-    from .mikrotik_garbage_output import MikrotikGarbageOutput
-
-    out_list = _normalize_output(output)
-    cleaner = MikrotikGarbageOutput()
-    cleaned = cleaner.process(output=tuple(out_list), query=query)
-
-    if isinstance(output, str):
-        return cleaned[0] if cleaned else ""
-    return cleaned
-
-
 def _clean_traceroute_only(
     output: t.Union[str, t.Sequence[str]], query: "Query"
 ) -> t.Union[str, t.Tuple[str, ...]]:
@@ -143,6 +124,14 @@ class TraceroutePluginMikrotik(OutputPlugin):
 
         if hasattr(query, "device") and query.device:
             source = getattr(query.device, "name", source)
+
+        # Debug: emit the raw response exactly as returned by the router.
+        # Do not transform, join, or normalize the output — log it verbatim.
+        try:
+            log.debug("Router raw output", raw=output)
+        except Exception:
+            # Don't let logging interfere with normal processing
+            log.exception("Failed to log router raw output")
 
         try:
             params = use_state("params")
