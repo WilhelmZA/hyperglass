@@ -46,6 +46,32 @@ def _clean_raw_output(output: t.Union[str, t.Sequence[str]], query: "Query"):
     return cleaned
 
 
+def _clean_traceroute_only(output: t.Union[str, t.Sequence[str]], query: "Query") -> t.Union[str, t.Tuple[str, ...]]:
+    """Run only the traceroute-specific cleaner and return same-shaped result.
+
+    This calls the internal _clean_traceroute_output method on the
+    MikrotikGarbageOutput plugin so the cleaned traceroute text is used
+    as the 'raw' output exposed to clients.
+    """
+    from .mikrotik_garbage_output import MikrotikGarbageOutput
+
+    out_list = _normalize_output(output)
+    cleaner = MikrotikGarbageOutput()
+
+    cleaned_list: t.List[str] = []
+    for piece in out_list:
+        try:
+            cleaned_piece = cleaner._clean_traceroute_output(piece)
+        except Exception:
+            # If cleaner fails for any piece, fall back to the original piece
+            cleaned_piece = piece
+        cleaned_list.append(cleaned_piece)
+
+    if isinstance(output, str):
+        return cleaned_list[0] if cleaned_list else ""
+    return tuple(cleaned_list)
+
+
 def parse_mikrotik_traceroute(
     output: t.Union[str, t.Sequence[str]], target: str, source: str
 ) -> "OutputDataModel":
@@ -116,35 +142,21 @@ class TraceroutePluginMikrotik(OutputPlugin):
         if hasattr(query, "device") and query.device:
             source = getattr(query.device, "name", source)
 
-        # Decide whether to return structured data or the raw output.
-        device = getattr(query, "device", None)
-        # DEBUG: Log the structured_output and params flag for diagnosis
         try:
             params = use_state("params")
         except Exception:
             params = None
-        _log.debug(
-            f"MikroTikPlugin: device.structured_output={getattr(device, 'structured_output', None)} params.structured.enable_for_traceroute={getattr(getattr(params, 'structured', None), 'enable_for_traceroute', None)}"
-        )
 
-        if device is not None:
-            if not getattr(device, "structured_output", False):
-                return _clean_raw_output(output, query)
-            # If a global structured flag explicitly disables traceroute, obey it.
-            try:
-                _params = use_state("params")
-            except Exception:
-                _params = None
-            if _params and getattr(_params, "structured", None) and getattr(_params.structured, "enable_for_traceroute", None) is False:
-                return _clean_raw_output(output, query)
+        device = getattr(query, "device", None)
+
+        if device is None:
+            return _clean_traceroute_only(output, query)
         else:
-            try:
-                params = use_state("params")
-            except Exception:
-                params = None
-            if not (params and getattr(params, "structured", None)):
-                return _clean_raw_output(output, query)
+            if params is None:
+                return _clean_traceroute_only(output, query)
+            if not getattr(params, "structured", None):
+                return _clean_traceroute_only(output, query)
             if getattr(params.structured, "enable_for_traceroute", None) is False:
-                return _clean_raw_output(output, query)
+                return _clean_traceroute_only(output, query)
 
         return parse_mikrotik_traceroute(output, target, source)
