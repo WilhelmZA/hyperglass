@@ -130,6 +130,13 @@ class TraceroutePluginMikrotik(OutputPlugin):
         if device is not None:
             if not getattr(device, "structured_output", False):
                 return _clean_raw_output(output, query)
+            # If a global structured flag explicitly disables traceroute, obey it.
+            try:
+                _params = use_state("params")
+            except Exception:
+                _params = None
+            if _params and getattr(_params, "structured", None) and getattr(_params.structured, "enable_for_traceroute", None) is False:
+                return _clean_raw_output(output, query)
         else:
             try:
                 params = use_state("params")

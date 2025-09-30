@@ -525,6 +525,12 @@ class TraceroutePluginFrr(OutputPlugin):
         if device is not None:
             if not getattr(device, "structured_output", False):
                 return output
+            try:
+                _params = use_state("params")
+            except Exception:
+                _params = None
+            if _params and getattr(_params, "structured", None) and getattr(_params.structured, "enable_for_traceroute", None) is False:
+                return output
         else:
             try:
                 params = use_state("params")
