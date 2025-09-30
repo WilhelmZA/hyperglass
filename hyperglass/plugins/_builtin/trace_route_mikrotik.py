@@ -97,4 +97,9 @@ class TraceroutePluginMikrotik(OutputPlugin):
         if hasattr(query, "device") and query.device:
             source = getattr(query.device, "name", source)
 
+        # If structured output is not enabled for this request, return raw output
+        # so the UI will display the device-provided text instead of a structured table.
+        if not (hasattr(query, "device") and getattr(query.device, "structured_output", False)):
+            return output
+
         return parse_mikrotik_traceroute(output, target, source)

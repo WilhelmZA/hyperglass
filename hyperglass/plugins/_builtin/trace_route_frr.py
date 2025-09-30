@@ -520,6 +520,11 @@ class TraceroutePluginFrr(OutputPlugin):
                 query.device, "name", "unknown"
             )
 
+        # If structured output is not enabled for this request, return raw output
+        # unchanged so the UI shows the device text output.
+        if not (hasattr(query, "device") and getattr(query.device, "structured_output", False)):
+            return output
+
         return parse_frr_traceroute(
             output=output,
             target=target,
