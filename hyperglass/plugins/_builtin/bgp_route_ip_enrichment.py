@@ -71,16 +71,21 @@ class ZBgpRouteIpEnrichment(OutputPlugin):
             from hyperglass.state import use_state
 
             params = use_state("params")
+            # If enrichment is disabled globally, we should still perform
+            # AS path organization enrichment (e.g., when a user clicks
+            # "Show ASPATH"). Only skip next-hop IP enrichment in that case.
             if not params.structured.ip_enrichment.enabled:
-                _log.debug("IP enrichment disabled in configuration")
-                return output
-
-            # Check next-hop enrichment setting but don't exit - we still want ASN org enrichment
-            enrich_next_hop = params.structured.ip_enrichment.enrich_next_hop
-            if not enrich_next_hop:
                 _log.debug(
-                    "Next-hop enrichment disabled in configuration - will skip next-hop lookup but continue with ASN organization enrichment"
+                    "IP enrichment disabled in configuration - skipping next-hop enrichment but will enrich AS path organizations"
                 )
+                enrich_next_hop = False
+            else:
+                # Check next-hop enrichment setting but don't exit - we still want ASN org enrichment
+                enrich_next_hop = params.structured.ip_enrichment.enrich_next_hop
+                if not enrich_next_hop:
+                    _log.debug(
+                        "Next-hop enrichment disabled in configuration - will skip next-hop lookup but continue with ASN organization enrichment"
+                    )
         except Exception as e:
             _log.debug(f"Could not check IP enrichment config: {e}")
 

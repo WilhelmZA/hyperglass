@@ -287,6 +287,16 @@ async def ip_enrichment_refresh(force: bool = False) -> dict:
     """Manually refresh IP enrichment data."""
     try:
         from hyperglass.external.ip_enrichment import refresh_ip_enrichment_data
+        # If enrichment is disabled in config, return a clear message
+        try:
+            from hyperglass.state import use_state
+
+            params = use_state("params")
+            if not getattr(params, "structured", None) or not params.structured.ip_enrichment.enabled:
+                return {"success": False, "message": "IP enrichment is not enabled"}
+        except Exception:
+            # If config can't be read, proceed with refresh call and let it decide
+            pass
 
         success = await refresh_ip_enrichment_data(force=force)
         return {
