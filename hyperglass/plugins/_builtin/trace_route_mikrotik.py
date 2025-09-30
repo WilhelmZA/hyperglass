@@ -118,12 +118,15 @@ class TraceroutePluginMikrotik(OutputPlugin):
 
         # Decide whether to return structured data or the raw output.
         device = getattr(query, "device", None)
-            # DEBUG: Log the structured_output and params flag for diagnosis
-            try:
-                params = use_state("params")
-            except Exception:
-                params = None
-            _log.debug(f"MikroTikPlugin: device.structured_output={getattr(device, 'structured_output', None)} params.structured.enable_for_traceroute={getattr(getattr(params, 'structured', None), 'enable_for_traceroute', None)}")
+        # DEBUG: Log the structured_output and params flag for diagnosis
+        try:
+            params = use_state("params")
+        except Exception:
+            params = None
+        _log.debug(
+            f"MikroTikPlugin: device.structured_output={getattr(device, 'structured_output', None)} params.structured.enable_for_traceroute={getattr(getattr(params, 'structured', None), 'enable_for_traceroute', None)}"
+        )
+
         if device is not None:
             if not getattr(device, "structured_output", False):
                 return _clean_raw_output(output, query)
