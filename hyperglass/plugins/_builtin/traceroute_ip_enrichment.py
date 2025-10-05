@@ -36,12 +36,16 @@ class ZTracerouteIpEnrichment(OutputPlugin):
 
     def _reverse_dns_lookup(self, ip: str) -> t.Optional[str]:
         """Perform reverse DNS lookup for an IP address."""
+        from hyperglass.settings import Settings
+
         try:
             hostname = socket.gethostbyaddr(ip)[0]
-            log.debug(f"Reverse DNS for {ip}: {hostname}")
+            if Settings.debug:
+                log.debug(f"Reverse DNS for {ip}: {hostname}")
             return hostname
         except (socket.herror, socket.gaierror, socket.timeout) as e:
-            log.debug(f"Reverse DNS lookup failed for {ip}: {e}")
+            if Settings.debug:
+                log.debug(f"Reverse DNS lookup failed for {ip}: {e}")
             return None
 
     async def _reverse_dns_lookup_async(self, ip: str) -> t.Optional[str]:
@@ -53,7 +57,10 @@ class ZTracerouteIpEnrichment(OutputPlugin):
         try:
             return await asyncio.to_thread(self._reverse_dns_lookup, ip)
         except Exception as e:
-            log.debug(f"Reverse DNS async lookup error for {ip}: {e}")
+            from hyperglass.settings import Settings
+
+            if Settings.debug:
+                log.debug(f"Reverse DNS async lookup error for {ip}: {e}")
             return None
 
     async def _enrich_async(self, output: TracerouteResult) -> None:
@@ -86,7 +93,10 @@ class ZTracerouteIpEnrichment(OutputPlugin):
                 res = results[idx]
                 idx += 1
                 if isinstance(res, Exception):
-                    log.debug(f"Reverse DNS lookup raised for {hop.ip_address}: {res}")
+                    from hyperglass.settings import Settings
+
+                    if Settings.debug:
+                        log.debug(f"Reverse DNS lookup raised for {hop.ip_address}: {res}")
                 else:
                     hop.hostname = res
 
@@ -97,9 +107,13 @@ class ZTracerouteIpEnrichment(OutputPlugin):
             return output
 
         _log = log.bind(plugin=self.__class__.__name__)
-        _log.debug(f"Starting IP enrichment for {len(output.hops)} traceroute hops")
 
-        # Check if IP enrichment is enabled in config
+        # Import Settings for debug gating
+        from hyperglass.settings import Settings
+
+        _log.info(
+            f"Starting IP enrichment for {len(output.hops)} traceroute hops"
+        )  # Check if IP enrichment is enabled in config
         try:
             from hyperglass.state import use_state
 
@@ -111,7 +125,8 @@ class ZTracerouteIpEnrichment(OutputPlugin):
                 or not params.structured.ip_enrichment.enrich_traceroute
                 or getattr(params.structured, "enable_for_traceroute", None) is False
             ):
-                _log.debug("IP enrichment for traceroute disabled in configuration")
+                if Settings.debug:
+                    _log.debug("IP enrichment for traceroute disabled in configuration")
                 # Still do reverse DNS if enrichment is disabled
                 # Perform concurrent reverse DNS lookups for hops needing hostnames
                 ips = [
@@ -155,13 +170,17 @@ class ZTracerouteIpEnrichment(OutputPlugin):
                                 if not isinstance(res, Exception):
                                     hop.hostname = res
                     except Exception as e:
-                        _log.debug(f"Concurrent reverse DNS failed (fallback to sequential): {e}")
+                        if Settings.debug:
+                            _log.debug(
+                                f"Concurrent reverse DNS failed (fallback to sequential): {e}"
+                            )
                         for hop in output.hops:
                             if hop.ip_address and hop.hostname is None:
                                 hop.hostname = self._reverse_dns_lookup(hop.ip_address)
                 return output
         except Exception as e:
-            _log.debug(f"Could not check IP enrichment config: {e}")
+            if Settings.debug:
+                _log.debug(f"Could not check IP enrichment config: {e}")
 
         # Use the built-in enrichment method from TracerouteResult
         try:
@@ -181,11 +200,11 @@ class ZTracerouteIpEnrichment(OutputPlugin):
             except RuntimeError:
                 # No event loop, create one
                 asyncio.run(self._enrich_async(output))
-            _log.debug("IP enrichment completed successfully")
+            _log.info("IP enrichment completed successfully")
         except Exception as e:
             _log.error(f"IP enrichment failed: {e}")
 
         # Reverse DNS lookups already handled in _enrich_async for missing hostnames
 
-        _log.debug(f"Completed enrichment for traceroute to {output.target}")
+        _log.info(f"Completed enrichment for traceroute to {output.target}")
         return output
