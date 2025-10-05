@@ -317,28 +317,36 @@ class IPEnrichmentService:
             if self.ixp_networks:
                 return True
 
-            # Try to load existing pickle file
-            try:
-                pickle_path = IP_ENRICHMENT_DATA_DIR / "ixp_data.pickle"
-                if pickle_path.exists():
-                    with open(pickle_path, "rb") as f:
-                        parsed = pickle.load(f)
-                    if parsed and isinstance(parsed, list) and len(parsed) > 0:
-                        self.ixp_networks = [
-                            (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
-                        ]
-                        if Settings.debug:
-                            log.debug(f"Loaded {len(self.ixp_networks)} IXP prefixes from pickle")
-                        return True
-                    else:
-                        if Settings.debug:
-                            log.debug("Pickle exists but appears empty, will refresh")
-            except Exception as e:
-                if Settings.debug:
-                    log.debug(f"Failed to load pickle: {e}")
+            # Check if refresh is needed first
+            should_refresh, reason = should_refresh_data()
 
-        # Check if refresh is needed
-        should_refresh, reason = should_refresh_data()
+            if not should_refresh:
+                # Try to load existing pickle file if data is fresh
+                try:
+                    pickle_path = IP_ENRICHMENT_DATA_DIR / "ixp_data.pickle"
+                    if pickle_path.exists():
+                        with open(pickle_path, "rb") as f:
+                            parsed = pickle.load(f)
+                        if parsed and isinstance(parsed, list) and len(parsed) > 0:
+                            self.ixp_networks = [
+                                (ip_address(net), prefixlen, name)
+                                for net, prefixlen, name in parsed
+                            ]
+                            if Settings.debug:
+                                log.debug(
+                                    f"Loaded {len(self.ixp_networks)} IXP prefixes from pickle"
+                                )
+                            return True
+                        else:
+                            if Settings.debug:
+                                log.debug("Pickle exists but appears empty, will refresh")
+                            should_refresh = True
+                            reason = "Pickle file is empty"
+                except Exception as e:
+                    if Settings.debug:
+                        log.debug(f"Failed to load pickle: {e}")
+                    should_refresh = True
+                    reason = f"Failed to load pickle: {e}"
 
         if not should_refresh:
             # Try to build pickle from existing JSON files
