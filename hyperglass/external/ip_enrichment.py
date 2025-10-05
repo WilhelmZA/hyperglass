@@ -391,34 +391,33 @@ class IPEnrichmentService:
 
         # Acquire lock and refresh IXP list only
         async with _download_lock:
-            # Double-check in case another worker refreshed
-            try:
-                # Double-check: if another worker already refreshed the IXP file
-                # while we were waiting for the lock, load it.
-                if IXP_PICKLE_FILE.exists():
+            # Double-check: if another worker already refreshed the IXP file
+            # while we were waiting for the lock, verify it's actually fresh
+            if IXP_PICKLE_FILE.exists():
+                # Re-check if data is still expired after waiting for lock
+                should_refresh_postlock, reason_postlock = should_refresh_data()
+                if not should_refresh_postlock:
                     try:
                         with open(IXP_PICKLE_FILE, "rb") as f:
                             parsed = pickle.load(f)
+                        if parsed and isinstance(parsed, list) and len(parsed) > 0:
+                            self.ixp_networks = [
+                                (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
+                            ]
+                            if Settings.debug:
+                                log.debug(
+                                    f"Another worker refreshed data while waiting for lock: {reason_postlock}"
+                                )
+                            log.info(
+                                f"Loaded {len(self.ixp_networks)} IXP prefixes from fresh pickle (post-lock)"
+                            )
+                            return True
                     except Exception as e:
-                        log.warning(
-                            f"Existing optimized pickle is invalid after lock wait: {e}; will attempt to refresh"
-                        )
-                        parsed = None
-
-                    if not parsed or (isinstance(parsed, list) and len(parsed) == 0):
-                        log.warning(
-                            "Existing optimized pickle is empty after lock wait; will attempt to refresh",
-                        )
-                    else:
-                        self.ixp_networks = [
-                            (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
-                        ]
-                        log.info(
-                            f"Loaded {len(self.ixp_networks)} IXP prefixes from optimized pickle (post-lock)"
-                        )
-                        return True
-            except Exception:
-                pass
+                        if Settings.debug:
+                            log.debug(f"Failed to load post-lock pickle: {e}")
+                else:
+                    if Settings.debug:
+                        log.debug(f"Data still expired after lock wait: {reason_postlock}")
 
             if not httpx:
                 log.error("httpx not available: cannot download PeeringDB prefixes")
