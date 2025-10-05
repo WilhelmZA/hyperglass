@@ -54,23 +54,18 @@ def _clean_traceroute_only(
 def parse_mikrotik_traceroute(
     output: t.Union[str, t.Sequence[str]], target: str, source: str
 ) -> "OutputDataModel":
-    """Parse a MikroTik traceroute text response."""
-    result = None
+    """Parse a cleaned MikroTik traceroute text response."""
     out_list = _normalize_output(output)
     _log = log.bind(plugin=TraceroutePluginMikrotik.__name__)
     combined_output = "\n".join(out_list)
 
     if Settings.debug:
-        contains_paging = "-- [Q quit|C-z pause]" in combined_output
-        contains_multiple_tables = combined_output.count("ADDRESS") > 1
         _log.debug(
-            "Received traceroute plugin input",
+            "Parsing cleaned traceroute input",
             target=target,
             source=source,
             pieces=len(out_list),
             combined_len=len(combined_output),
-            contains_paging=contains_paging,
-            multiple_tables=contains_multiple_tables,
         )
 
     try:
@@ -143,17 +138,17 @@ class TraceroutePluginMikrotik(OutputPlugin):
             if Settings.debug:
                 _log.debug("No device found, using cleanup-only mode")
             return _clean_traceroute_only(output, query)
-        
+
         if params is None:
             if Settings.debug:
                 _log.debug("No params found, using cleanup-only mode")
             return _clean_traceroute_only(output, query)
-        
+
         if not getattr(params, "structured", None):
             if Settings.debug:
                 _log.debug("Structured output not configured, using cleanup-only mode")
             return _clean_traceroute_only(output, query)
-        
+
         if getattr(params.structured, "enable_for_traceroute", None) is False:
             if Settings.debug:
                 _log.debug("Structured output disabled for traceroute, using cleanup-only mode")
@@ -161,4 +156,10 @@ class TraceroutePluginMikrotik(OutputPlugin):
 
         if Settings.debug:
             _log.debug("Processing traceroute with structured output enabled")
-        return parse_mikrotik_traceroute(output, target, source)
+
+        # Clean the output first using garbage cleaner before parsing
+        cleaned_output = _clean_traceroute_only(output, query)
+        if Settings.debug:
+            _log.debug("Applied garbage cleaning before structured parsing")
+
+        return parse_mikrotik_traceroute(cleaned_output, target, source)

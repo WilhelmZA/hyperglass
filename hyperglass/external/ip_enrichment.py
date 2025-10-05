@@ -402,7 +402,8 @@ class IPEnrichmentService:
                             parsed = pickle.load(f)
                         if parsed and isinstance(parsed, list) and len(parsed) > 0:
                             self.ixp_networks = [
-                                (ip_address(net), prefixlen, name) for net, prefixlen, name in parsed
+                                (ip_address(net), prefixlen, name)
+                                for net, prefixlen, name in parsed
                             ]
                             if Settings.debug:
                                 log.debug(
