@@ -27,6 +27,7 @@ def _normalize_output(output: t.Union[str, t.Sequence[str]]) -> t.List[str]:
         return [output]
     return list(output)
 
+
 def _clean_traceroute_only(
     output: t.Union[str, t.Sequence[str]], query: "Query"
 ) -> t.Union[str, t.Tuple[str, ...]]:
@@ -124,7 +125,7 @@ class TraceroutePluginMikrotik(OutputPlugin):
 
         if hasattr(query, "device") and query.device:
             source = getattr(query.device, "name", source)
-        
+
         _log = log.bind(plugin=TraceroutePluginMikrotik.__name__)
 
         # Debug: emit the raw response exactly as returned by the router.
