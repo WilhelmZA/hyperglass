@@ -101,12 +101,12 @@ FRRouting_Traceroute = BuiltinDirective(
         RuleWithIPv4(
             condition="0.0.0.0/0",
             action="permit",
-            command="traceroute -4 -w 1 -q 1 -s {source4} {target}",
+            command="traceroute -4 -I -n -q 1 -w 1 -s {source4} {target}",
         ),
         RuleWithIPv6(
             condition="::/0",
             action="permit",
-            command="traceroute -6 -w 1 -q 1 -s {source6} {target}",
+            command="traceroute -6 -I -n -q 1 -w 1 -s {source6} {target}",
         ),
     ],
     field=Text(description="IP Address, Prefix, or Hostname"),
