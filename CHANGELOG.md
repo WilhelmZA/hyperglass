@@ -6,23 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## 2.1.0 - 2025-12-19
+
+### Added
+- Structured traceroute output with vendor parsers (Arista, FRR, Huawei, Juniper, Mikrotik), traceroute data model, and UI table/fields. - @WilhelmZA
+- IP enrichment service and traceroute/AS-path enrichment plugins, including ASN/IXP lookups and on-demand ASN organization enrichment. - @CarlosSuporteISP, @WilhelmZA
+- [#304](https://github.com/thatmattlove/hyperglass/pull/304): Add FRR structured output for BGP Routes - @chriswiggins
+- Huawei and Mikrotik BGP route structured parsing/route string plugins plus Mikrotik input normalization and output cleanup plugins. - @CarlosSuporteISP, @WilhelmZA
+- BGP community friendly names and expanded RPKI configuration (server URL/backend selection, initial Routinator support). - @CarlosSuporteISP, @WilhelmZA
+- Documentation: complete configuration reference, structured output updates, quick-start examples, and user guide. - @CarlosSuporteISP, @WilhelmZA
+
+### Updated
+- [#245](https://github.com/thatmattlove/hyperglass/issues/245): v2.0.0 Vyos version platforms - Moved to latest LTS command set. - @ServerForge
+- [#292](https://github.com/thatmattlove/hyperglass/pull/292): Updates Mikrotik BGP route command so supernets are selected as well as exact matches. - @GrandArcher
+- Standardized BGP parsers to use `BGPRoute` objects and harmonized variable naming across vendors.
+- Refactored IP enrichment execution flow and removed unused enrichment admin endpoints.
+- Updated Dockerfile/compose and dependency constraints (typer/click compatibility; added requests).
+- README and sample configuration files refreshed and cleaned up.
+
 ### Fixed
 - [#280](https://github.com/thatmattlove/hyperglass/issues/280): Fix: `condition: None` caused error in directive @Jimmy01240397
 - [#306](https://github.com/thatmattlove/hyperglass/issues/306): Fix: allow integer values in ext_community_list_raw field for Arista BGP - @cooperwinser
 - [#311](https://github.com/thatmattlove/hyperglass/issues/311): Fix: device and directive errors.
-- [#315](https://github.com/thatmattlove/hyperglass/issues/315): Impossibile to use command "BGP Route" with Huawei NetEngine 8000 
-- [#315](https://github.com/thatmattlove/hyperglass/issues/187): Error in bgp_router query on Huawei
+- [#315](https://github.com/thatmattlove/hyperglass/issues/315): Impossible to use command "BGP Route" with Huawei NetEngine 8000
+- [#187](https://github.com/thatmattlove/hyperglass/issues/187): Error in bgp_router query on Huawei
 - [#325](https://github.com/thatmattlove/hyperglass/pull/325): Fix code block padding in the documentation - @jagardaniel
-- [#332](https://github.com/thatmattlove/hyperglass/pull/332): Fix custom proxy port support in SSH proxy tunnels @jessiebryan 
-
-### Updated
-
-- [#245](https://github.com/thatmattlove/hyperglass/issues/245): v2.0.0 Vyos version platforms - Moved to latest LTS command set. - @ServerForge
-- [#292](https://github.com/thatmattlove/hyperglass/pull/292): Updates Mikrotik BGP route command so supernets are selected as well as exact matches. - @GrandArcher
-
-### Added
-
-- [#304](https://github.com/thatmattlove/hyperglass/pull/304): Add FRR structured output for BGP Routes - @chriswiggins
+- [#332](https://github.com/thatmattlove/hyperglass/pull/332): Fix custom proxy port support in SSH proxy tunnels @jessiebryan
+- Device config field validation and directive rule deserialization edge cases.
+- Mikrotik output cleaning, traceroute deduplication, missing-field handling, and non-string output guards.
+- BGP community name validation error messaging, UI BGP table field formatting, and API docs rendering.
 
 ## 2.0.4 - 2024-06-30
 
