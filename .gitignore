@@ -4,6 +4,7 @@ TODO*
 .env
 dev-build.sh
 dev-docker/
+build-pipelines/
 
 test.py
 .DS_Store

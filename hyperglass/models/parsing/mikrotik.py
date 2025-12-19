@@ -9,6 +9,7 @@ from pydantic import ConfigDict
 
 # Project
 from hyperglass.log import log
+from hyperglass.settings import Settings
 from hyperglass.models.data.bgp_route import BGPRoute, BGPRouteTable  # Add BGPRoute import
 
 # Local
@@ -32,8 +33,9 @@ def remove_prefix(text: str, prefix: str) -> str:
 # The value can be quoted or a single word.
 TOKEN_RE = re.compile(r'([a-zA-Z0-9_.-]+)=(".*?"|\S+)')
 
-# Regex to find flags at the beginning of a line (e.g., "Ab   dst-address=...")
-FLAGS_RE = re.compile(r"^\s*([DXIAcmsroivmyH\+b]+)\s+")
+# Regex to find flags at the beginning of a line (e.g., "Ab   dst-address=...").
+# Include filtered flag (F/f) so filtered routes split into their own entries.
+FLAGS_RE = re.compile(r"^\s*([DXIAFfcmsroivmyH\+b]+)\s+")
 
 
 class MikrotikBase(HyperglassModel, extra="ignore"):
@@ -111,15 +113,17 @@ class MikrotikRouteEntry(MikrotikBase):
 
 
 def _extract_paths(lines: t.List[str]) -> MikrotikPaths:
-    """Simple count based on lines with dst/dst-address and 'A' flag."""
+    """Simple count based on lines with dst/dst-address and preferred 'A' flag."""
     available = 0
     best = 0
     for raw in lines:
         if ("dst-address=" in raw) or (" dst=" in f" {raw} "):
             available += 1
             m = FLAGS_RE.match(raw)
-            if m and "A" in m.group(1):
-                best += 1
+            if m:
+                flags = set(m.group(1))
+                if "A" in flags and "F" not in flags and "f" not in flags:
+                    best += 1
     return MikrotikPaths(available=available, best=best, select=best)
 
 
@@ -212,6 +216,7 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
     if "dst-address=" not in full_block_text and " dst=" not in f" {full_block_text} ":
         return None
 
+    flags = ""
     rd = {
         "prefix": "",
         "gateway": "",
@@ -231,11 +236,24 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
         "rpki_state": RPKI_STATE_MAP.get("unknown", 2),
     }
 
-    # Check for 'A' (active) flag in the first line
+    # Interpret flags in the first line:
+    # - "A" => active + preferred
+    # - "a" => active + valid candidate
+    # - otherwise not active
     m = FLAGS_RE.match(block[0])
-    if m and "A" in m.group(1):
-        rd["is_active"] = True
-        rd["is_best"] = True
+    if m:
+        flags = m.group(1)
+        flag_set = set(flags)
+        is_filtered = "F" in flag_set or "f" in flag_set
+
+        if not is_filtered:
+            if "A" in flag_set:
+                rd["is_active"] = True
+                rd["is_best"] = True
+                rd["is_valid"] = True
+            elif "a" in flag_set:
+                rd["is_active"] = True
+                rd["is_valid"] = True
 
     # Find all key=value tokens in the entire block
     for k, v in TOKEN_RE.findall(full_block_text):
@@ -243,6 +261,18 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
 
     if rd["prefix"]:
         try:
+            if Settings.debug:
+                log.bind(
+                    parser="MikrotikBGPTable",
+                    prefix=rd["prefix"],
+                    flags=flags or None,
+                    active=rd["is_active"],
+                    best=rd["is_best"],
+                    valid=rd["is_valid"],
+                    next_hop=rd["gateway"] or None,
+                    as_path=rd["as_path"],
+                    rpki_state=rd["rpki_state"],
+                ).debug("Parsed MikroTik route entry")
             return MikrotikRouteEntry(**rd)
         except Exception as e:
             log.warning(f"Failed to create MikroTik route entry ({rd.get('prefix','?')}: {e}")
