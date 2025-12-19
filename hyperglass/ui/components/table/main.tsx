@@ -125,6 +125,7 @@ export const Table = <T = Route>(props: TableProps<T>): JSX.Element => {
         <TableBody>
           {page.map((row, key) => {
             prepareRow(row);
+            const dimText = Boolean((row.original as { filtered?: boolean }).filtered);
             return (
               <TableRow
                 index={key}
@@ -132,7 +133,7 @@ export const Table = <T = Route>(props: TableProps<T>): JSX.Element => {
                 highlightBg={rowHighlightBg}
                 doHorizontalBorders={bordersHorizontal}
                 highlight={row.values[rowHighlightProp ?? ''] ?? false}
-                dimText={Boolean((row.original as { filtered?: boolean }).filtered)}
+                dimText={dimText}
                 {...row.getRowProps()}
               >
                 {row.cells.map((cell, i) => {
@@ -141,6 +142,7 @@ export const Table = <T = Route>(props: TableProps<T>): JSX.Element => {
                     <TableCell
                       align={cell.column.align}
                       bordersVertical={[bordersVertical, i]}
+                      dimText={dimText}
                       {...cell.getCellProps()}
                     >
                       {typeof Cell !== 'undefined' ? (
