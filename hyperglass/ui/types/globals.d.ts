@@ -30,6 +30,7 @@ export declare global {
     source_rid: string;
     peer_rid: string;
     rpki_state: RPKIState;
+    filtered: boolean;
   };
 
   type TracerouteHop = {

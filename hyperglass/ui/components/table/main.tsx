@@ -132,6 +132,7 @@ export const Table = <T = Route>(props: TableProps<T>): JSX.Element => {
                 highlightBg={rowHighlightBg}
                 doHorizontalBorders={bordersHorizontal}
                 highlight={row.values[rowHighlightProp ?? ''] ?? false}
+                dimText={Boolean((row.original as { filtered?: boolean }).filtered)}
                 {...row.getRowProps()}
               >
                 {row.cells.map((cell, i) => {

@@ -35,6 +35,7 @@ class BGPRoute(HyperglassModel):
     source_rid: str
     peer_rid: str
     rpki_state: int
+    filtered: bool = False
 
     # IP enrichment data (optional)
     next_hop_asn: t.Optional[str] = None

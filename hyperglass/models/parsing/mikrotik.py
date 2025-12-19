@@ -69,8 +69,7 @@ class MikrotikRouteEntry(MikrotikBase):
     metric: int = 0  # MED
     origin: str = ""
     is_active: bool = False
-    is_best: bool = False
-    is_valid: bool = False
+    is_filtered: bool = False
     rpki_state: int = RPKI_STATE_MAP.get("unknown", 2)
 
     @property
@@ -92,7 +91,7 @@ class MikrotikRouteEntry(MikrotikBase):
 
     @property
     def active(self) -> bool:
-        return self.is_active or self.is_best
+        return self.is_active
 
     @property
     def all_communities(self) -> t.List[str]:
@@ -122,7 +121,7 @@ def _extract_paths(lines: t.List[str]) -> MikrotikPaths:
             m = FLAGS_RE.match(raw)
             if m:
                 flags = set(m.group(1))
-                if "A" in flags and "F" not in flags and "f" not in flags:
+                if "A" in flags:
                     best += 1
     return MikrotikPaths(available=available, best=best, select=best)
 
@@ -231,29 +230,24 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
         "metric": 0,
         "origin": "",
         "is_active": False,
-        "is_best": False,
-        "is_valid": False,
+        "is_filtered": False,
         "rpki_state": RPKI_STATE_MAP.get("unknown", 2),
     }
 
     # Interpret flags in the first line:
-    # - "A" => active + preferred
-    # - "a" => active + valid candidate
+    # - "A" => active (preferred)
     # - otherwise not active
     m = FLAGS_RE.match(block[0])
     if m:
         flags = m.group(1)
         flag_set = set(flags)
-        is_filtered = "F" in flag_set or "f" in flag_set
+        has_active_flag = "A" in flag_set or "a" in flag_set
 
-        if not is_filtered:
-            if "A" in flag_set:
-                rd["is_active"] = True
-                rd["is_best"] = True
-                rd["is_valid"] = True
-            elif "a" in flag_set:
-                rd["is_active"] = True
-                rd["is_valid"] = True
+        if not has_active_flag:
+            rd["is_filtered"] = True
+
+        if "A" in flag_set:
+            rd["is_active"] = True
 
     # Find all key=value tokens in the entire block
     for k, v in TOKEN_RE.findall(full_block_text):
@@ -264,13 +258,12 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
             if Settings.debug:
                 log.bind(parser="MikrotikBGPTable").debug(
                     "Parsed MikroTik route entry: "
-                    "prefix={prefix} flags={flags} active={active} best={best} valid={valid} "
+                    "prefix={prefix} flags={flags} active={active} filtered={filtered} "
                     "next_hop={next_hop} as_path={as_path} rpki_state={rpki_state}",
                     prefix=rd["prefix"],
                     flags=flags or None,
                     active=rd["is_active"],
-                    best=rd["is_best"],
-                    valid=rd["is_valid"],
+                    filtered=rd["is_filtered"],
                     next_hop=rd["gateway"] or None,
                     as_path=rd["as_path"],
                     rpki_state=rd["rpki_state"],
@@ -330,6 +323,7 @@ class MikrotikBGPTable(MikrotikBase):
                 "source_rid": route.source_rid,
                 "peer_rid": route.peer_rid,
                 "rpki_state": route.rpki_state,
+                "filtered": route.is_filtered,
             }
             # Instantiate BGPRoute to trigger validation (including external RPKI)
             routes.append(BGPRoute(**route_data))

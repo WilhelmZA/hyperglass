@@ -137,6 +137,7 @@ class ThemeColors(HyperglassModel):
     dark: Color = "#010101"
     light: Color = "#f5f6f7"
     gray: Color = "#c1c7cc"
+    filtered: Color = "#c1c7cc"
     red: Color = "#d84b4b"
     orange: Color = "#ff6b35"
     yellow: Color = "#edae49"
