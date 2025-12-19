@@ -262,8 +262,10 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
     if rd["prefix"]:
         try:
             if Settings.debug:
-                log.bind(
-                    parser="MikrotikBGPTable",
+                log.bind(parser="MikrotikBGPTable").debug(
+                    "Parsed MikroTik route entry: "
+                    "prefix={prefix} flags={flags} active={active} best={best} valid={valid} "
+                    "next_hop={next_hop} as_path={as_path} rpki_state={rpki_state}",
                     prefix=rd["prefix"],
                     flags=flags or None,
                     active=rd["is_active"],
@@ -272,7 +274,7 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
                     next_hop=rd["gateway"] or None,
                     as_path=rd["as_path"],
                     rpki_state=rd["rpki_state"],
-                ).debug("Parsed MikroTik route entry")
+                )
             return MikrotikRouteEntry(**rd)
         except Exception as e:
             log.warning(f"Failed to create MikroTik route entry ({rd.get('prefix','?')}: {e}")
