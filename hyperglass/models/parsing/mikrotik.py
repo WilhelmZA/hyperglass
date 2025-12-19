@@ -34,8 +34,8 @@ def remove_prefix(text: str, prefix: str) -> str:
 TOKEN_RE = re.compile(r'([a-zA-Z0-9_.-]+)=(".*?"|\S+)')
 
 # Regex to find flags at the beginning of a line (e.g., "Ab   dst-address=...").
-# Include filtered flag (F/f) so filtered routes split into their own entries.
-FLAGS_RE = re.compile(r"^\s*([DXIAFfcmsroivmyH\+b]+)\s+")
+# Include filtered/disabled/unreachable flags so those routes split into their own entries.
+FLAGS_RE = re.compile(r"^\s*([DXUuIAFfcmsroivmyH\+b]+)\s+")
 
 
 class MikrotikBase(HyperglassModel, extra="ignore"):
@@ -241,13 +241,14 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
     if m:
         flags = m.group(1)
         flag_set = set(flags)
-        has_active_flag = "A" in flag_set or "a" in flag_set
+        is_active = "A" in flag_set
+        is_filtered = bool(flag_set & {"F", "f", "U", "u", "X", "x"})
 
-        if not has_active_flag:
-            rd["is_filtered"] = True
-
-        if "A" in flag_set:
+        if is_active:
             rd["is_active"] = True
+            rd["is_filtered"] = False
+        else:
+            rd["is_filtered"] = is_filtered
 
     # Find all key=value tokens in the entire block
     for k, v in TOKEN_RE.findall(full_block_text):
