@@ -4,7 +4,7 @@
 from datetime import datetime
 
 __name__ = "hyperglass"
-__version__ = "2.0.4"
+__version__ = "2.1.0"
 __author__ = "Matt Love"
 __copyright__ = f"Copyright {datetime.now().year} Matthew Love"
 __license__ = "BSD 3-Clause Clear License"
@@ -19,7 +19,14 @@ TARGET_FORMAT_SPACE = ("huawei", "huawei_vrpv8")
 
 TARGET_JUNIPER_ASPATH = ("juniper", "juniper_junos")
 
-SUPPORTED_STRUCTURED_OUTPUT = ("frr", "juniper", "arista_eos")
+SUPPORTED_STRUCTURED_OUTPUT = (
+    "frr",
+    "juniper",
+    "arista_eos",
+    "huawei",
+    "mikrotik_routeros",
+    "mikrotik_switchos",
+)
 
 CONFIG_EXTENSIONS = ("py", "yaml", "yml", "json", "toml")
 
