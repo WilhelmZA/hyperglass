@@ -87,7 +87,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
     _setErrorLevel(e);
   };
 
-  const { data, error, isLoading, refetch, isFetchedAfterMount } = useLGQuery(
+  const { data, error, isLoading, isFetching, refetch, isFetchedAfterMount } = useLGQuery(
     { queryLocation, queryTarget: form.queryTarget, queryType: form.queryType },
     {
       onSuccess(data) {
@@ -108,6 +108,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
     },
   );
 
+  const isQuerying = isLoading || isFetching;
   const isError = useMemo(() => isLGOutputOrError(data), [data, error]);
 
   const isCached = useMemo(() => data?.cached || !isFetchedAfterMount, [data, isFetchedAfterMount]);
@@ -172,13 +173,13 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
   // Signal to the group that this result is done loading.
   useEffect(() => {
     // Only set the index if it's not already set and the query is finished loading.
-    if (Array.isArray(indices) && indices.length === 0 && !isLoading) {
+    if (Array.isArray(indices) && indices.length === 0 && !isQuerying) {
       // Only set the index if the response has data or an error.
       if (data || isError) {
         setIndex([index]);
       }
     }
-  }, [data, index, indices, isLoading, isError, setIndex]);
+  }, [data, index, indices, isQuerying, isError, setIndex]);
 
   if (device === null) {
     const id = `toast-queryLocation-${index}-${queryLocation}`;
@@ -198,7 +199,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
     <AnimatedAccordionItem
       ref={ref}
       id={device.id}
-      isDisabled={isLoading}
+      isDisabled={isQuerying}
       exit={{ opacity: 0, y: 300 }}
       animate={{ opacity: 1, y: 0 }}
       initial={{ opacity: 0, y: 300 }}
@@ -212,7 +213,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
         <AccordionButton py={2} w="unset" _hover={{}} _focus={{}} flex="1 0 auto">
           <ResultHeader
             isError={isError}
-            loading={isLoading}
+            loading={isQuerying}
             errorMsg={errorMsg}
             errorLevel={errorLevel}
             runtime={data?.runtime ?? 0}
@@ -223,8 +224,8 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
           {isStructuredOutput(data) && data.level === 'success' && tableComponent && (
             <Path device={device.id} />
           )}
-          <CopyButton copyValue={copyValue} isDisabled={isLoading} />
-          <RequeryButton requery={refetch} isDisabled={isLoading} />
+          <CopyButton copyValue={copyValue} isDisabled={isQuerying} />
+          <RequeryButton requery={refetch} isDisabled={isQuerying} />
         </HStack>
       </AccordionHeaderWrapper>
       <AccordionPanel

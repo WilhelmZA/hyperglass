@@ -23,17 +23,19 @@ class ScrapeError(
         """Initialize parent error with sanitized error message."""
         # Sanitize error message to remove sensitive information like IP/port
         error_str = str(error)
-        
+
         # Remove device settings line that contains IP:port
         if "Device settings:" in error_str:
-            lines = error_str.split('\n')
-            sanitized_lines = [line for line in lines if not line.strip().startswith("Device settings:")]
-            error_str = '\n'.join(sanitized_lines).strip()
-        
+            lines = error_str.split("\n")
+            sanitized_lines = [
+                line for line in lines if not line.strip().startswith("Device settings:")
+            ]
+            error_str = "\n".join(sanitized_lines).strip()
+
         # If the error is empty after sanitization, provide a generic message
         if not error_str or error_str.isspace():
             error_str = "Connection error occurred"
-            
+
         super().__init__(error=error_str, device=device.name, proxy=device.proxy)
 
 
@@ -44,17 +46,19 @@ class AuthError(PublicHyperglassError, template="authentication_error", level="d
         """Initialize parent error with sanitized error message."""
         # Sanitize error message to remove sensitive information like IP/port
         error_str = str(error)
-        
+
         # Remove device settings line that contains IP:port
         if "Device settings:" in error_str:
-            lines = error_str.split('\n')
-            sanitized_lines = [line for line in lines if not line.strip().startswith("Device settings:")]
-            error_str = '\n'.join(sanitized_lines).strip()
-        
+            lines = error_str.split("\n")
+            sanitized_lines = [
+                line for line in lines if not line.strip().startswith("Device settings:")
+            ]
+            error_str = "\n".join(sanitized_lines).strip()
+
         # If the error is empty after sanitization, provide a generic message
         if not error_str or error_str.isspace():
             error_str = "Authentication failed"
-            
+
         super().__init__(error=error_str, device=device.name, proxy=device.proxy)
 
 
@@ -65,17 +69,19 @@ class RestError(PublicHyperglassError, template="connection_error", level="dange
         """Initialize parent error with sanitized error message."""
         # Sanitize error message to remove sensitive information like IP/port
         error_str = str(error)
-        
+
         # Remove device settings line that contains IP:port
         if "Device settings:" in error_str:
-            lines = error_str.split('\n')
-            sanitized_lines = [line for line in lines if not line.strip().startswith("Device settings:")]
-            error_str = '\n'.join(sanitized_lines).strip()
-        
+            lines = error_str.split("\n")
+            sanitized_lines = [
+                line for line in lines if not line.strip().startswith("Device settings:")
+            ]
+            error_str = "\n".join(sanitized_lines).strip()
+
         # If the error is empty after sanitization, provide a generic message
         if not error_str or error_str.isspace():
             error_str = "REST API connection error"
-            
+
         super().__init__(error=error_str, device=device.name)
 
 
@@ -86,17 +92,19 @@ class DeviceTimeout(PublicHyperglassError, template="request_timeout", level="da
         """Initialize parent error with sanitized error message."""
         # Sanitize error message to remove sensitive information like IP/port
         error_str = str(error)
-        
+
         # Remove device settings line that contains IP:port
         if "Device settings:" in error_str:
-            lines = error_str.split('\n')
-            sanitized_lines = [line for line in lines if not line.strip().startswith("Device settings:")]
-            error_str = '\n'.join(sanitized_lines).strip()
-        
+            lines = error_str.split("\n")
+            sanitized_lines = [
+                line for line in lines if not line.strip().startswith("Device settings:")
+            ]
+            error_str = "\n".join(sanitized_lines).strip()
+
         # If the error is empty after sanitization, provide a generic message
         if not error_str or error_str.isspace():
             error_str = "Connection timed out"
-            
+
         super().__init__(error=error_str, device=device.name, proxy=device.proxy)
 
 

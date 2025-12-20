@@ -122,7 +122,8 @@ export function useTableToString(
                 const fmtFunc = getFmtFunc(accessor) as (v: typeof value) => string;
                 value = fmtFunc(value);
                 if (accessor === 'prefix') {
-                  tableStringParts.push(`  - ${header}: ${value}`);
+                  const filteredSuffix = route.filtered ? ' (filtered)' : '';
+                  tableStringParts.push(`  - ${header}: ${value}${filteredSuffix}`);
                 } else {
                   tableStringParts.push(`    - ${header}: ${value}`);
                 }

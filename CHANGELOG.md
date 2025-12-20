@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## 2.1.1 - 2025-12-20
+### Added
+- Display and dim filtered BGP routes in the UI.
+
+### Fixed
+- MikroTik BGP queries now retry on empty structured output with clearer delay/attempt logging.
+- Retry button correctly re-enters loading state during refetches.
+- Copy output now marks filtered routes so they are included in copied text.
+
 ## 2.1.0 - 2025-12-19
 
 ### Added

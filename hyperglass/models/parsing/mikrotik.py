@@ -9,6 +9,7 @@ from pydantic import ConfigDict
 
 # Project
 from hyperglass.log import log
+from hyperglass.settings import Settings
 from hyperglass.models.data.bgp_route import BGPRoute, BGPRouteTable  # Add BGPRoute import
 
 # Local
@@ -32,8 +33,9 @@ def remove_prefix(text: str, prefix: str) -> str:
 # The value can be quoted or a single word.
 TOKEN_RE = re.compile(r'([a-zA-Z0-9_.-]+)=(".*?"|\S+)')
 
-# Regex to find flags at the beginning of a line (e.g., "Ab   dst-address=...")
-FLAGS_RE = re.compile(r"^\s*([DXIAcmsroivmyH\+b]+)\s+")
+# Regex to find flags at the beginning of a line (e.g., "Ab   dst-address=...").
+# Include filtered/disabled/unreachable flags so those routes split into their own entries.
+FLAGS_RE = re.compile(r"^\s*([DXUuIAFfcmsroivmyH\+b]+)\s+")
 
 
 class MikrotikBase(HyperglassModel, extra="ignore"):
@@ -67,8 +69,7 @@ class MikrotikRouteEntry(MikrotikBase):
     metric: int = 0  # MED
     origin: str = ""
     is_active: bool = False
-    is_best: bool = False
-    is_valid: bool = False
+    is_filtered: bool = False
     rpki_state: int = RPKI_STATE_MAP.get("unknown", 2)
 
     @property
@@ -90,7 +91,7 @@ class MikrotikRouteEntry(MikrotikBase):
 
     @property
     def active(self) -> bool:
-        return self.is_active or self.is_best
+        return self.is_active
 
     @property
     def all_communities(self) -> t.List[str]:
@@ -111,15 +112,17 @@ class MikrotikRouteEntry(MikrotikBase):
 
 
 def _extract_paths(lines: t.List[str]) -> MikrotikPaths:
-    """Simple count based on lines with dst/dst-address and 'A' flag."""
+    """Simple count based on lines with dst/dst-address and preferred 'A' flag."""
     available = 0
     best = 0
     for raw in lines:
         if ("dst-address=" in raw) or (" dst=" in f" {raw} "):
             available += 1
             m = FLAGS_RE.match(raw)
-            if m and "A" in m.group(1):
-                best += 1
+            if m:
+                flags = set(m.group(1))
+                if "A" in flags:
+                    best += 1
     return MikrotikPaths(available=available, best=best, select=best)
 
 
@@ -212,6 +215,7 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
     if "dst-address=" not in full_block_text and " dst=" not in f" {full_block_text} ":
         return None
 
+    flags = ""
     rd = {
         "prefix": "",
         "gateway": "",
@@ -226,16 +230,25 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
         "metric": 0,
         "origin": "",
         "is_active": False,
-        "is_best": False,
-        "is_valid": False,
+        "is_filtered": False,
         "rpki_state": RPKI_STATE_MAP.get("unknown", 2),
     }
 
-    # Check for 'A' (active) flag in the first line
+    # Interpret flags in the first line:
+    # - "A" => active (preferred)
+    # - otherwise not active
     m = FLAGS_RE.match(block[0])
-    if m and "A" in m.group(1):
-        rd["is_active"] = True
-        rd["is_best"] = True
+    if m:
+        flags = m.group(1)
+        flag_set = set(flags)
+        is_active = "A" in flag_set
+        is_filtered = bool(flag_set & {"F", "f", "U", "u", "X", "x"})
+
+        if is_active:
+            rd["is_active"] = True
+            rd["is_filtered"] = False
+        else:
+            rd["is_filtered"] = is_filtered
 
     # Find all key=value tokens in the entire block
     for k, v in TOKEN_RE.findall(full_block_text):
@@ -243,6 +256,19 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
 
     if rd["prefix"]:
         try:
+            if Settings.debug:
+                log.bind(parser="MikrotikBGPTable").debug(
+                    "Parsed MikroTik route entry: "
+                    "prefix={prefix} flags={flags} active={active} filtered={filtered} "
+                    "next_hop={next_hop} as_path={as_path} rpki_state={rpki_state}",
+                    prefix=rd["prefix"],
+                    flags=flags or None,
+                    active=rd["is_active"],
+                    filtered=rd["is_filtered"],
+                    next_hop=rd["gateway"] or None,
+                    as_path=rd["as_path"],
+                    rpki_state=rd["rpki_state"],
+                )
             return MikrotikRouteEntry(**rd)
         except Exception as e:
             log.warning(f"Failed to create MikroTik route entry ({rd.get('prefix','?')}: {e}")
@@ -298,6 +324,7 @@ class MikrotikBGPTable(MikrotikBase):
                 "source_rid": route.source_rid,
                 "peer_rid": route.peer_rid,
                 "rpki_state": route.rpki_state,
+                "filtered": route.is_filtered,
             }
             # Instantiate BGPRoute to trigger validation (including external RPKI)
             routes.append(BGPRoute(**route_data))

@@ -8,6 +8,7 @@ interface TableRowProps extends BoxProps {
   highlightBg?: Theme.ColorNames;
   doHorizontalBorders?: boolean;
   highlight?: boolean;
+  dimText?: boolean;
   doStripe?: boolean;
   index: number;
 }
@@ -19,6 +20,7 @@ export const TableRow = (props: TableRowProps): JSX.Element => {
     highlight = false,
     highlightBg = 'primary',
     doHorizontalBorders = false,
+    dimText = false,
     ...rest
   } = props;
 
@@ -40,12 +42,14 @@ export const TableRow = (props: TableRowProps): JSX.Element => {
   }
   const defaultBg = useColorValue('white', 'black');
   const color = useOpposingColor(bg ?? defaultBg);
+  const filteredTextColor = useColorValue('filtered.400', 'filtered.500');
+  const rowTextColor = dimText ? filteredTextColor : color;
   const borderProps = doHorizontalBorders && index !== 0 ? rowBorder : {};
 
   return (
     <chakra.tr
       bg={bg}
-      css={{ '& > td': { color } }}
+      css={{ '& > td': { color: rowTextColor } }}
       fontWeight={highlight ? 'bold' : undefined}
       _hover={{
         cursor: 'pointer',

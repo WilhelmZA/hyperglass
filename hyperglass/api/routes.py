@@ -185,43 +185,71 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                     )
                 else:
                     # Pass request to execution module with retry logic for specific platforms
-                    max_retries = 2 if data.device.platform in ("mikrotik_routeros", "mikrotik_switchos", "mikrotik") else 1
-                    retry_count = 0
+                    mikrotik_platforms = ("mikrotik_routeros", "mikrotik_switchos", "mikrotik")
+                    directive_name = getattr(getattr(data, "directive", None), "name", "")
+                    is_bgp_query = "bgp_" in data.query_type or "bgp" in directive_name.lower()
+                    is_mikrotik_bgp = data.device.platform in mikrotik_platforms and is_bgp_query
+                    max_attempts = 4 if is_mikrotik_bgp else 1
+                    retry_delay = 10
                     output = None
-                    
-                    while retry_count < max_retries:
+
+                    if is_mikrotik_bgp:
+                        _log.bind(
+                            max_attempts=max_attempts,
+                            retry_delay=retry_delay,
+                            directive=data.query_type,
+                        ).debug("MikroTik BGP retry enabled")
+
+                    for attempt in range(1, max_attempts + 1):
+                        if attempt > 1:
+                            _log.bind(
+                                attempt=attempt,
+                                max_attempts=max_attempts,
+                                retry_delay=retry_delay,
+                            ).debug("Sleeping before MikroTik BGP retry")
+                            await asyncio.sleep(retry_delay)
+
+                        _log.bind(attempt=attempt, max_attempts=max_attempts).debug(
+                            "Starting MikroTik BGP query attempt"
+                        )
                         attempt_start = time.time()
                         output = await execute(data)
                         attempt_time = round(time.time() - attempt_start, 4)
-                        
-                        # Check if this looks like a failed MikroTik query (empty result + fast execution)
-                        should_retry = False
-                        if retry_count < max_retries - 1 and data.device.platform in ("mikrotik_routeros", "mikrotik_switchos", "mikrotik"):
-                            if is_type(output, OutputDataModel):
-                                try:
-                                    as_json = output.export_json()
-                                    raw_output = json.loads(as_json)
-                                    # Check for empty BGP route table and fast execution (< 5 seconds)
-                                    if (isinstance(raw_output, dict) and 
-                                        "count" in raw_output and "routes" in raw_output and
-                                        raw_output.get("count", 0) == 0 and 
-                                        not raw_output.get("routes") and
-                                        attempt_time < 5.0):
-                                        should_retry = True
-                                        _log.bind(attempt=retry_count + 1, runtime=attempt_time).warning(
-                                            "MikroTik returned empty result with fast execution time - retrying"
-                                        )
-                                except Exception:
-                                    # If we can't parse the output, don't retry
-                                    pass
-                        
-                        if not should_retry:
-                            break
-                            
-                        retry_count += 1
-                        if should_retry:
-                            # Wait a bit before retrying to let the device settle
-                            await asyncio.sleep(2)
+
+                        empty_bgp = False
+                        if is_mikrotik_bgp and is_type(output, OutputDataModel):
+                            try:
+                                as_json = output.export_json()
+                                raw_output = json.loads(as_json)
+                                # Check for empty BGP route table
+                                if (
+                                    isinstance(raw_output, dict)
+                                    and "count" in raw_output
+                                    and "routes" in raw_output
+                                    and raw_output.get("count", 0) == 0
+                                    and not raw_output.get("routes")
+                                ):
+                                    empty_bgp = True
+                            except Exception:
+                                # If we can't parse the output, don't retry
+                                empty_bgp = False
+
+                        if empty_bgp and attempt < max_attempts:
+                            _log.bind(
+                                attempt=attempt,
+                                max_attempts=max_attempts,
+                                runtime=attempt_time,
+                                retry_delay=retry_delay,
+                            ).warning("MikroTik returned empty BGP result - retrying after delay")
+                            continue
+                        if empty_bgp and attempt >= max_attempts:
+                            _log.bind(
+                                attempt=attempt,
+                                max_attempts=max_attempts,
+                                runtime=attempt_time,
+                            ).warning("MikroTik returned empty BGP result after max retries")
+
+                        break
 
                 endtime = time.time()
                 elapsedtime = round(endtime - starttime, 4)

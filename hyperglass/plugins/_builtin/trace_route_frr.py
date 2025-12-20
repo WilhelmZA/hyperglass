@@ -80,54 +80,56 @@ class FrrTracerouteTable(TracerouteResult):
         _log.debug(f"=== END RAW INPUT ===")
 
         hops = []
-        
+
         # Parse the traceroute output line by line
-        lines = text.strip().split('\n')
+        lines = text.strip().split("\n")
         _log.debug(f"Split into {len(lines)} lines")
-        
+
         # Patterns for different line formats
         # Pattern for regular hop: " 1  102.216.76.37  0.221 ms"
         simple_pattern = re.compile(r"^\s*(\d+)\s+([\d\.:a-fA-F]+)\s+([\d.]+)\s+ms")
-        
+
         # Pattern for timeout hop: " 9  *"
         timeout_pattern = re.compile(r"^\s*(\d+)\s+\*\s*$")
-        
+
         # Pattern for hop with hostname: " 2  hostname.example.com (192.168.1.1)  15.234 ms"
         hostname_pattern = re.compile(r"^\s*(\d+)\s+(\S+)\s+\(([\d\.:a-fA-F]+)\)\s+([\d.]+)\s+ms")
-        
+
         # Pattern for multiple RTTs: " 3  192.168.1.1  15.234 ms  16.123 ms  14.567 ms"
-        multi_rtt_pattern = re.compile(r"^\s*(\d+)\s+([\d\.:a-fA-F]+)\s+([\d.]+)\s+ms(?:\s+([\d.]+)\s+ms)?(?:\s+([\d.]+)\s+ms)?")
-        
+        multi_rtt_pattern = re.compile(
+            r"^\s*(\d+)\s+([\d\.:a-fA-F]+)\s+([\d.]+)\s+ms(?:\s+([\d.]+)\s+ms)?(?:\s+([\d.]+)\s+ms)?"
+        )
+
         # Pattern for partial timeout: " 7  port-channel4.core4.mrs1.he.net (184.105.81.30)  132.624 ms  132.589 ms *"
         partial_timeout_pattern = re.compile(
             r"^\s*(\d+)\s+(\S+)\s+\(([\d\.:a-fA-F]+)\)\s+(?:([\d.]+)\s+ms\s+)?(?:([\d.]+)\s+ms\s+)?\*"
         )
-        
+
         for i, line in enumerate(lines):
             line = line.strip()
             if not line:
                 continue
-                
+
             _log.debug(f"Line {i:2}: {repr(line)}")
-            
+
             # Skip header lines
             if "traceroute to" in line.lower() or "hops max" in line.lower():
                 _log.debug(f"Line {i:2}: SKIPPING HEADER")
                 continue
-            
+
             hop_number = None
             ip_address = None
             hostname = None
             rtt1 = None
             rtt2 = None
             rtt3 = None
-            
+
             # Try to match timeout hop first
             timeout_match = timeout_pattern.match(line)
             if timeout_match:
                 hop_number = int(timeout_match.group(1))
                 _log.debug(f"Line {i:2}: TIMEOUT HOP - {hop_number}")
-                
+
             # Try to match partial timeout
             elif partial_timeout_pattern.match(line):
                 partial_match = partial_timeout_pattern.match(line)
@@ -136,8 +138,10 @@ class FrrTracerouteTable(TracerouteResult):
                 ip_address = partial_match.group(3)
                 rtt1 = float(partial_match.group(4)) if partial_match.group(4) else None
                 rtt2 = float(partial_match.group(5)) if partial_match.group(5) else None
-                _log.debug(f"Line {i:2}: PARTIAL TIMEOUT HOP - {hop_number}: {hostname} ({ip_address}) {rtt1} {rtt2} *")
-                
+                _log.debug(
+                    f"Line {i:2}: PARTIAL TIMEOUT HOP - {hop_number}: {hostname} ({ip_address}) {rtt1} {rtt2} *"
+                )
+
             # Try to match hostname pattern
             elif hostname_pattern.match(line):
                 hostname_match = hostname_pattern.match(line)
@@ -145,8 +149,10 @@ class FrrTracerouteTable(TracerouteResult):
                 hostname = hostname_match.group(2)
                 ip_address = hostname_match.group(3)
                 rtt1 = float(hostname_match.group(4))
-                _log.debug(f"Line {i:2}: HOSTNAME HOP - {hop_number}: {hostname} ({ip_address}) {rtt1} ms")
-                
+                _log.debug(
+                    f"Line {i:2}: HOSTNAME HOP - {hop_number}: {hostname} ({ip_address}) {rtt1} ms"
+                )
+
             # Try to match multiple RTT pattern
             elif multi_rtt_pattern.match(line):
                 multi_match = multi_rtt_pattern.match(line)
@@ -155,8 +161,10 @@ class FrrTracerouteTable(TracerouteResult):
                 rtt1 = float(multi_match.group(3))
                 rtt2 = float(multi_match.group(4)) if multi_match.group(4) else None
                 rtt3 = float(multi_match.group(5)) if multi_match.group(5) else None
-                _log.debug(f"Line {i:2}: MULTI RTT HOP - {hop_number}: {ip_address} {rtt1} {rtt2} {rtt3}")
-                
+                _log.debug(
+                    f"Line {i:2}: MULTI RTT HOP - {hop_number}: {ip_address} {rtt1} {rtt2} {rtt3}"
+                )
+
             # Try to match simple pattern
             elif simple_pattern.match(line):
                 simple_match = simple_pattern.match(line)
@@ -164,11 +172,11 @@ class FrrTracerouteTable(TracerouteResult):
                 ip_address = simple_match.group(2)
                 rtt1 = float(simple_match.group(3))
                 _log.debug(f"Line {i:2}: SIMPLE IP HOP - {hop_number}: {ip_address} {rtt1} ms")
-                
+
             else:
                 _log.debug(f"Line {i:2}: NO MATCH - skipping")
                 continue
-            
+
             # Create hop object if we have valid data
             if hop_number is not None:
                 try:
@@ -180,7 +188,7 @@ class FrrTracerouteTable(TracerouteResult):
                     if not hostname:
                         hostname = ip_address
                     ip_address = None
-                
+
                 hop = TracerouteHop(
                     hop_number=hop_number,
                     ip_address=ip_address,
@@ -191,8 +199,12 @@ class FrrTracerouteTable(TracerouteResult):
                     rtt3=rtt3,
                     sent_count=None,
                     last_rtt=rtt1,
-                    best_rtt=min(filter(None, [rtt1, rtt2, rtt3])) if any([rtt1, rtt2, rtt3]) else None,
-                    worst_rtt=max(filter(None, [rtt1, rtt2, rtt3])) if any([rtt1, rtt2, rtt3]) else None,
+                    best_rtt=(
+                        min(filter(None, [rtt1, rtt2, rtt3])) if any([rtt1, rtt2, rtt3]) else None
+                    ),
+                    worst_rtt=(
+                        max(filter(None, [rtt1, rtt2, rtt3])) if any([rtt1, rtt2, rtt3]) else None
+                    ),
                     loss_pct=None,
                     # BGP enrichment fields (will be populated by enrichment plugin)
                     asn=None,
@@ -206,7 +218,7 @@ class FrrTracerouteTable(TracerouteResult):
 
         # Clean up hops - remove duplicates and sort by hop number
         _log.debug(f"Before cleanup: {len(hops)} hops")
-        
+
         # Group hops by hop number and merge data
         hop_dict = {}
         for hop in hops:
@@ -236,7 +248,7 @@ class FrrTracerouteTable(TracerouteResult):
                 )
             else:
                 hop_dict[hop.hop_number] = hop
-        
+
         # Convert back to sorted list
         final_hops = [hop_dict[hop_num] for hop_num in sorted(hop_dict.keys())]
         _log.debug(f"After cleanup: {len(final_hops)} hops")
@@ -244,7 +256,9 @@ class FrrTracerouteTable(TracerouteResult):
         # Debug final hop list
         for hop in final_hops:
             hostname_display = hop.hostname or "no-hostname"
-            _log.debug(f"Final hop {hop.hop_number}: {hop.ip_address} ({hostname_display}) - RTTs: {hop.rtt1}/{hop.rtt2}/{hop.rtt3}")
+            _log.debug(
+                f"Final hop {hop.hop_number}: {hop.ip_address} ({hostname_display}) - RTTs: {hop.rtt1}/{hop.rtt2}/{hop.rtt3}"
+            )
 
         _log.info(f"Parsed {len(final_hops)} hops from FRR traceroute")
 
@@ -295,7 +309,7 @@ class TraceroutePluginFrr(OutputPlugin):
                 query.device, "name", "unknown"
             )
 
-        # Logging 
+        # Logging
         _log = log.bind(plugin="TraceroutePluginFrr")
         _log.info(f"Processing Traceroute for {target} from {source}")
 
