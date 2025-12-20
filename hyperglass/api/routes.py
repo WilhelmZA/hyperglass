@@ -191,7 +191,6 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                     is_mikrotik_bgp = data.device.platform in mikrotik_platforms and is_bgp_query
                     max_attempts = 4 if is_mikrotik_bgp else 1
                     retry_delay = 10
-                    retry_count = 0
                     output = None
 
                     if is_mikrotik_bgp:
@@ -201,13 +200,22 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                             directive=data.query_type,
                         ).debug("MikroTik BGP retry enabled")
 
-                    while retry_count < max_attempts:
-                        attempt = retry_count + 1
+                    for attempt in range(1, max_attempts + 1):
+                        if attempt > 1:
+                            _log.bind(
+                                attempt=attempt,
+                                max_attempts=max_attempts,
+                                retry_delay=retry_delay,
+                            ).debug("Sleeping before MikroTik BGP retry")
+                            await asyncio.sleep(retry_delay)
+
+                        _log.bind(attempt=attempt, max_attempts=max_attempts).debug(
+                            "Starting MikroTik BGP query attempt"
+                        )
                         attempt_start = time.time()
                         output = await execute(data)
                         attempt_time = round(time.time() - attempt_start, 4)
 
-                        should_retry = False
                         empty_bgp = False
                         if is_mikrotik_bgp and is_type(output, OutputDataModel):
                             try:
@@ -227,26 +235,21 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                                 empty_bgp = False
 
                         if empty_bgp and attempt < max_attempts:
-                            should_retry = True
                             _log.bind(
                                 attempt=attempt,
                                 max_attempts=max_attempts,
                                 runtime=attempt_time,
                                 retry_delay=retry_delay,
                             ).warning("MikroTik returned empty BGP result - retrying after delay")
-                        elif empty_bgp and attempt >= max_attempts:
+                            continue
+                        if empty_bgp and attempt >= max_attempts:
                             _log.bind(
                                 attempt=attempt,
                                 max_attempts=max_attempts,
                                 runtime=attempt_time,
                             ).warning("MikroTik returned empty BGP result after max retries")
 
-                        if not should_retry:
-                            break
-
-                        retry_count += 1
-                        # Wait before retrying to let the device settle
-                        await asyncio.sleep(retry_delay)
+                        break
 
                 endtime = time.time()
                 elapsedtime = round(endtime - starttime, 4)
