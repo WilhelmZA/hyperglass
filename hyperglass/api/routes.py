@@ -186,14 +186,20 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                 else:
                     # Pass request to execution module with retry logic for specific platforms
                     mikrotik_platforms = ("mikrotik_routeros", "mikrotik_switchos", "mikrotik")
-                    is_mikrotik_bgp = (
-                        data.device.platform in mikrotik_platforms
-                        and data.query_type.startswith("bgp_")
-                    )
+                    directive_name = getattr(getattr(data, "directive", None), "name", "")
+                    is_bgp_query = "bgp_" in data.query_type or "bgp" in directive_name.lower()
+                    is_mikrotik_bgp = data.device.platform in mikrotik_platforms and is_bgp_query
                     max_attempts = 4 if is_mikrotik_bgp else 1
                     retry_delay = 10
                     retry_count = 0
                     output = None
+
+                    if is_mikrotik_bgp:
+                        _log.bind(
+                            max_attempts=max_attempts,
+                            retry_delay=retry_delay,
+                            directive=data.query_type,
+                        ).debug("MikroTik BGP retry enabled")
 
                     while retry_count < max_attempts:
                         attempt = retry_count + 1
@@ -227,17 +233,13 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                                 max_attempts=max_attempts,
                                 runtime=attempt_time,
                                 retry_delay=retry_delay,
-                            ).warning(
-                                "MikroTik returned empty BGP result - retrying after delay"
-                            )
+                            ).warning("MikroTik returned empty BGP result - retrying after delay")
                         elif empty_bgp and attempt >= max_attempts:
                             _log.bind(
                                 attempt=attempt,
                                 max_attempts=max_attempts,
                                 runtime=attempt_time,
-                            ).warning(
-                                "MikroTik returned empty BGP result after max retries"
-                            )
+                            ).warning("MikroTik returned empty BGP result after max retries")
 
                         if not should_retry:
                             break

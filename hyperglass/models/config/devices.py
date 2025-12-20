@@ -344,10 +344,14 @@ class Devices(MultiModel, model=Device, unique_by="id"):
 
     def directive_names(self) -> t.List[str]:
         """Get all directive names for all devices."""
-        return list({
-            directive.name for device in self for directive in device.directives
-            if directive.name is not None and directive.name.strip() != ""
-        })
+        return list(
+            {
+                directive.name
+                for device in self
+                for directive in device.directives
+                if directive.name is not None and directive.name.strip() != ""
+            }
+        )
 
     def frontend(self: "Devices") -> t.List[t.Dict[str, t.Any]]:
         """Export grouped devices for UIParameters."""
@@ -365,7 +369,8 @@ class Devices(MultiModel, model=Device, unique_by="id"):
                         ),
                         "description": device.description,
                         "directives": [
-                            d.frontend() for d in device.directives 
+                            d.frontend()
+                            for d in device.directives
                             if d.name is not None and d.name.strip() != ""
                         ],
                     }
