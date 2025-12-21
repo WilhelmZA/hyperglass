@@ -59,14 +59,14 @@ async def read_package_json() -> t.Dict[str, t.Any]:
     return package_json
 
 
-async def node_initial(timeout: int = 180, dev_mode: bool = False) -> str:
+async def node_initial(timeout: int = 600, dev_mode: bool = False) -> str:
     """Initialize node_modules."""
 
     ui_path = Path(__file__).parent.parent / "ui"
 
     env_timeout = get_ui_build_timeout()
 
-    if env_timeout is not None and env_timeout > timeout:
+    if env_timeout is not None:
         timeout = env_timeout
 
     proc = await asyncio.create_subprocess_shell(
