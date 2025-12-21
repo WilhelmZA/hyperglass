@@ -12,9 +12,10 @@ COPY . .
 
 FROM base as ui
 WORKDIR /opt/hyperglass/hyperglass/ui
-RUN apk add build-base pkgconfig cairo-dev nodejs npm
-RUN npm install -g pnpm
-RUN pnpm install -P
+RUN apk add build-base pkgconfig cairo-dev nodejs npm \
+  && npm install -g npm@10.9.3 pnpm@9 \
+  && apk del npm \
+  && pnpm install -P
 
 FROM ui as hyperglass
 WORKDIR /opt/hyperglass

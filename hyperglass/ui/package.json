@@ -31,7 +31,7 @@
     "framer-motion": "^11.2.10",
     "lodash": "^4.17.21",
     "merge-anything": "^4.0.1",
-    "next": "13.5.11",
+    "next": "14.2.35",
     "palette-by-numbers": "^0.1.6",
     "plur": "^4.0.0",
     "react": "^18.2.0",
@@ -90,7 +90,9 @@
   },
   "pnpm": {
     "overrides": {
-      "ua-parser-js": "^0.7.36"
+      "ua-parser-js": "^0.7.36",
+      "@babel/runtime": "7.26.10",
+      "@babel/helpers": "7.26.10"
     }
   }
 }
