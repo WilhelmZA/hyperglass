@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## 2.1.2 - 2025-12-20
+
+### Summary of Changes
+- Dependency refresh to address reported CVEs and improve build reliability.
+
+### Dependency Updates
+- next.js
+  - Bumped to 14.2.35.
+  - Addresses: CVE-2025-29927, CVE-2024-46982, CVE-2024-34351, CVE-2024-51479, CVE-2025-57822, CVE-2025-57752, GHSA-5j59-xgg2-r9c4, GHSA-mwv6-3258-q52c.
+- ua-parser-js
+  - Added pnpm override: ^0.7.36 (resolved to 0.7.41).
+  - Patches vulnerabilities introduced transitively via react-device-detect (CVE-2021-27292).
+
+### Docker / Build Fixes
+- Explicitly install glob@11.1.0 during UI build stage to address CVE-2025-64756 in Alpine's bundled npm.
+
+### Lockfile & Tooling
+- Regenerated pnpm-lock.yaml to reflect updated dependency graph and overrides.
+
+### Runtime Adjustment
+- Increased default Node initialization timeout to 600 seconds to prevent startup timeouts.
+
 ## 2.1.1 - 2025-12-20
 ### Added
 - Display and dim filtered BGP routes in the UI.
