@@ -68,6 +68,7 @@ class MikrotikRouteEntry(MikrotikBase):
     local_preference: int = 100
     metric: int = 0  # MED
     origin: str = ""
+    belongs_to: str = ""  # BGP session identifier
     is_active: bool = False
     is_filtered: bool = False
     rpki_state: int = RPKI_STATE_MAP.get("unknown", 2)
@@ -103,7 +104,21 @@ class MikrotikRouteEntry(MikrotikBase):
 
     @property
     def source_rid(self) -> str:
-        # MikroTik output does not provide source RID, returning empty string.
+        """Extract the IP/IPv6 address from belongs-to field.
+        
+        Examples:
+            belongs-to="bgp-IP-196.60.96.109" -> "196.60.96.109"
+            belongs-to="bgp-IPv6-2001:43f8:6d0::11:141" -> "2001:43f8:6d0::11:141"
+        """
+        if not self.belongs_to:
+            return ""
+        
+        # Remove bgp-IP- or bgp-IPv6- prefix
+        if self.belongs_to.startswith("bgp-IP-"):
+            return self.belongs_to[7:]  # len("bgp-IP-") = 7
+        elif self.belongs_to.startswith("bgp-IPv6-"):
+            return self.belongs_to[9:]  # len("bgp-IPv6-") = 9
+        
         return ""
 
     @property
@@ -170,6 +185,8 @@ def _process_kv(route: dict, key: str, val: str):
         # _log.debug(f"RPKI raw value: {val!r}")
         clean_val = val.strip().strip('"').lower()
         route["rpki_state"] = RPKI_STATE_MAP.get(clean_val, 2)
+    elif key == "belongs-to":
+        route["belongs_to"] = val
 
 
 def _extract_route_entries(lines: t.List[str]) -> t.List[MikrotikRouteEntry]:
@@ -229,6 +246,7 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
         "local_preference": 100,
         "metric": 0,
         "origin": "",
+        "belongs_to": "",
         "is_active": False,
         "is_filtered": False,
         "rpki_state": RPKI_STATE_MAP.get("unknown", 2),
