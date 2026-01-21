@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## 2.1.3 - 2026-01-21
+
+### Added
+- Server-side BGP route enrichment plugin with configurable early enrichment via `structured.ip_enrichment.enrich_bgproute` setting.
+- Next-hop IP enrichment with ASN and organization lookups for BGP routes.
+- Next-hop IP tooltips showing ASN and organization names on hover.
+- Clickable AS path entries in BGP routes linking to https://bgp.tools/as/{asn}.
+- AS path ASN tooltips showing organization names when enrichment data is available.
+- Enhanced copy functionality for BGP routes:
+  - Route status indicators: `(active path)`, `(filtered)`, or `(candidate)`.
+  - Enriched AS path display: `37468 (Organization) → 12956 (Organization)`.
+  - Enriched next-hop display: `192.0.2.1 (ASN Organization)`.
+- MikroTik Originator column population from `belongs-to` field for both IPv4 and IPv6 routes.
+
+### Fixed
+- AS path link colors now display correctly in black.
+- Community list formatting in copied text (removed extra leading space).
+- Traceroute enrichment default changed to `false` for better control.
+
+### Configuration
+- New setting: `structured.ip_enrichment.enrich_bgproute` (boolean, default: `false`).
+  - When `true`: ASN/organization enrichment happens immediately during query execution.
+  - When `false`: Enrichment is available on-demand via AS Path modal (lazy loading).
+
 ## 2.1.2 - 2025-12-20
 
 ### Summary of Changes

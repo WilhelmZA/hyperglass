@@ -23,13 +23,17 @@ interface TableToStringFormatted {
 dayjs.extend(relativeTimePlugin);
 dayjs.extend(utcPlugin);
 
-function formatAsPath(path: number[]): string {
-  return path.join(' → ');
+function formatAsPath(path: number[], enrichments?: Record<string, { name?: string; country?: string }>): string {
+  return path.map(asn => {
+    const asnStr = String(asn);
+    const org = enrichments?.[asnStr]?.name;
+    return org ? `${asn} (${org})` : String(asn);
+  }).join(' → ');
 }
 
 function formatCommunities(comms: string[]): string {
   const commsStr = comms.map(c => `      - ${c}`);
-  return `\n ${commsStr.join('\n')}`;
+  return `\n${commsStr.join('\n')}`;
 }
 
 function formatBool(val: boolean): string {
@@ -105,6 +109,10 @@ export function useTableToString(
             `Routes For: ${target.join(', ')}`,
             `Timestamp: ${data.timestamp} UTC`,
           ];
+          
+          // Get enrichment data if available
+          const enrichments = (data.output as any).asn_organizations || {};
+          
           for (const route of data.output.routes) {
             for (const field of parsedDataFields) {
               const [header, accessor, align] = field;
@@ -119,11 +127,34 @@ export function useTableToString(
                   continue; // Skip this field entirely
                 }
                 
-                const fmtFunc = getFmtFunc(accessor) as (v: typeof value) => string;
-                value = fmtFunc(value);
+                // Special handling for AS path with enrichment
+                if (accessor === 'as_path') {
+                  value = formatAsPath(value as number[], enrichments);
+                }
+                // Special handling for next_hop with enrichment
+                else if (accessor === 'next_hop') {
+                  const nextHopOrg = (route as any).next_hop_org;
+                  const nextHopAsn = (route as any).next_hop_asn;
+                  if (nextHopOrg || nextHopAsn) {
+                    const asnPart = nextHopAsn ? nextHopAsn.replace(/^AS/, '') : '';
+                    const enrichmentPart = [asnPart, nextHopOrg].filter(Boolean).join(' ');
+                    value = enrichmentPart ? `${value} (${enrichmentPart})` : value;
+                  }
+                } else {
+                  const fmtFunc = getFmtFunc(accessor) as (v: typeof value) => string;
+                  value = fmtFunc(value);
+                }
+                
                 if (accessor === 'prefix') {
-                  const filteredSuffix = route.filtered ? ' (filtered)' : '';
-                  tableStringParts.push(`  - ${header}: ${value}${filteredSuffix}`);
+                  let statusSuffix = '';
+                  if (route.active) {
+                    statusSuffix = ' (active path)';
+                  } else if (route.filtered) {
+                    statusSuffix = ' (filtered)';
+                  } else {
+                    statusSuffix = ' (candidate)';
+                  }
+                  tableStringParts.push(`  - ${header}: ${value}${statusSuffix}`);
                 } else {
                   tableStringParts.push(`    - ${header}: ${value}`);
                 }
