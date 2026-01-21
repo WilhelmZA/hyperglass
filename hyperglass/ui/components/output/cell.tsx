@@ -1,4 +1,4 @@
-import { MonoField, Active, Weight, Age, Communities, RPKIState, ASPath, HideableField } from './fields';
+import { MonoField, Active, Weight, Age, Communities, RPKIState, ASPath, HideableField, NextHop } from './fields';
 
 import type { CellRenderProps } from '~/types';
 
@@ -14,7 +14,14 @@ export const Cell = (props: CellProps): JSX.Element => {
     med: <MonoField v={data.value} />,
     age: <Age inSeconds={data.value} />,
     prefix: <MonoField v={data.value} />,
-    next_hop: <MonoField v={data.value} />,
+    next_hop: (
+      <NextHop
+        ip={data.value}
+        asn={data.row.original.next_hop_asn}
+        org={data.row.original.next_hop_org}
+        country={data.row.original.next_hop_country}
+      />
+    ),
     peer_rid: <MonoField v={data.value} />,
     source_as: <MonoField v={data.value} />,
     active: <Active isActive={data.value} />,

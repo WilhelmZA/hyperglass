@@ -34,6 +34,13 @@ interface ASPathProps {
   asnOrgs?: Record<string, { name?: string; country?: string }>;
 }
 
+interface NextHopProps extends TextProps {
+  ip: string;
+  asn?: string | null;
+  org?: string | null;
+  country?: string | null;
+}
+
 interface CommunitiesProps {
   communities: string[];
 }
@@ -170,6 +177,43 @@ export const ASPath = (props: ASPathProps): JSX.Element => {
   });
 
   return <Flex>{paths}</Flex>;
+};
+
+export const NextHop = (props: NextHopProps): JSX.Element => {
+  const { ip, asn, org, country, ...rest } = props;
+  
+  // Build tooltip label with ASN - ORG format (strip AS prefix from asn to match AS path format)
+  const hasEnrichment = asn || org;
+  let tooltipLabel = '';
+  
+  if (hasEnrichment) {
+    const parts = [];
+    if (asn) {
+      // Remove "AS" prefix if present to match AS path tooltip format
+      const asnNumber = asn.startsWith('AS') ? asn.slice(2) : asn;
+      parts.push(asnNumber);
+    }
+    if (org) parts.push(org);
+    tooltipLabel = parts.join(' - ');
+  }
+  
+  if (!hasEnrichment) {
+    // No enrichment data, just show the IP
+    return (
+      <Text as="span" fontSize="sm" fontFamily="mono" {...rest}>
+        {ip}
+      </Text>
+    );
+  }
+  
+  // Show tooltip with ASN - ORG format
+  return (
+    <Tooltip hasArrow label={tooltipLabel} placement="top">
+      <Text as="span" fontSize="sm" fontFamily="mono" {...rest}>
+        {ip}
+      </Text>
+    </Tooltip>
+  );
 };
 
 export const Communities = (props: CommunitiesProps): JSX.Element => {
