@@ -73,6 +73,7 @@ export declare global {
     count: number;
     routes: Route[];
     winning_weight: 'high' | 'low';
+    asn_organizations?: Record<string, { name?: string; country?: string }>;
   };
 
   type TracerouteStructuredOutput = {
@@ -83,6 +84,7 @@ export declare global {
     max_hops: number;
     packet_size: number;
     raw_output: string | null;
+    asn_organizations?: Record<string, { name?: string; country?: string }>;
   };
 
   type BGPStructuredOutput = StructuredResponse;

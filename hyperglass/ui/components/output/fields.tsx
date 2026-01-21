@@ -30,6 +30,8 @@ interface WeightProps extends TextProps {
 interface ASPathProps {
   path: number[];
   active: boolean;
+  // Optional ASN -> org map populated when enrichment is enabled
+  asnOrgs?: Record<string, { name?: string; country?: string }>;
 }
 
 interface CommunitiesProps {
@@ -115,7 +117,7 @@ export const Weight = (props: WeightProps): JSX.Element => {
 };
 
 export const ASPath = (props: ASPathProps): JSX.Element => {
-  const { path, active } = props;
+  const { path, active, asnOrgs = {} } = props;
   const color = useColorValue(
     // light: inactive, active
     ['blackAlpha.500', 'blackAlpha.500'],
@@ -137,6 +139,8 @@ export const ASPath = (props: ASPathProps): JSX.Element => {
 
   path.map((asn, i) => {
     const asnStr = String(asn);
+    const orgName = asnOrgs?.[asnStr]?.name;
+    const tooltipLabel = orgName ? `${asnStr} - ${orgName}` : `AS${asnStr}`;
     i !== 0 &&
       paths.push(
         <DynamicIcon
@@ -151,9 +155,18 @@ export const ASPath = (props: ASPathProps): JSX.Element => {
       );
     paths.push(
       // biome-ignore lint/suspicious/noArrayIndexKey: index makes sense in this case.
-      <Text fontSize="sm" as="span" whiteSpace="pre" fontFamily="mono" key={`as-${asnStr}-${i}`}>
-        {asnStr}
-      </Text>,
+      <Tooltip hasArrow label={tooltipLabel} placement="top" key={`as-tooltip-${asnStr}-${i}`}>
+        <Link
+          href={`https://bgp.tools/as/${asnStr}`}
+          isExternal
+          fontSize="sm"
+          whiteSpace="pre"
+          fontFamily="mono"
+          color={color[+active]}
+        >
+          {asnStr}
+        </Link>
+      </Tooltip>,
     );
   });
 

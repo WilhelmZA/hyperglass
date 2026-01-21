@@ -21,7 +21,13 @@ export const Cell = (props: CellProps): JSX.Element => {
     source_rid: <HideableField v={data.value} />,
     local_preference: <MonoField v={data.value} />,
     communities: <Communities communities={data.value} />,
-    as_path: <ASPath path={data.value} active={data.row.values.active} />,
+    as_path: (
+      <ASPath
+        path={data.value}
+        active={data.row.values.active}
+        asnOrgs={(rawData as any).asn_organizations}
+      />
+    ),
     rpki_state: <RPKIState state={data.value} active={data.row.values.active} />,
     weight: <Weight weight={data.value} winningWeight={rawData.winning_weight} />,
   };

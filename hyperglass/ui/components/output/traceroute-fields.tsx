@@ -1,4 +1,4 @@
-import { Text, Tooltip, Badge } from '@chakra-ui/react';
+import { Text, Tooltip, Badge, Link } from '@chakra-ui/react';
 import { Else, If, Then } from 'react-if';
 import { useColorValue } from '~/hooks';
 
@@ -68,17 +68,27 @@ export const ASNField = (props: ASNFieldProps): JSX.Element => {
     ? (asn === 'IXP' ? `IXP - ${org}` : `${asnDisplay} - ${org}`)
     : asnDisplay;
   
+  const isNumericAsn = /^\d+$/.test(asnDisplay);
+  const content = isNumericAsn ? (
+    <Link
+      href={`https://bgp.tools/as/${asnDisplay}`}
+      isExternal
+      fontSize="sm"
+      fontFamily="mono"
+      cursor="pointer"
+      {...rest}
+    >
+      {asnDisplay}
+    </Link>
+  ) : (
+    <Text as="span" fontSize="sm" fontFamily="mono" cursor="help" {...rest}>
+      {asnDisplay}
+    </Text>
+  );
+
   return (
     <Tooltip hasArrow label={tooltipLabel} placement="top">
-      <Text 
-        as="span" 
-        fontSize="sm" 
-        fontFamily="mono" 
-        cursor="help"
-        {...rest}
-      >
-        {asnDisplay}
-      </Text>
+      {content}
     </Tooltip>
   );
 };
