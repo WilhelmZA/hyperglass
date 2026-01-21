@@ -32,7 +32,8 @@ For devices with structured traceroute support (Arista EOS, FRRouting, Huawei VR
 | `structured.communities.items`    | List of Strings |               | List of communities to match (used by `deny` and `permit` modes).                                                                     |
 | `structured.communities.names`    | Dict            |               | Dictionary mapping BGP community codes to friendly names (used by `name` mode).                                                       |
 | `structured.ip_enrichment.cache_timeout`    | Integer         | 604800        | **DEPRECATED:** No longer used with real-time BGP.tools lookups. Kept for backward compatibility only.                               |
-| `structured.ip_enrichment.enrich_traceroute`| Boolean         | true          | When `structured:` is present, enable IP enrichment of traceroute hops (ASN, org, IXP). This must be true for enrichment to run.   |
+| `structured.ip_enrichment.enrich_traceroute`| Boolean         | false         | When `structured:` is present, enable IP enrichment of traceroute hops (ASN, org, IXP). This must be true for enrichment to run.   |
+| `structured.ip_enrichment.enrich_bgproute` | Boolean         | false         | When `structured:` is present, enable early ASN/org enrichment for BGP routes. When true, enrichment happens immediately on query response. When false, enrichment is lazy-loaded when viewing AS Path. |
 | `structured.enable_for_traceroute`| Boolean         | (when structured present) true | When `structured:` is present this controls whether the structured traceroute table output is shown. Set to false to force raw router output. |
 | `structured.enable_for_bgp_route`| Boolean         | (when structured present) true | When `structured:` is present this controls whether the structured BGP route table output is shown. Set to false to force raw router output. |
 
@@ -208,6 +209,7 @@ structured:
 structured:
     ip_enrichment:
         enrich_traceroute: false  # Traceroute will show basic hop info without ASN/org data
+        enrich_bgproute: true      # BGP routes will include ASN/org enrichment on query response
 ```
 
 <Callout type="warning" emoji="⚠️">
@@ -215,9 +217,47 @@ structured:
     
     Without IP enrichment enabled:
     - Traceroute hops will only show IP addresses and RTT values
-    - No ASN, organization names, or country information will be displayed
+    - BGP next-hop IPs will not show ASN/organization tooltips
+    - No ASN organization names in copied BGP route text
     - AS path visualization will be limited or unavailable
     - IXP detection will not function
     
-    For the full structured traceroute experience with rich metadata, `ip_enrichment.enrich_traceroute: true` is required.
+    For the full structured traceroute and BGP route experience with rich metadata, enable the appropriate enrichment settings.
 </Callout>
+
+### BGP Route Enrichment
+
+BGP route enrichment provides two modes for ASN and organization lookups:
+
+#### Early Enrichment (On-Query)
+When `enrich_bgproute: true`, enrichment happens immediately during query execution:
+- ✅ ASN names appear instantly in AS path entries
+- ✅ Next-hop IP tooltips show organization information
+- ✅ Copied text includes enriched data: `37468 (Organization) → 12956 (Organization)`
+- ⚠️ Adds a small delay to query execution for bulk lookups
+
+```yaml filename="config.yaml" copy {4}
+structured:
+    ip_enrichment:
+        enrich_bgproute: true
+```
+
+#### Lazy Enrichment (On-Demand)
+When `enrich_bgproute: false` (default), enrichment happens only when needed:
+- ✅ Faster initial query response
+- ✅ Organization names load when clicking "View AS Path" button or hovering
+- ✅ Reduces unnecessary lookups for partial queries
+- ⚠️ Organization names not included in copied text by default
+
+```yaml filename="config.yaml" copy {4}
+structured:
+    ip_enrichment:
+        enrich_bgproute: false
+```
+
+#### Next-Hop Enrichment
+
+Regardless of enrichment mode, next-hop IPs for BGP routes are always enriched with:
+- Peer ASN (if available)
+- Peer organization name (if available)
+- Hovering over a next-hop IP shows: `192.0.2.1 (ASN Organization)`
