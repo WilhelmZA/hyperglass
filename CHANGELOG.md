@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- State initialization race condition: Added automatic retry logic (up to 5 times with 0.5s delay) in API dependencies to prevent 400 errors on early requests before Redis state is fully populated. This fixes intermittent query failures at startup.
+
 ## 2.1.3 - 2026-01-21
 
 ### Added
