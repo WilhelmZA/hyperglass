@@ -162,7 +162,6 @@ export const ASPath = (props: ASPathProps): JSX.Element => {
           fontSize="sm"
           whiteSpace="pre"
           fontFamily="mono"
-          color={color[+active]}
         >
           {asnStr}
         </Link>

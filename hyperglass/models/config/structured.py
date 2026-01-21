@@ -41,12 +41,20 @@ class StructuredRpki(HyperglassModel):
 class StructuredIpEnrichment(HyperglassModel):
     """Control IP enrichment for structured data responses using real-time BGP.TOOLS lookups."""
 
-    enrich_traceroute: bool = True
+    enrich_traceroute: bool = False
     """Enable ASN/org/IP enrichment for traceroute hops using real-time BGP.TOOLS data."""
+
+    enrich_bgproute: bool = False
+    """Enable early ASN/org enrichment for BGP routes. When true, enrichment happens immediately on query response. When false, enrichment is lazy-loaded when viewing AS Path."""
 
     @field_validator("enrich_traceroute")
     def validate_enrich_traceroute(cls, value: bool) -> bool:
         """Validate traceroute enrichment setting."""
+        return value
+
+    @field_validator("enrich_bgproute")
+    def validate_enrich_bgproute(cls, value: bool) -> bool:
+        """Validate BGP route enrichment setting."""
         return value
 
 
