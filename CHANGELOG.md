@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## 2.1.4 - 2026-01-22
+
 ### Fixed
 - State initialization race condition: Added comprehensive retry logic at both API dependency and query execution layers. API dependencies (get_state, get_params, get_devices, get_ui_params) retry up to 5 times with 0.5s delay. Query execution layer (_execute_with_state_retry) applies the same retry mechanism to execute() calls to catch StateError exceptions that occur downstream in execution drivers. This fixes intermittent 400 errors when requests arrive before Redis state is fully populated on startup.
 
