@@ -9,7 +9,9 @@ from hyperglass.state import use_state
 from hyperglass.exceptions.private import StateError
 
 
-async def _get_state_with_retry(attr: t.Optional[str] = None, max_retries: int = 5, retry_delay: float = 0.5):
+async def _get_state_with_retry(
+    attr: t.Optional[str] = None, max_retries: int = 5, retry_delay: float = 0.5
+):
     """Get hyperglass state with automatic retry on StateError."""
     last_error = None
     for attempt in range(max_retries):

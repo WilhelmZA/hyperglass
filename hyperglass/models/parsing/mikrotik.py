@@ -105,20 +105,20 @@ class MikrotikRouteEntry(MikrotikBase):
     @property
     def source_rid(self) -> str:
         """Extract the IP/IPv6 address from belongs-to field.
-        
+
         Examples:
             belongs-to="bgp-IP-196.60.96.109" -> "196.60.96.109"
             belongs-to="bgp-IPv6-2001:43f8:6d0::11:141" -> "2001:43f8:6d0::11:141"
         """
         if not self.belongs_to:
             return ""
-        
+
         # Remove bgp-IP- or bgp-IPv6- prefix
         if self.belongs_to.startswith("bgp-IP-"):
             return self.belongs_to[7:]  # len("bgp-IP-") = 7
         elif self.belongs_to.startswith("bgp-IPv6-"):
             return self.belongs_to[9:]  # len("bgp-IPv6-") = 9
-        
+
         return ""
 
     @property
