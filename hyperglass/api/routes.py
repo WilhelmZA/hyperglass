@@ -17,6 +17,7 @@ from litestar.background_tasks import BackgroundTask
 from hyperglass.log import log
 from hyperglass.state import HyperglassState
 from hyperglass.exceptions import HyperglassError
+from hyperglass.exceptions.private import StateError
 from hyperglass.exceptions.public import DeviceTimeout, ResponseEmpty
 from hyperglass.models.api import Query
 from hyperglass.models.data import OutputDataModel
@@ -37,18 +38,47 @@ _ongoing_queries: t.Dict[str, asyncio.Event] = {}
 
 async def _cleanup_query_event(cache_key: str) -> None:
     """Clean up completed query event after a short delay."""
-    await asyncio.sleep(5)  # Allow time for waiting requests to proceed
-    _ongoing_queries.pop(cache_key, None)
-
-
-# Global dict to track ongoing queries to prevent duplicate execution
-_ongoing_queries: t.Dict[str, asyncio.Event] = {}
-
-
-async def _cleanup_query_event(cache_key: str) -> None:
-    """Clean up completed query event after a short delay."""
     await asyncio.sleep(1)  # Allow waiting requests to proceed
     _ongoing_queries.pop(cache_key, None)
+
+
+async def _execute_with_state_retry(
+    data: Query, max_retries: int = 5, retry_delay: float = 0.5
+) -> OutputDataModel | str:
+    """Execute query with automatic retry on state initialization errors.
+
+    Args:
+        data: The query data to execute
+        max_retries: Maximum number of retry attempts
+        retry_delay: Delay in seconds between retries
+
+    Returns:
+        The query output (OutputDataModel or string)
+
+    Raises:
+        HyperglassError: If all retries are exhausted
+    """
+    _log = log.bind(query=data.summary())
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            return await execute(data)
+        except StateError as e:
+            if attempt < max_retries:
+                _log.bind(
+                    attempt=attempt,
+                    max_retries=max_retries,
+                    retry_delay=retry_delay,
+                    error=str(e),
+                ).debug("State initialization error - retrying after delay")
+                await asyncio.sleep(retry_delay)
+            else:
+                _log.bind(
+                    attempt=attempt,
+                    max_retries=max_retries,
+                    error=str(e),
+                ).warning("State initialization error - max retries exhausted")
+                raise
 
 
 __all__ = (
@@ -213,7 +243,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                             "Starting MikroTik BGP query attempt"
                         )
                         attempt_start = time.time()
-                        output = await execute(data)
+                        output = await _execute_with_state_retry(data)
                         attempt_time = round(time.time() - attempt_start, 4)
 
                         empty_bgp = False
