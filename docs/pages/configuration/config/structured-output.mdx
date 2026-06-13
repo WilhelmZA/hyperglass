@@ -89,3 +89,9 @@ structured:
             "65000:100": "Customer Route"
             "65000:200": "Peer Route"
 ```
+
+## IP Enrichment
+
+hyperglass can enrich structured responses with ASN, organization, country, and IXP metadata resolved in real time from [bgp.tools](https://bgp.tools/). This data powers the organization names shown on AS paths and next-hops, and the per-hop detail in structured traceroute.
+
+Enrichment is performed by an internal service that issues bulk WHOIS lookups to bgp.tools; results are cached in-memory for the life of the process. No configuration is required to make the service available — it is enabled per-feature via the [`structured.ip_enrichment`](#ip-enrichment-configuration) settings documented below.
