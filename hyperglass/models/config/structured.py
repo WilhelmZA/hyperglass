@@ -49,11 +49,23 @@ class StructuredRpki(HyperglassModel):
         return self
 
 
+class StructuredIpEnrichment(HyperglassModel):
+    """Control IP enrichment for structured data responses using real-time BGP.tools lookups."""
+
+    enrich_traceroute: bool = False
+    """Enable ASN/org/IP enrichment for traceroute hops using real-time BGP.tools data."""
+
+    enrich_bgproute: bool = False
+    """Enable early ASN/org enrichment for BGP routes. When true, enrichment happens immediately
+    on query response. When false, enrichment is lazy-loaded when viewing the AS Path."""
+
+
 class Structured(HyperglassModel):
     """Control structured data responses."""
 
     communities: StructuredCommunities = StructuredCommunities()
     rpki: StructuredRpki = StructuredRpki()
+    ip_enrichment: StructuredIpEnrichment = StructuredIpEnrichment()
 
     # Top-level structured enable/disable flags. If `structured:` is present in
     # the user's config and these are not set (None), the structured table

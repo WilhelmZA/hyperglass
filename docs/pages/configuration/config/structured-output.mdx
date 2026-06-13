@@ -122,3 +122,28 @@ structured:
 hyperglass can enrich structured responses with ASN, organization, country, and IXP metadata resolved in real time from [bgp.tools](https://bgp.tools/). This data powers the organization names shown on AS paths and next-hops, and the per-hop detail in structured traceroute.
 
 Enrichment is performed by an internal service that issues bulk WHOIS lookups to bgp.tools; results are cached in-memory for the life of the process. No configuration is required to make the service available — it is enabled per-feature via the [`structured.ip_enrichment`](#ip-enrichment-configuration) settings documented below.
+
+### IP Enrichment Configuration
+
+| Parameter                                | Type    | Default Value | Description                                                                                                                                                 |
+| :--------------------------------------- | :------ | :------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `structured.ip_enrichment.enrich_traceroute` | Boolean | `false`   | Resolve ASN, organization, country, and IXP details for each traceroute hop.                                                                               |
+| `structured.ip_enrichment.enrich_bgproute`    | Boolean | `false`   | When `true`, BGP next-hop and AS-path organizations are resolved eagerly as part of the query response. When `false`, they are resolved lazily on demand when the AS Path view is opened (via the `/api/aspath/enrich` endpoint). |
+
+When BGP routes are enriched, AS-path entries link to `https://bgp.tools/as/<asn>` and display the organization name on hover, and next-hop IPs show their ASN and organization.
+
+### Enable Traceroute Enrichment
+
+```yaml filename="config.yaml" copy {3}
+structured:
+    ip_enrichment:
+        enrich_traceroute: true
+```
+
+### Eagerly Enrich BGP Routes
+
+```yaml filename="config.yaml" copy {3}
+structured:
+    ip_enrichment:
+        enrich_bgproute: true
+```
