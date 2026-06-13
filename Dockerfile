@@ -1,4 +1,4 @@
-FROM python:3.12.3-alpine as base
+FROM python:3.13-alpine AS base
 WORKDIR /opt/hyperglass
 ENV HYPERGLASS_APP_PATH=/etc/hyperglass
 ENV HYPERGLASS_HOST=0.0.0.0
@@ -12,9 +12,10 @@ COPY . .
 
 FROM base as ui
 WORKDIR /opt/hyperglass/hyperglass/ui
-RUN apk add build-base pkgconfig cairo-dev nodejs npm
-RUN npm install -g pnpm
-RUN pnpm install -P
+RUN apk add build-base pkgconfig cairo-dev nodejs npm \
+  && npm install -g npm@10.9.3 pnpm@9 \
+  && npm --prefix /usr/lib/node_modules/npm install glob@11.1.0 \
+  && pnpm install -P
 
 FROM ui as hyperglass
 WORKDIR /opt/hyperglass
