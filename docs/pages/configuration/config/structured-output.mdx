@@ -7,6 +7,8 @@ Devices that support responding to a query with structured or easily parsable da
 -   Huawei VRP
 -   MikroTik RouterOS / SwitchOS
 
+MikroTik structured BGP output (Route, AS Path, and Community queries) requires **RouterOS v7+**, as it parses the output of `routing route print detail`. RouterOS v6 uses a different route-print syntax and is not supported for structured BGP.
+
 When structured output is available, hyperglass checks the RPKI state of each BGP prefix returned using one of two methods:
 
 1. From the router's perspective
