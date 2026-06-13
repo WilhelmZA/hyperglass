@@ -30,6 +30,15 @@ interface WeightProps extends TextProps {
 interface ASPathProps {
   path: number[];
   active: boolean;
+  // Optional ASN -> org map populated when enrichment is enabled
+  asnOrgs?: Record<string, { name?: string; country?: string }>;
+}
+
+interface NextHopProps extends TextProps {
+  ip: string;
+  asn?: string | null;
+  org?: string | null;
+  country?: string | null;
 }
 
 interface CommunitiesProps {
@@ -50,6 +59,16 @@ dayjs.extend(utcPlugin);
 
 export const MonoField = (props: MonoFieldProps): JSX.Element => {
   const { v, ...rest } = props;
+  
+  // Handle empty or undefined values, but not zero values
+  if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) {
+    return (
+      <Text as="span" fontSize="sm" fontFamily="mono" color="gray.500" {...rest}>
+        N/A
+      </Text>
+    );
+  }
+  
   return (
     <Text as="span" fontSize="sm" fontFamily="mono" {...rest}>
       {v}
@@ -74,6 +93,12 @@ export const Active = (props: ActiveProps): JSX.Element => {
 
 export const Age = (props: AgeProps): JSX.Element => {
   const { inSeconds, ...rest } = props;
+  
+  // Handle case where age is not available (e.g., MikroTik) - hide the field entirely
+  if (inSeconds === -1) {
+    return <></>;
+  }
+  
   const now = dayjs.utc();
   const then = now.subtract(inSeconds, 'second');
   return (
@@ -99,7 +124,7 @@ export const Weight = (props: WeightProps): JSX.Element => {
 };
 
 export const ASPath = (props: ASPathProps): JSX.Element => {
-  const { path, active } = props;
+  const { path, active, asnOrgs = {} } = props;
   const color = useColorValue(
     // light: inactive, active
     ['blackAlpha.500', 'blackAlpha.500'],
@@ -121,6 +146,8 @@ export const ASPath = (props: ASPathProps): JSX.Element => {
 
   path.map((asn, i) => {
     const asnStr = String(asn);
+    const orgName = asnOrgs?.[asnStr]?.name;
+    const tooltipLabel = orgName ? `${asnStr} - ${orgName}` : `AS${asnStr}`;
     i !== 0 &&
       paths.push(
         <DynamicIcon
@@ -135,13 +162,58 @@ export const ASPath = (props: ASPathProps): JSX.Element => {
       );
     paths.push(
       // biome-ignore lint/suspicious/noArrayIndexKey: index makes sense in this case.
-      <Text fontSize="sm" as="span" whiteSpace="pre" fontFamily="mono" key={`as-${asnStr}-${i}`}>
-        {asnStr}
-      </Text>,
+      <Tooltip hasArrow label={tooltipLabel} placement="top" key={`as-tooltip-${asnStr}-${i}`}>
+        <Link
+          href={`https://bgp.tools/as/${asnStr}`}
+          isExternal
+          fontSize="sm"
+          whiteSpace="pre"
+          fontFamily="mono"
+        >
+          {asnStr}
+        </Link>
+      </Tooltip>,
     );
   });
 
   return <Flex>{paths}</Flex>;
+};
+
+export const NextHop = (props: NextHopProps): JSX.Element => {
+  const { ip, asn, org, country, ...rest } = props;
+  
+  // Build tooltip label with ASN - ORG format (strip AS prefix from asn to match AS path format)
+  const hasEnrichment = asn || org;
+  let tooltipLabel = '';
+  
+  if (hasEnrichment) {
+    const parts = [];
+    if (asn) {
+      // Remove "AS" prefix if present to match AS path tooltip format
+      const asnNumber = asn.startsWith('AS') ? asn.slice(2) : asn;
+      parts.push(asnNumber);
+    }
+    if (org) parts.push(org);
+    tooltipLabel = parts.join(' - ');
+  }
+  
+  if (!hasEnrichment) {
+    // No enrichment data, just show the IP
+    return (
+      <Text as="span" fontSize="sm" fontFamily="mono" {...rest}>
+        {ip}
+      </Text>
+    );
+  }
+  
+  // Show tooltip with ASN - ORG format
+  return (
+    <Tooltip hasArrow label={tooltipLabel} placement="top">
+      <Text as="span" fontSize="sm" fontFamily="mono" {...rest}>
+        {ip}
+      </Text>
+    </Tooltip>
+  );
 };
 
 export const Communities = (props: CommunitiesProps): JSX.Element => {
@@ -149,6 +221,16 @@ export const Communities = (props: CommunitiesProps): JSX.Element => {
   const { web } = useConfig();
   const bg = useColorValue('white', 'gray.900');
   const color = useOpposingColor(bg);
+  
+  // Parse communities to separate code and name if present
+  const parsedCommunities = communities.map(community => {
+    if (community.includes(',')) {
+      const [code, name] = community.split(',', 2);
+      return { code, name, display: `${code} - ${name}` };
+    }
+    return { code: community, name: null, display: community };
+  });
+  
   return (
     <If condition={communities.length === 0}>
       <Then>
@@ -175,7 +257,9 @@ export const Communities = (props: CommunitiesProps): JSX.Element => {
             fontWeight="normal"
             whiteSpace="pre-wrap"
           >
-            {communities.join('\n')}
+            {parsedCommunities.map(({ display }, index) => (
+              <Text key={index} as="div">{display}</Text>
+            ))}
           </MenuList>
         </Menu>
       </Else>
@@ -231,3 +315,18 @@ const _RPKIState: React.ForwardRefRenderFunction<HTMLDivElement, RPKIStateProps>
 };
 
 export const RPKIState = forwardRef<HTMLDivElement, RPKIStateProps>(_RPKIState);
+
+export const HideableField = (props: MonoFieldProps): JSX.Element => {
+  const { v, ...rest } = props;
+  
+  // Hide the field entirely if value is empty or undefined
+  if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) {
+    return <></>;
+  }
+  
+  return (
+    <Text as="span" fontSize="sm" fontFamily="mono" {...rest}>
+      {v}
+    </Text>
+  );
+};

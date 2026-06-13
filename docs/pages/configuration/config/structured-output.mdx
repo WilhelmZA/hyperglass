@@ -93,6 +93,30 @@ structured:
             "65000:200": "Peer Route"
 ```
 
+## Structured Traceroute
+
+In addition to BGP routes, hyperglass can parse traceroute output into a structured hop table (and JSON via the REST API). Each hop shows the hop number, IP address, resolved hostname (when available), and per-probe round-trip times; MikroTik hops also include loss and probe counts. When [IP enrichment](#ip-enrichment) is enabled, each hop is annotated with its ASN, organization, country, and IXP membership.
+
+Structured traceroute is supported on the following platforms:
+
+-   FRRouting
+-   Huawei VRP
+-   MikroTik RouterOS / SwitchOS
+
+Structured output (for both BGP routes and traceroute) is controlled per query type. When a `structured:` block is present in the device's configuration and the device has `structured_output: true`, structured output is enabled by default. The two flags below let you disable it for a specific query type without removing the `structured:` block:
+
+| Parameter                          | Type    | Default Value | Description                                                                                  |
+| :--------------------------------- | :------ | :------------ | :------------------------------------------------------------------------------------------- |
+| `structured.enable_for_traceroute` | Boolean | (enabled)     | Set to `false` to return raw (unstructured) traceroute output even when structured is available. |
+| `structured.enable_for_bgp_route`  | Boolean | (enabled)     | Set to `false` to return raw (unstructured) BGP route output even when structured is available.  |
+
+### Disable Structured Traceroute (keep structured BGP)
+
+```yaml filename="config.yaml" copy {2}
+structured:
+    enable_for_traceroute: false
+```
+
 ## IP Enrichment
 
 hyperglass can enrich structured responses with ASN, organization, country, and IXP metadata resolved in real time from [bgp.tools](https://bgp.tools/). This data powers the organization names shown on AS paths and next-hops, and the per-hop detail in structured traceroute.
