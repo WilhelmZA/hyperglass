@@ -8,6 +8,7 @@ from .bgp_route_huawei import BGPRoutePluginHuawei
 from .bgp_routestr_huawei import BGPSTRRoutePluginHuawei
 from .bgp_route_juniper import BGPRoutePluginJuniper
 from .mikrotik_garbage_output import MikrotikGarbageOutput
+from .mikrotik_normalize_input import MikrotikTargetNormalizerInput
 
 __all__ = (
     "BGPRoutePluginArista",
@@ -16,5 +17,6 @@ __all__ = (
     "BGPRoutePluginHuawei",
     "BGPSTRRoutePluginHuawei",
     "MikrotikGarbageOutput",
+    "MikrotikTargetNormalizerInput",
     "RemoveCommand",
 )
