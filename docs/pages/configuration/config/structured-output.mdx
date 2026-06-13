@@ -19,8 +19,9 @@ Additionally, hyperglass provides the ability to control which BGP communities a
 | `structured.rpki.mode`         | String          | router        | Use `router` to use the router's view of the RPKI state (1 above), or `external` to use an external validator (2 above).      |
 | `structured.rpki.backend`      | String          | cloudflare    | When `mode` is `external`, the validator to use: `cloudflare` or `routinator`.                                               |
 | `structured.rpki.rpki_server_url` | String       |               | Base URL of the Routinator instance. **Required** when `backend` is `routinator` (e.g. `http://routinator.example.net:8323`). |
-| `structured.communities.mode`  | String          | deny          | Use `deny` to deny any communities listed in `structured.communities.items`, or `permit` to _only_ permit communities listed. |
-| `structured.communities.items` | List of Strings |               | List of communities to match.                                                                                                 |
+| `structured.communities.mode`  | String          | deny          | `deny` hides communities listed in `items`; `permit` shows _only_ those listed; `name` shows all communities and appends a friendly label to any listed in `names`. |
+| `structured.communities.items` | List of Strings |               | List of communities to match (used by `deny`/`permit`).                                                                       |
+| `structured.communities.names` | Map of String→String |          | Map of community → friendly name, used by `name` mode. At least one entry is required when `mode` is `name`.                   |
 
 ### RPKI Examples
 
@@ -73,4 +74,17 @@ structured:
         items:
             - "^65000:.*$" # permit any communities starting with 65000, but no others.
             - "1234:1" # permit only the 1234:1 community.
+```
+
+#### Show Friendly Names Alongside Communities
+
+With `mode: name`, all communities are shown, and any community listed in `names` has its friendly label appended (rendered as `<community> (<name>)` in the UI).
+
+```yaml filename="config.yaml" {3-6}
+structured:
+    communities:
+        mode: name
+        names:
+            "65000:100": "Customer Route"
+            "65000:200": "Peer Route"
 ```

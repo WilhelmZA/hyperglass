@@ -4,12 +4,12 @@
 import typing as t
 
 # Third Party
-from pydantic import model_validator
+from pydantic import ValidationInfo, field_validator, model_validator
 
 # Local
 from ..main import HyperglassModel
 
-StructuredCommunityMode = t.Literal["permit", "deny"]
+StructuredCommunityMode = t.Literal["permit", "deny", "name"]
 StructuredRPKIMode = t.Literal["router", "external"]
 StructuredRPKIBackend = t.Literal["cloudflare", "routinator"]
 
@@ -19,6 +19,17 @@ class StructuredCommunities(HyperglassModel):
 
     mode: StructuredCommunityMode = "deny"
     items: t.List[str] = []
+    names: t.Dict[str, str] = {}
+
+    @field_validator("names")
+    def validate_names(cls, value: t.Dict[str, str], info: ValidationInfo) -> t.Dict[str, str]:
+        """Require at least one community mapping when mode is 'name'."""
+        if info.data and info.data.get("mode") == "name" and not value:
+            raise ValueError(
+                "When using mode 'name', at least one community mapping must be "
+                "provided in 'names'"
+            )
+        return value
 
 
 class StructuredRpki(HyperglassModel):
