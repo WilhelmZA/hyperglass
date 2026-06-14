@@ -122,6 +122,7 @@ export const Table = (props: TableProps): JSX.Element => {
         <TableBody>
           {page.map((row, key) => {
             prepareRow(row);
+            const dimText = row.original.filtered;
             return (
               <TableRow
                 index={key}
@@ -129,6 +130,7 @@ export const Table = (props: TableProps): JSX.Element => {
                 highlightBg={rowHighlightBg}
                 doHorizontalBorders={bordersHorizontal}
                 highlight={row.values[rowHighlightProp ?? ''] ?? false}
+                dimText={dimText}
                 {...row.getRowProps()}
               >
                 {row.cells.map((cell, i) => {
@@ -137,6 +139,7 @@ export const Table = (props: TableProps): JSX.Element => {
                     <TableCell
                       align={cell.column.align}
                       bordersVertical={[bordersVertical, i]}
+                      dimText={dimText}
                       {...cell.getCellProps()}
                     >
                       {typeof Cell !== 'undefined' ? (
