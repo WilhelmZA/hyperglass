@@ -42,6 +42,7 @@ class BGPRoute(HyperglassModel):
         Actions:
             permit: only permit matches
             deny: only deny matches
+            name: append friendly names to matching communities
         """
 
         (structured := use_state("params").structured)
@@ -64,6 +65,15 @@ class BGPRoute(HyperglassModel):
                     break
             return valid
 
+        def _name(comm):
+            """Append a friendly name to a community when one is mapped."""
+            if comm in structured.communities.names:
+                return f"{comm},{structured.communities.names[comm]}"
+            return comm
+
+        if structured.communities.mode == "name":
+            return [_name(c) for c in value]
+
         func_map = {"permit": _permit, "deny": _deny}
         func = func_map[structured.communities.mode]
 
@@ -80,10 +90,9 @@ class BGPRoute(HyperglassModel):
             return value
 
         if structured.rpki.mode == "external":
-            # If external validation is enabled, validate the prefix
-            # & asn with Cloudflare's RPKI API.
+            # If external validation is enabled, validate the prefix & asn
+            # with the configured RPKI backend.
             as_path = info.data.get("as_path", [])
-
             if len(as_path) == 0:
                 # If the AS_PATH length is 0, i.e. for an internal route,
                 # return RPKI Unknown state.
@@ -91,14 +100,19 @@ class BGPRoute(HyperglassModel):
             # Get last ASN in path
             asn = as_path[-1]
 
-        try:
-            net = ip_network(info.data["prefix"])
-        except ValueError:
-            return 3
+            try:
+                net = ip_network(info.data["prefix"])
+            except ValueError:
+                return 3
 
-        # Only do external RPKI lookups for global prefixes.
-        if net.is_global:
-            return rpki_state(prefix=info.data["prefix"], asn=asn)
+            # Only do external RPKI lookups for global prefixes.
+            if net.is_global:
+                return rpki_state(
+                    prefix=info.data["prefix"],
+                    asn=asn,
+                    backend=structured.rpki.backend,
+                    rpki_server_url=structured.rpki.rpki_server_url,
+                )
 
         return value
 
