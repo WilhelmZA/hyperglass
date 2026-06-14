@@ -247,10 +247,10 @@ class Device(HyperglassModelWithId, extra="allow"):
         if value is True:
             if info.data.get("platform") not in SUPPORTED_STRUCTURED_OUTPUT:
                 raise ConfigError(
-                    "The 'structured_output' field is set to 'true' on device '{}' with "
-                    + "platform '{}', which does not support structured output",
-                    info.data.get("name"),
-                    info.data.get("platform"),
+                    "The 'structured_output' field is set to 'true' on device '{d}' with "
+                    "platform '{p}', which does not support structured output",
+                    d=info.data.get("name"),
+                    p=info.data.get("platform"),
                 )
             return value
         if value is None and info.data.get("platform") in SUPPORTED_STRUCTURED_OUTPUT:
