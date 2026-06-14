@@ -389,11 +389,17 @@ class MikrotikTracerouteTable(MikrotikBase):
         # Find the table header to start parsing from
         header_found = False
         data_start_index = 0
+        has_index_column = False
 
         for i, line in enumerate(lines):
             if "ADDRESS" in line and "LOSS" in line and "SENT" in line:
                 header_found = True
                 data_start_index = i + 1
+                # Some RouterOS versions prefix each row with a hop-index column,
+                # so the header begins with "#" (e.g. "# ADDRESS LOSS SENT ...").
+                # Detect it here so the data rows can drop that leading column.
+                header_tokens = line.split()
+                has_index_column = bool(header_tokens) and header_tokens[0] == "#"
                 break
 
         if not header_found:
@@ -415,6 +421,9 @@ class MikrotikTracerouteTable(MikrotikBase):
             try:
                 # Parse data line
                 parts = line.split()
+                # Drop the leading hop-index column when present (e.g. "0  1.2.3.4 ...").
+                if has_index_column and parts and re.fullmatch(r"\d+", parts[0]):
+                    parts = parts[1:]
                 if len(parts) < 3:
                     continue
 

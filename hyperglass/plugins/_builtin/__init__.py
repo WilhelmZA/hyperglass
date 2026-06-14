@@ -10,6 +10,11 @@ from .bgp_route_juniper import BGPRoutePluginJuniper
 from .mikrotik_garbage_output import MikrotikGarbageOutput
 from .mikrotik_normalize_input import MikrotikTargetNormalizerInput
 from .bgp_routestr_mikrotik import BGPSTRRoutePluginMikrotik
+from .trace_route_frr import TraceroutePluginFrr
+from .trace_route_huawei import TraceroutePluginHuawei
+from .trace_route_mikrotik import TraceroutePluginMikrotik
+from .traceroute_ip_enrichment import ZTracerouteIpEnrichment
+from .bgp_route_enrichment import ZBgpRouteEnrichment
 
 __all__ = (
     "BGPRoutePluginArista",
@@ -20,5 +25,10 @@ __all__ = (
     "MikrotikGarbageOutput",
     "MikrotikTargetNormalizerInput",
     "BGPSTRRoutePluginMikrotik",
+    "TraceroutePluginFrr",
+    "TraceroutePluginHuawei",
+    "TraceroutePluginMikrotik",
+    "ZTracerouteIpEnrichment",
+    "ZBgpRouteEnrichment",
     "RemoveCommand",
 )
