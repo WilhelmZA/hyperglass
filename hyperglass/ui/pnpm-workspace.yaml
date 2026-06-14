@@ -1,5 +1,17 @@
-onlyBuiltDependencies:
-  - '@biomejs/biome'
-  - esbuild
+# Build-script approvals (pnpm 11 `allowBuilds`). sharp is an optional native
+# dep pulled in by Next 15; the static export build does not use next/image, so
+# its build script is intentionally skipped (avoids ERR_PNPM_IGNORED_BUILDS).
+allowBuilds:
+  '@biomejs/biome': true
+  esbuild: true
+  sharp: false
+# Migrated from package.json `pnpm.overrides` (pnpm 11 no longer reads that key).
+# Security pins for transitive deps:
+#   ua-parser-js   >=0.7.36  (ReDoS CVEs in older 0.7.x)
+#   @babel/runtime, @babel/helpers  pinned to a patched release
+overrides:
+  ua-parser-js: '^0.7.36'
+  '@babel/runtime': '7.26.10'
+  '@babel/helpers': '7.26.10'
 packages:
   - .
