@@ -16,19 +16,19 @@ import { PageSelect } from './page-select';
 import type { TableOptions, PluginHook } from 'react-table';
 import type { Theme, TableColumn, CellRenderProps } from '~/types';
 
-interface TableProps {
-  data: Route[];
+interface TableProps<T = Route> {
+  data: T[];
   striped?: boolean;
-  columns: TableColumn[];
+  columns: TableColumn[] | any[]; // Allow more flexible column types
   heading?: React.ReactNode;
   bordersVertical?: boolean;
   bordersHorizontal?: boolean;
-  Cell?: React.FC<CellRenderProps>;
-  rowHighlightProp?: keyof Route;
+  Cell?: React.FC<any>; // More flexible cell render props
+  rowHighlightProp?: keyof T;
   rowHighlightBg?: Theme.ColorNames;
 }
 
-export const Table = (props: TableProps): JSX.Element => {
+export const Table = <T = Route>(props: TableProps<T>): JSX.Element => {
   const {
     data,
     columns,
@@ -61,12 +61,15 @@ export const Table = (props: TableProps): JSX.Element => {
     columns,
     defaultColumn,
     data,
-    initialState: { hiddenColumns },
-  } as TableOptions<Route>;
+    initialState: { 
+      hiddenColumns,
+      pageSize: 50  // Default to 50 rows instead of default 10
+    },
+  } as TableOptions<T>;
 
-  const plugins = [useSortBy, usePagination] as PluginHook<Route>[];
+  const plugins = [useSortBy, usePagination] as PluginHook<T>[];
 
-  const instance = useTable<Route>(options, ...plugins);
+  const instance = useTable<T>(options, ...plugins);
 
   const {
     page,
@@ -122,6 +125,7 @@ export const Table = (props: TableProps): JSX.Element => {
         <TableBody>
           {page.map((row, key) => {
             prepareRow(row);
+            const dimText = Boolean((row.original as { filtered?: boolean }).filtered);
             return (
               <TableRow
                 index={key}
@@ -129,6 +133,7 @@ export const Table = (props: TableProps): JSX.Element => {
                 highlightBg={rowHighlightBg}
                 doHorizontalBorders={bordersHorizontal}
                 highlight={row.values[rowHighlightProp ?? ''] ?? false}
+                dimText={dimText}
                 {...row.getRowProps()}
               >
                 {row.cells.map((cell, i) => {
@@ -137,6 +142,7 @@ export const Table = (props: TableProps): JSX.Element => {
                     <TableCell
                       align={cell.column.align}
                       bordersVertical={[bordersVertical, i]}
+                      dimText={dimText}
                       {...cell.getCellProps()}
                     >
                       {typeof Cell !== 'undefined' ? (

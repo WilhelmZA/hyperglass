@@ -16,7 +16,7 @@ import startCase from 'lodash/startCase';
 import { forwardRef, memo, useEffect, useMemo, useState } from 'react';
 import isEqual from 'react-fast-compare';
 import { Else, If, Then } from 'react-if';
-import { BGPTable, Path, TextOutput } from '~/components';
+import { BGPTable, TracerouteTable, Path, TextOutput } from '~/components';
 import { useConfig } from '~/context';
 import { Countdown, DynamicIcon } from '~/elements';
 import {
@@ -28,7 +28,7 @@ import {
   useStrf,
   useTableToString,
 } from '~/hooks';
-import { isStringOutput, isStructuredOutput } from '~/types';
+import { isStringOutput, isStructuredOutput, isBGPStructuredOutput, isTracerouteStructuredOutput } from '~/types';
 import { CopyButton } from './copy-button';
 import { FormattedError } from './formatted-error';
 import { isFetchError, isLGError, isLGOutputOrError, isStackError } from './guards';
@@ -87,7 +87,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
     _setErrorLevel(e);
   };
 
-  const { data, error, isLoading, refetch, isFetchedAfterMount } = useLGQuery(
+  const { data, error, isLoading, isFetching, refetch, isFetchedAfterMount } = useLGQuery(
     { queryLocation, queryTarget: form.queryTarget, queryType: form.queryType },
     {
       onSuccess(data) {
@@ -108,6 +108,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
     },
   );
 
+  const isQuerying = isLoading || isFetching;
   const isError = useMemo(() => isLGOutputOrError(data), [data, error]);
 
   const isCached = useMemo(() => data?.cached || !isFetchedAfterMount, [data, isFetchedAfterMount]);
@@ -153,9 +154,15 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
 
   let copyValue = data?.output as string;
 
+  // Always create formatData hook for both BGP and Traceroute outputs
   const formatData = useTableToString(form.queryTarget, data, [data?.format]);
+  const isBGPData = isBGPStructuredOutput(data);
+  const isTracerouteData = isTracerouteStructuredOutput(data);
 
-  if (data?.format === 'application/json') {
+  if (data?.format === 'application/json' && isBGPData) {
+    copyValue = formatData();
+  } else if (data?.format === 'application/json' && isTracerouteData) {
+    // For structured traceroute, use formatted table output for copy functionality
     copyValue = formatData();
   }
 
@@ -166,13 +173,13 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
   // Signal to the group that this result is done loading.
   useEffect(() => {
     // Only set the index if it's not already set and the query is finished loading.
-    if (Array.isArray(indices) && indices.length === 0 && !isLoading) {
+    if (Array.isArray(indices) && indices.length === 0 && !isQuerying) {
       // Only set the index if the response has data or an error.
       if (data || isError) {
         setIndex([index]);
       }
     }
-  }, [data, index, indices, isLoading, isError, setIndex]);
+  }, [data, index, indices, isQuerying, isError, setIndex]);
 
   if (device === null) {
     const id = `toast-queryLocation-${index}-${queryLocation}`;
@@ -192,7 +199,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
     <AnimatedAccordionItem
       ref={ref}
       id={device.id}
-      isDisabled={isLoading}
+      isDisabled={isQuerying}
       exit={{ opacity: 0, y: 300 }}
       animate={{ opacity: 1, y: 0 }}
       initial={{ opacity: 0, y: 300 }}
@@ -206,7 +213,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
         <AccordionButton py={2} w="unset" _hover={{}} _focus={{}} flex="1 0 auto">
           <ResultHeader
             isError={isError}
-            loading={isLoading}
+            loading={isQuerying}
             errorMsg={errorMsg}
             errorLevel={errorLevel}
             runtime={data?.runtime ?? 0}
@@ -217,8 +224,8 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
           {isStructuredOutput(data) && data.level === 'success' && tableComponent && (
             <Path device={device.id} />
           )}
-          <CopyButton copyValue={copyValue} isDisabled={isLoading} />
-          <RequeryButton requery={refetch} isDisabled={isLoading} />
+          <CopyButton copyValue={copyValue} isDisabled={isQuerying} />
+          <RequeryButton requery={refetch} isDisabled={isQuerying} />
         </HStack>
       </AccordionHeaderWrapper>
       <AccordionPanel
@@ -244,8 +251,10 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
           <Flex direction="column" flex="1 0 auto" maxW={error ? '100%' : undefined}>
             <If condition={!isError && typeof data !== 'undefined'}>
               <Then>
-                {isStructuredOutput(data) && data.level === 'success' && tableComponent ? (
+                {isBGPStructuredOutput(data) && data.level === 'success' && tableComponent ? (
                   <BGPTable>{data.output}</BGPTable>
+                ) : isTracerouteStructuredOutput(data) && data.level === 'success' && tableComponent ? (
+                  <TracerouteTable>{data.output}</TracerouteTable>
                 ) : isStringOutput(data) && data.level === 'success' && !tableComponent ? (
                   <TextOutput>{data.output}</TextOutput>
                 ) : isStringOutput(data) && data.level !== 'success' ? (

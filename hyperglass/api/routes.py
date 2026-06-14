@@ -34,7 +34,36 @@ __all__ = (
     "queries",
     "info",
     "query",
+    "aspath_enrich",
 )
+
+
+# Cap the number of ASNs accepted per enrichment request to bound outbound lookups.
+_MAX_ASPATH_ENRICH = 64
+
+
+@post("/api/aspath/enrich")
+async def aspath_enrich(data: dict) -> dict:
+    """Enrich a list of ASNs with organization names on demand.
+
+    Expected JSON payload: { "as_path": [123, 456, ...] }
+    """
+    as_path = data.get("as_path", []) if isinstance(data, dict) else []
+    # Accept only numeric ASNs and bound the request size.
+    asns = [str(a) for a in as_path if str(a).isdigit()][:_MAX_ASPATH_ENRICH]
+    if not asns:
+        return {"success": False, "error": "No valid as_path provided"}
+
+    from hyperglass.external.ip_enrichment import lookup_asns_bulk
+
+    try:
+        results = await lookup_asns_bulk(asns)
+    except Exception:
+        # Log server-side; don't leak internal error detail to the client.
+        log.bind(as_path=asns).error("AS path enrichment lookup failed")
+        return {"success": False, "error": "Enrichment lookup failed"}
+
+    return {"success": True, "asn_organizations": results}
 
 
 @get("/api/devices/{id:str}", dependencies={"devices": Provide(get_devices)})
