@@ -34,6 +34,7 @@ class BGPRoute(HyperglassModel):
     source_rid: str
     peer_rid: str
     rpki_state: int
+    filtered: bool = False
 
     @field_validator("communities")
     def validate_communities(cls, value):

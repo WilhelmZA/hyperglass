@@ -243,6 +243,7 @@ hyperglass allows you to customize the colors and fonts used in the Web UI.
 | `web.theme.colors.dark`   | <Color hex="#010101"/>  |
 | `web.theme.colors.light`  | <Color hex="#f5f6f7"/>  |
 | `web.theme.colors.gray`   | <Color hex="#c1c7cc"/>  |
+| `web.theme.colors.filtered` | <Color hex="#c1c7cc"/> |
 | `web.theme.colors.red`    | <Color hex="#d84b4b"/>  |
 | `web.theme.colors.orange` | <Color hex="#ff6b35"/>  |
 | `web.theme.colors.yellow` | <Color hex="#edae49"/>  |
@@ -252,6 +253,8 @@ hyperglass allows you to customize the colors and fonts used in the Web UI.
 | `web.theme.colors.cyan`   | <Color hex="#118ab2"/>  |
 | `web.theme.colors.pink`   | <Color hex="#f2607d"/>  |
 | `web.theme.colors.purple` | <Color hex="#8d30b5"/>  |
+
+The `filtered` color is used to dim BGP routes that are present but not selected/active in the structured table (for example, MikroTik routes flagged filtered, disabled, or unreachable). It defaults to the same value as `gray`.
 
 ##### Functional Colors
 
