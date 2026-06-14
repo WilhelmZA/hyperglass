@@ -4,19 +4,28 @@ Devices that support responding to a query with structured or easily parsable da
 
 -   Arista EOS
 -   Juniper Junos
+-   Huawei VRP
+-   MikroTik RouterOS / SwitchOS
+
+MikroTik structured BGP output (Route, AS Path, and Community queries) requires **RouterOS v7+**, as it parses the output of `routing route print detail`. RouterOS v6 uses a different route-print syntax and is not supported for structured BGP.
 
 When structured output is available, hyperglass checks the RPKI state of each BGP prefix returned using one of two methods:
 
 1. From the router's perspective
-2. From the perspective of [Cloudflare's RPKI Service](https://rpki.cloudflare.com/)
+2. From an external validator — either [Cloudflare's RPKI Service](https://rpki.cloudflare.com/) (the default) or a self-hosted [Routinator](https://routinator.docs.nlnetlabs.nl/) instance
+
+When `structured.rpki.mode` is `external`, the `structured.rpki.backend` field selects which validator to query. The `cloudflare` backend uses Cloudflare's GraphQL API; the `routinator` backend queries the `/validity` HTTP API of a Routinator instance at `structured.rpki.rpki_server_url`.
 
 Additionally, hyperglass provides the ability to control which BGP communities are shown to the end user.
 
 | Parameter                      | Type            | Default Value | Description                                                                                                                   |
 | :----------------------------- | :-------------- | :------------ | :---------------------------------------------------------------------------------------------------------------------------- |
-| `structured.rpki.mode`         | String          | router        | Use `router` to use the router's view of the RPKI state (1 above), or `external` to use Cloudflare's view (2 above).          |
-| `structured.communities.mode`  | String          | deny          | Use `deny` to deny any communities listed in `structured.communities.items`, or `permit` to _only_ permit communities listed. |
-| `structured.communities.items` | List of Strings |               | List of communities to match.                                                                                                 |
+| `structured.rpki.mode`         | String          | router        | Use `router` to use the router's view of the RPKI state (1 above), or `external` to use an external validator (2 above).      |
+| `structured.rpki.backend`      | String          | cloudflare    | When `mode` is `external`, the validator to use: `cloudflare` or `routinator`.                                               |
+| `structured.rpki.rpki_server_url` | String       |               | Base URL of the Routinator instance. **Required** when `backend` is `routinator` (e.g. `http://routinator.example.net:8323`). |
+| `structured.communities.mode`  | String          | deny          | `deny` hides communities listed in `items`; `permit` shows _only_ those listed; `name` shows all communities and appends a friendly label to any listed in `names`. |
+| `structured.communities.items` | List of Strings |               | List of communities to match (used by `deny`/`permit`).                                                                       |
+| `structured.communities.names` | Map of String→String |          | Map of community → friendly name, used by `name` mode. At least one entry is required when `mode` is `name`.                   |
 
 ### RPKI Examples
 
@@ -28,12 +37,23 @@ structured:
         mode: router
 ```
 
-#### Show RPKI State from a Public/External Perspective
+#### Show RPKI State from a Public/External Perspective (Cloudflare)
 
-```yaml filename="config.yaml" copy {2}
+```yaml filename="config.yaml" copy {2-3}
 structured:
     rpki:
         mode: external
+        backend: cloudflare
+```
+
+#### Validate RPKI State Against a Self-Hosted Routinator
+
+```yaml filename="config.yaml" copy {2-5}
+structured:
+    rpki:
+        mode: external
+        backend: routinator
+        rpki_server_url: "http://routinator.example.net:8323"
 ```
 
 ### Community Filtering Examples
@@ -59,3 +79,22 @@ structured:
             - "^65000:.*$" # permit any communities starting with 65000, but no others.
             - "1234:1" # permit only the 1234:1 community.
 ```
+
+#### Show Friendly Names Alongside Communities
+
+With `mode: name`, all communities are shown, and any community listed in `names` has its friendly label appended (rendered as `<community> (<name>)` in the UI).
+
+```yaml filename="config.yaml" {3-6}
+structured:
+    communities:
+        mode: name
+        names:
+            "65000:100": "Customer Route"
+            "65000:200": "Peer Route"
+```
+
+## IP Enrichment
+
+hyperglass can enrich structured responses with ASN, organization, country, and IXP metadata resolved in real time from [bgp.tools](https://bgp.tools/). This data powers the organization names shown on AS paths and next-hops, and the per-hop detail in structured traceroute.
+
+Enrichment is performed by an internal service that issues bulk WHOIS lookups to bgp.tools; results are cached in-memory for the life of the process. No configuration is required to make the service available — it is enabled per-feature via the [`structured.ip_enrichment`](#ip-enrichment-configuration) settings documented below.
