@@ -3,6 +3,7 @@
 # Standard Library
 import json
 import time
+import asyncio
 import typing as t
 from datetime import UTC, datetime
 
@@ -36,6 +37,57 @@ __all__ = (
     "query",
     "aspath_enrich",
 )
+
+# MikroTik occasionally answers a BGP query before its routing table has finished
+# assembling, returning an empty route table on the first attempt. For MikroTik
+# BGP queries only, retry a few times (with a delay) while the result is empty.
+_MIKROTIK_PLATFORMS = ("mikrotik_routeros", "mikrotik_switchos", "mikrotik")
+_MIKROTIK_BGP_MAX_ATTEMPTS = 4
+_MIKROTIK_BGP_RETRY_DELAY = 10  # seconds
+
+
+def _is_empty_bgp_table(output: t.Any) -> bool:
+    """True if output is a structured BGP table containing no routes."""
+    if not is_type(output, OutputDataModel):
+        return False
+    try:
+        raw = json.loads(output.export_json())
+    except Exception:
+        return False
+    return (
+        isinstance(raw, dict)
+        and raw.get("count", None) == 0
+        and not raw.get("routes")
+    )
+
+
+async def _execute_query(data: "Query") -> t.Any:
+    """Execute a query, retrying MikroTik BGP queries that return an empty table."""
+    directive_name = getattr(getattr(data, "directive", None), "name", "") or ""
+    is_bgp_query = "bgp_" in data.query_type or "bgp" in directive_name.lower()
+    is_mikrotik_bgp = data.device.platform in _MIKROTIK_PLATFORMS and is_bgp_query
+    max_attempts = _MIKROTIK_BGP_MAX_ATTEMPTS if is_mikrotik_bgp else 1
+
+    _log = log.bind(directive=data.query_type, device=data.device.name)
+    if is_mikrotik_bgp:
+        _log.bind(max_attempts=max_attempts, retry_delay=_MIKROTIK_BGP_RETRY_DELAY).debug(
+            "MikroTik BGP empty-table retry enabled"
+        )
+
+    output = None
+    for attempt in range(1, max_attempts + 1):
+        if attempt > 1:
+            _log.bind(attempt=attempt, max_attempts=max_attempts).warning(
+                "MikroTik returned empty BGP table - retrying after {}s", _MIKROTIK_BGP_RETRY_DELAY
+            )
+            await asyncio.sleep(_MIKROTIK_BGP_RETRY_DELAY)
+
+        output = await execute(data)
+
+        if not (is_mikrotik_bgp and attempt < max_attempts and _is_empty_bgp_table(output)):
+            break
+
+    return output
 
 
 # Cap the number of ASNs accepted per enrichment request to bound outbound lookups.
@@ -136,8 +188,8 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                 structured=data.device.structured_output or False,
             )
         else:
-            # Pass request to execution module
-            output = await execute(data)
+            # Pass request to execution module (retries empty MikroTik BGP tables)
+            output = await _execute_query(data)
 
         endtime = time.time()
         elapsedtime = round(endtime - starttime, 4)

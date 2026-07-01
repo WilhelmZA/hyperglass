@@ -19,6 +19,13 @@ if t.TYPE_CHECKING:
     from hyperglass.models.api.query import Query
 
 
+# Matches a RouterOS flag-legend line, e.g. "c - connect, s - static" or
+# "H - hw-offloaded; + - ecmp". Deliberately anchored to "<char> - " so it never
+# matches a route line such as "b   ;;; comment" or "Ab   afi=ip ..." (whose flag
+# column is followed by whitespace, not " - ").
+LEGEND_LINE_RE = re.compile(r"^[A-Za-z+]\s-\s")
+
+
 class MikrotikGarbageOutput(OutputPlugin):
     """Parse Mikrotik output to remove garbage before structured parsing."""
 
@@ -84,21 +91,14 @@ class MikrotikGarbageOutput(OutputPlugin):
         if not tables:
             # Fallback to previous behavior: remove prompts and flags
             filtered_lines: t.List[str] = []
-            in_flags_section = False
             for line in lines:
                 stripped_line = line.strip()
                 if stripped_line.startswith("@") and stripped_line.endswith("] >"):
                     continue
                 if "[Q quit|D dump|C-z pause]" in stripped_line:
                     continue
-                if stripped_line.startswith("Flags:"):
-                    in_flags_section = True
+                if stripped_line.startswith("Flags:") or LEGEND_LINE_RE.match(stripped_line):
                     continue
-                if in_flags_section:
-                    if "=" in stripped_line:
-                        in_flags_section = False
-                    else:
-                        continue
                 filtered_lines.append(line)
             return "\n".join(filtered_lines)
 
@@ -223,7 +223,6 @@ class MikrotikGarbageOutput(OutputPlugin):
             # Original logic for other outputs (BGP routes, etc.)
             lines = raw_output.splitlines()
             filtered_lines = []
-            in_flags_section = False
 
             for line in lines:
                 stripped_line = line.strip()
@@ -236,17 +235,13 @@ class MikrotikGarbageOutput(OutputPlugin):
                 if "[Q quit|D dump|C-z pause]" in stripped_line:
                     continue
 
-                # Begin detecting the Flags section
-                if stripped_line.startswith("Flags:"):
-                    in_flags_section = True
-                    continue  # Skip the "Flags:" line itself
-
-                # Within the flags section, check whether the line is still part of it
-                if in_flags_section:
-                    if "=" in stripped_line:
-                        in_flags_section = False
-                    else:
-                        continue  # Skip the flag-legend lines
+                # Skip the flag legend: the "Flags:" header and its continuation
+                # lines ("c - connect, ...", "H - hw-offloaded; + - ecmp, ...").
+                # Matching the "<char> - " shape (rather than "no '=' present")
+                # ensures a commented route line like "b   ;;; peer-name" — which
+                # also has no "=" — is preserved instead of being dropped.
+                if stripped_line.startswith("Flags:") or LEGEND_LINE_RE.match(stripped_line):
+                    continue
 
                 filtered_lines.append(line)
 
