@@ -126,16 +126,21 @@ class MikrotikRouteEntry(MikrotikBase):
 
 
 def _extract_paths(lines: t.List[str]) -> MikrotikPaths:
-    """Simple count based on lines with dst/dst-address and preferred 'A' flag."""
+    """Count available/best paths.
+
+    Prefers the RouterOS v7 ``contribution=active`` marker (which sits on the same
+    line as ``dst-address``) and falls back to the legacy ``A`` flag for ROS v6.
+    """
     available = 0
     best = 0
     for raw in lines:
         if ("dst-address=" in raw) or (" dst=" in f" {raw} "):
             available += 1
-            m = FLAGS_RE.match(raw)
-            if m:
-                flags = set(m.group(1))
-                if "A" in flags:
+            if "contribution=active" in raw:
+                best += 1
+            elif "contribution=" not in raw:
+                m = FLAGS_RE.match(raw)
+                if m and "A" in set(m.group(1)):
                     best += 1
     return MikrotikPaths(available=available, best=best, select=best)
 
@@ -176,7 +181,7 @@ def _process_kv(route: dict, key: str, val: str):
     elif key in (".large-communities", "large-communities", "bgp-large-communities"):
         if val and val.lower() != "none":
             route["large_communities"] = [c.strip() for c in val.split(",") if c.strip()]
-    elif key == "bgp-ext-communities":
+    elif key in (".ext-communities", "ext-communities", "bgp-ext-communities"):
         if val and val.lower() != "none":
             route["ext_communities"] = [c.strip() for c in val.split(",") if c.strip()]
     elif key == "rpki":
@@ -184,6 +189,11 @@ def _process_kv(route: dict, key: str, val: str):
         route["rpki_state"] = RPKI_STATE_MAP.get(clean_val, 2)
     elif key == "belongs-to":
         route["belongs_to"] = val
+    elif key == "contribution":
+        # ROS v7 selection state: active | candidate | filtered. This is the
+        # authoritative active/filtered signal (see _parse_route_block); the
+        # legacy flag column is only used as a fallback for ROS v6.
+        route["contribution"] = val.strip().lower()
 
 
 def _extract_route_entries(lines: t.List[str]) -> t.List[MikrotikRouteEntry]:
@@ -229,7 +239,13 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
     if "dst-address=" not in full_block_text and " dst=" not in f" {full_block_text} ":
         return None
 
-    flags = ""
+    # RouterOS wraps long output at the terminal width, splitting unquoted
+    # comma-separated lists (.communities / .large-communities) across physical
+    # lines. Joining with a space above turns the wrap into ", " inside the list;
+    # collapse it back so the whole list is captured as a single token. RouterOS
+    # never emits ", " within a route value otherwise, so this is safe.
+    full_block_text = re.sub(r",\s+", ",", full_block_text)
+
     rd = {
         "prefix": "",
         "gateway": "",
@@ -249,25 +265,27 @@ def _parse_route_block(block: t.List[str]) -> t.Optional[MikrotikRouteEntry]:
         "rpki_state": RPKI_STATE_MAP.get("unknown", 2),
     }
 
-    # Interpret flags in the first line:
-    # - "A" => active (preferred)
-    # - otherwise not active
-    m = FLAGS_RE.match(block[0])
-    if m:
-        flags = m.group(1)
-        flag_set = set(flags)
-        is_active = "A" in flag_set
-        is_filtered = bool(flag_set & {"F", "f", "U", "u", "X", "x"})
-
-        if is_active:
-            rd["is_active"] = True
-            rd["is_filtered"] = False
-        else:
-            rd["is_filtered"] = is_filtered
-
     # Find all key=value tokens in the entire block
     for k, v in TOKEN_RE.findall(full_block_text):
         _process_kv(rd, k, v)
+
+    # Determine active/filtered state. Prefer the ROS v7 "contribution" marker,
+    # which always appears in the key=value data (robust to comment lines and to
+    # the flag column being wrapped/stripped). Fall back to the legacy flag
+    # column ("A" active; F/U/X filtered) for ROS v6, which has no contribution.
+    contribution = rd.pop("contribution", "")
+    m = FLAGS_RE.match(block[0])
+    flags = m.group(1) if m else ""
+    if contribution:
+        rd["is_active"] = contribution == "active"
+        rd["is_filtered"] = contribution == "filtered"
+    elif flags:
+        flag_set = set(flags)
+        if "A" in flag_set:
+            rd["is_active"] = True
+            rd["is_filtered"] = False
+        else:
+            rd["is_filtered"] = bool(flag_set & {"F", "f", "U", "u", "X", "x"})
 
     if rd["prefix"]:
         try:
