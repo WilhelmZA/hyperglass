@@ -7,6 +7,7 @@ http client API calls, returns the output back to the front end.
 """
 
 # Standard Library
+import time
 import signal
 from typing import TYPE_CHECKING, Any, Dict, Union, Callable
 
@@ -14,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Dict, Union, Callable
 from hyperglass.log import log
 from hyperglass.state import use_state
 from hyperglass.util.typing import is_series
+from hyperglass.util.query_samples import log_query_sample
 from hyperglass.exceptions.public import DeviceTimeout, ResponseEmpty
 
 if TYPE_CHECKING:
@@ -59,32 +61,66 @@ async def execute(query: "Query") -> Union["OutputDataModel", str]:
     )
     signal.alarm(params.request_timeout - 1)
 
-    if query.device.proxy:
-        proxy = driver.setup_proxy()
-        with proxy() as tunnel:
-            response = await driver.collect(tunnel.local_bind_host, tunnel.local_bind_port)
-    else:
-        response = await driver.collect()
+    # Capture the raw device output and parsed result (and failures) as JSONL
+    # samples when logging.samples is enabled. Best-effort; never affects the query.
+    samples = params.logging.samples
+    started = time.monotonic()
+    response = None
+    output = None
 
-    output = await driver.response(response)
+    try:
+        if query.device.proxy:
+            proxy = driver.setup_proxy()
+            with proxy() as tunnel:
+                response = await driver.collect(tunnel.local_bind_host, tunnel.local_bind_port)
+        else:
+            response = await driver.collect()
 
-    if is_series(output):
-        if len(output) == 0:
-            raise ResponseEmpty(query=query)
-        output = "\n\n".join(output)
+        output = await driver.response(response)
 
-    elif isinstance(output, str):
-        # If the output is a string (not structured) and is empty,
-        # produce an error.
-        if output == "" or output == "\n":
-            raise ResponseEmpty(query=query)
+        if is_series(output):
+            if len(output) == 0:
+                raise ResponseEmpty(query=query)
+            output = "\n\n".join(output)
 
-    elif isinstance(output, Dict):
-        # If the output an empty dict, responses have data, produce an
-        # error.
-        if not output:
-            raise ResponseEmpty(query=query)
+        elif isinstance(output, str):
+            # If the output is a string (not structured) and is empty,
+            # produce an error.
+            if output == "" or output == "\n":
+                raise ResponseEmpty(query=query)
 
-    signal.alarm(0)
+        elif isinstance(output, Dict):
+            # If the output an empty dict, responses have data, produce an
+            # error.
+            if not output:
+                raise ResponseEmpty(query=query)
+
+    except Exception as error:
+        if samples.enable:
+            log_query_sample(
+                query,
+                samples,
+                params.logging.directory,
+                raw=response,
+                parsed=output,
+                error=error,
+                runtime=round(time.monotonic() - started, 4),
+                structured=output is not None and not isinstance(output, str),
+            )
+        raise
+    finally:
+        signal.alarm(0)
+
+    if samples.enable:
+        log_query_sample(
+            query,
+            samples,
+            params.logging.directory,
+            raw=response,
+            parsed=output,
+            error=None,
+            runtime=round(time.monotonic() - started, 4),
+            structured=output is not None and not isinstance(output, str),
+        )
 
     return output
