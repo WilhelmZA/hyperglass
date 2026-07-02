@@ -28,7 +28,6 @@ if node_major < MIN_NODE_VERSION:
 
 
 # Local
-from .util import cpu_count
 from .state import use_state
 from .settings import Settings
 
@@ -151,13 +150,7 @@ def run(workers: int = None):
                 host=state.params.logging.syslog.host,
                 port=state.params.logging.syslog.port,
             )
-        _workers = workers
-
-        if workers is None:
-            if Settings.debug:
-                _workers = 1
-            else:
-                _workers = cpu_count(2)
+        _workers = workers if workers is not None else Settings.worker_count
 
         log.bind(
             version=__version__,
