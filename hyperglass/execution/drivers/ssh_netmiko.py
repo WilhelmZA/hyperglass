@@ -29,7 +29,10 @@ netmiko_device_globals = {
     "mikrotik_switchos": {"global_cmd_verify": False},
 }
 
-netmiko_device_send_args = {}
+netmiko_device_send_args = {
+    "mikrotik_routeros": {"last_read": 5.0},
+    "mikrotik_switchos": {"last_read": 5.0},
+}
 
 
 class NetmikoConnection(SSHConnection):
