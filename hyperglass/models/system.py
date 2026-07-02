@@ -50,6 +50,7 @@ class HyperglassSettings(BaseSettings):
     port: int = 8001
     ca_cert: t.Optional[FilePath] = None
     container: bool = False
+    workers: t.Optional[int] = None
 
     def __init__(self, **kwargs) -> None:
         """Create hyperglass Settings instance."""
@@ -136,8 +137,14 @@ class HyperglassSettings(BaseSettings):
         return "WARNING"
 
     @property
-    def workers(self: "HyperglassSettings") -> int:
-        """Get worker count, inferred from debug mode."""
+    def worker_count(self: "HyperglassSettings") -> int:
+        """Number of web-server workers.
+
+        Honors an explicit ``HYPERGLASS_WORKERS`` (the ``workers`` field, clamped
+        to at least 1) when set; otherwise 1 in debug mode, else 2x CPU cores.
+        """
+        if self.workers is not None:
+            return max(1, self.workers)
         if self.debug:
             return 1
         return cpu_count(2)
