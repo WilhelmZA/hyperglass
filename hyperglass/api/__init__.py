@@ -10,9 +10,14 @@ from litestar.exceptions import HTTPException, ValidationException
 from litestar.static_files import create_static_files_router
 
 # Project
+from hyperglass.log import init_logger, LibInterceptHandler
 from hyperglass.state import use_state
+from hyperglass.settings import Settings
 from hyperglass.constants import __version__
 from hyperglass.exceptions import HyperglassError
+
+logging.basicConfig(handlers=[LibInterceptHandler()], level=0, force=True)
+init_logger(logging.INFO if Settings.debug is False else logging.DEBUG)
 
 # Local
 from .events import check_redis
