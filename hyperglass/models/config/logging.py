@@ -5,7 +5,7 @@ import typing as t
 from pathlib import Path
 
 # Third Party
-from pydantic import ByteSize, SecretStr, AnyHttpUrl, DirectoryPath, field_validator
+from pydantic import Field, ByteSize, SecretStr, AnyHttpUrl, DirectoryPath, field_validator
 
 # Project
 from hyperglass.constants import __version__
@@ -78,6 +78,26 @@ class Http(HyperglassModel, extra="allow"):
                 dumped["auth"] = self.authentication.basic()
 
 
+class QuerySamples(HyperglassModel):
+    """Structured request/response capture (raw + parsed) as JSON lines.
+
+    When enabled, every query appends one JSON object to a JSONL file capturing
+    the request, the raw device output, and the parsed result (and failures).
+    Intended for shipping to Loki via Grafana Alloy and for building parser
+    regression fixtures. Disabled by default.
+
+    Note: raw output can contain internal addresses/communities/interface names.
+    """
+
+    enable: bool = False
+    # Output file. Defaults to "<logging.directory>/hyperglass_query_log.jsonl".
+    path: t.Optional[Path] = None
+    include_raw: bool = True
+    include_parsed: bool = True
+    # Size-based rotation threshold; a single "<name>.1" backup is kept.
+    max_size: ByteSize = "50MB"
+
+
 class Logging(HyperglassModel):
     """Validation model for logging configuration."""
 
@@ -86,3 +106,4 @@ class Logging(HyperglassModel):
     max_size: ByteSize = "50MB"
     syslog: t.Optional[Syslog] = None
     http: t.Optional[Http] = None
+    samples: QuerySamples = Field(default_factory=QuerySamples)
