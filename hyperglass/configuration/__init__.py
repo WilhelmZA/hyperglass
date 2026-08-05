@@ -2,6 +2,7 @@
 
 # Standard Library
 import typing as t
+from uuid import uuid4
 
 # Project
 from hyperglass.state import use_state
@@ -43,3 +44,6 @@ def init_user_config(
     with state.cache.pipeline() as pipeline:
         pipeline.set("devices", _devices)
         pipeline.set("ui_params", ui_params)
+        # Written last, so its presence means state is complete. Changes on every load,
+        # so a lost and rebuilt store is distinguishable from the original.
+        pipeline.set("generation", str(uuid4()))

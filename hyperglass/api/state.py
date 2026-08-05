@@ -22,7 +22,11 @@ def _is_retryable(attr: t.Optional[str]) -> bool:
 async def _get_state_with_retry(
     attr: t.Optional[str] = None, max_retries: int = 5, retry_delay: float = 0.5
 ) -> t.Any:
-    """Get hyperglass state, retrying transient startup StateErrors."""
+    """Get hyperglass state, retrying transient startup StateErrors.
+
+    State that goes missing *after* startup is repopulated by `use_state` itself; these
+    retries only cover the window where another process is still writing it.
+    """
     for attempt in range(1, max_retries + 1):
         try:
             return use_state(attr)

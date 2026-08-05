@@ -67,3 +67,33 @@ def register_plugin(plugin_file: Path, **kwargs) -> t.Tuple[str, ...]:
         results = _register_from_module(module, ref=plugin_file.stem, **kwargs)
         return results
     raise FileNotFoundError(str(plugin_file))
+
+
+def register_all_plugins() -> None:
+    """Validate and register all built-in and configured plugins.
+
+    The registry lives in Redis alongside the rest of the state, so it is lost with
+    everything else if the store is emptied. Registering is idempotent, which is what
+    lets state recovery call this as well as startup.
+    """
+    # Project
+    from hyperglass.log import log
+    from hyperglass.state import use_state
+
+    state = use_state()
+
+    # Register built-in plugins.
+    init_builtin_plugins()
+
+    failures = ()
+
+    # Register external directive-based plugins (defined in directives).
+    for plugin_file, directives in state.devices.directive_plugins().items():
+        failures += register_plugin(plugin_file, directives=directives)
+
+    # Register external global/common plugins (defined in config).
+    for plugin_file in state.params.common_plugins():
+        failures += register_plugin(plugin_file, common=True)
+
+    for failure in failures:
+        log.bind(plugin=failure).warning("Invalid hyperglass plugin")
