@@ -73,5 +73,10 @@ def use_state(attr=None) -> "HyperglassState":
 
 
 def use_state(attr: t.Optional[str] = None) -> "HyperglassState":
-    """Access global hyperglass state."""
+    """Access global hyperglass state.
+
+    State lost from Redis after startup is rebuilt by the `HyperglassState` properties
+    themselves, so it is recovered whether it is reached from here or read directly off
+    a state instance.
+    """
     return _use_state(attr)

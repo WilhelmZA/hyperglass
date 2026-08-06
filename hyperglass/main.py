@@ -52,31 +52,6 @@ async def build_ui() -> bool:
     return True
 
 
-def register_all_plugins() -> None:
-    """Validate and register configured plugins."""
-
-    # Local
-    from .plugins import register_plugin, init_builtin_plugins
-
-    state = use_state()
-
-    # Register built-in plugins.
-    init_builtin_plugins()
-
-    failures = ()
-
-    # Register external directive-based plugins (defined in directives).
-    for plugin_file, directives in state.devices.directive_plugins().items():
-        failures += register_plugin(plugin_file, directives=directives)
-
-    # Register external global/common plugins (defined in config).
-    for plugin_file in state.params.common_plugins():
-        failures += register_plugin(plugin_file, common=True)
-
-    for failure in failures:
-        log.bind(plugin=failure).warning("Invalid hyperglass plugin")
-
-
 def unregister_all_plugins() -> None:
     """Unregister all plugins."""
     # Local
@@ -88,6 +63,8 @@ def unregister_all_plugins() -> None:
 
 def start(*, log_level: t.Union[str, int], workers: int) -> None:
     """Start hyperglass via ASGI server."""
+    # Local
+    from .plugins import register_all_plugins
 
     register_all_plugins()
 
@@ -154,6 +131,7 @@ def run(workers: int = None):
 
         log.bind(
             version=__version__,
+            state_generation=state.generation,
             listening=f"http://{Settings.bind()}",
             app_path=f"{Settings.app_path.absolute()!s}",
             container=Settings.container,
