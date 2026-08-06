@@ -12,9 +12,13 @@ COPY . .
 
 FROM base as ui
 WORKDIR /opt/hyperglass/hyperglass/ui
+# The glob patch that used to sit here is gone. It ran `npm --prefix
+# /usr/lib/node_modules/npm install glob@11.1.0`, which fails the build: installing
+# into npm's own tree makes npm reconcile npm's package.json, whose devDependencies
+# include the unpublished `@npmcli/docs`, so the install 404s. It is also no longer
+# needed, since the npm shipped by alpine bundles glob 13.x already.
 RUN apk add build-base pkgconfig cairo-dev nodejs npm \
   && npm install -g npm@10.9.3 pnpm@11.6.0 \
-  && npm --prefix /usr/lib/node_modules/npm install glob@11.1.0 \
   && pnpm install -P
 
 FROM ui as hyperglass
