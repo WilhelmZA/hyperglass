@@ -4,10 +4,17 @@
 from datetime import datetime
 
 __name__ = "hyperglass"
-__version__ = "2.0.4"
+__version__ = "3.0.0"
 __author__ = "Matt Love"
 __copyright__ = f"Copyright {datetime.now().year} Matthew Love"
 __license__ = "BSD 3-Clause Clear License"
+
+# This is a fork of hyperglass. `__version__` above is the fork's own version line, which
+# starts at 3.0.0 and is independent of upstream. `__upstream_version__` is the upstream
+# release the fork is based on.
+__upstream_version__ = "2.0.4"
+__upstream_url__ = "https://github.com/thatmattlove/hyperglass"
+__fork_url__ = "https://github.com/WilhelmZA/hyperglass"
 
 METADATA = (__name__, __version__, __author__, __copyright__, __license__)
 

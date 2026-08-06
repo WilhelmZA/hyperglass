@@ -113,14 +113,25 @@ def init_ui_params(*, params: "Params", devices: "Devices") -> "UIParameters":
 
     # Project
     from hyperglass.defaults import CREDIT
-    from hyperglass.constants import PARSED_RESPONSE_FIELDS, __version__
+    from hyperglass.constants import (
+        PARSED_RESPONSE_FIELDS,
+        __fork_url__,
+        __upstream_url__,
+        __upstream_version__,
+        __version__,
+    )
 
     content_greeting = get_markdown(
         config=params.web.greeting,
         default="",
         params={"title": params.web.greeting.title},
     )
-    content_credit = CREDIT.format(version=__version__)
+    content_credit = CREDIT.format(
+        version=__version__,
+        upstream_version=__upstream_version__,
+        upstream_url=__upstream_url__,
+        fork_url=__fork_url__,
+    )
 
     _ui_params = params.frontend()
     _ui_params["web"]["logo"]["light_format"] = params.web.logo.light.suffix

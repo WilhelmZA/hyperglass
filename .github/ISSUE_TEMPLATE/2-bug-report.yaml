@@ -20,7 +20,7 @@ body:
     attributes:
       label: Version
       description: What version of hyperglass are you currently running?
-      placeholder: v2.0.4
+      placeholder: v3.0.0
     validations:
       required: true
   - type: textarea

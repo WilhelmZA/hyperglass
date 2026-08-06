@@ -1,28 +1,87 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+This is the changelog for [WilhelmZA/hyperglass](https://github.com/WilhelmZA/hyperglass), a **fork** of [thatmattlove/hyperglass](https://github.com/thatmattlove/hyperglass). It documents the fork's changes, not upstream's.
+
+The fork's own version line starts at **3.0.0**. It is based on **upstream hyperglass 2.0.4**, plus the upstream commits that had landed on upstream `main` after 2.0.4 but were never released by upstream. Upstream's version numbering is unrelated to this one; upstream's own history continues at [thatmattlove/hyperglass/blob/main/CHANGELOG.md](https://github.com/thatmattlove/hyperglass/blob/main/CHANGELOG.md).
+
+Everything from [2.0.4](#204---2024-06-30) downward is inherited upstream history, kept verbatim for reference.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## 3.0.0 - 2026-08-06
 
-### Fixed
-- [#280](https://github.com/thatmattlove/hyperglass/issues/280): Fix: `condition: None` caused error in directive @Jimmy01240397
-- [#306](https://github.com/thatmattlove/hyperglass/issues/306): Fix: allow integer values in ext_community_list_raw field for Arista BGP - @cooperwinser
-- [#311](https://github.com/thatmattlove/hyperglass/issues/311): Fix: device and directive errors.
-- [#315](https://github.com/thatmattlove/hyperglass/issues/315): Impossibile to use command "BGP Route" with Huawei NetEngine 8000 
-- [#315](https://github.com/thatmattlove/hyperglass/issues/187): Error in bgp_router query on Huawei
-- [#325](https://github.com/thatmattlove/hyperglass/pull/325): Fix code block padding in the documentation - @jagardaniel
-- [#332](https://github.com/thatmattlove/hyperglass/pull/332): Fix custom proxy port support in SSH proxy tunnels @jessiebryan 
-
-### Updated
-
-- [#245](https://github.com/thatmattlove/hyperglass/issues/245): v2.0.0 Vyos version platforms - Moved to latest LTS command set. - @ServerForge
-- [#292](https://github.com/thatmattlove/hyperglass/pull/292): Updates Mikrotik BGP route command so supernets are selected as well as exact matches. - @GrandArcher
+First release of the fork. The major version bump reflects a raised Python floor (3.13), the removal of the `hyperglass.external.bgptools` module, and changed default directive commands for FRRouting, Huawei and MikroTik.
 
 ### Added
 
-- [#304](https://github.com/thatmattlove/hyperglass/pull/304): Add FRR structured output for BGP Routes - @chriswiggins
+- Structured BGP route output for **MikroTik RouterOS 7+** (`mikrotik_routeros`, `mikrotik_switchos`). New parser `hyperglass/models/parsing/mikrotik.py` (`MikrotikBGPTable`, `MikrotikRouteEntry`, `MikrotikPaths`), output plugin `bgp_routestr_mikrotik`, and three table directives `__hyperglass_mikrotik_bgp_route_table__`, `__hyperglass_mikrotik_bgp_aspath_table__` and `__hyperglass_mikrotik_bgp_community_table__`. Parses `routing route print detail`, including RPKI state, large and extended communities, and active/filtered status.
+- Structured BGP route output for **Huawei VRP**. New parser `hyperglass/models/parsing/huawei.py` (`HuaweiBGPTable`, `HuaweiRouteEntry`, `HuaweiPaths`), output plugin `bgp_routestr_huawei`, and the table directives `__hyperglass_huawei_bgp_route_table__`, `__hyperglass_huawei_bgp_aspath_table__` and `__hyperglass_huawei_bgp_community_table__`.
+- `SUPPORTED_STRUCTURED_OUTPUT` extended with `huawei`, `mikrotik_routeros` and `mikrotik_switchos`, so `structured_output: true` is now valid on those platforms.
+- **Structured traceroute output** for FRRouting, Huawei VRP and MikroTik. New data models `TracerouteResult` and `TracerouteHop` (`hyperglass/models/data/traceroute.py`), a shared parser base in `hyperglass/models/parsing/traceroute.py`, and the output plugins `TraceroutePluginFrr`, `TraceroutePluginHuawei` and `TraceroutePluginMikrotik`. `OutputDataModel` is now `Union[BGPRouteTable, TracerouteResult]`.
+- New UI components for structured traceroute: `TracerouteTable`, `TracerouteCell` and the field renderers `MonoField`, `ASNField`, `HostnameField`, `LatencyField` and `LossField` (Hop / IP Address / Hostname / ASN / Loss / Sent / Last / AVG / Best / Worst). Latency is colour-graded and packet loss renders as a badge. `results/individual.tsx` picks the BGP or traceroute table via the new `isBGPStructuredOutput` / `isTracerouteStructuredOutput` type guards.
+- New config keys `structured.enable_for_traceroute` and `structured.enable_for_bgp_route` (both `Optional[bool]`, unset means enabled when a `structured` block exists). `Query.device` now returns a per-request device proxy that applies these without mutating global device state.
+- **IP and ASN enrichment.** New config block `structured.ip_enrichment` with `enrich_traceroute` and `enrich_bgproute` (both default `false`). Two builtin output plugins, `bgp_route_enrichment` and `traceroute_ip_enrichment`, add ASN, organisation, country, IXP identity and reverse DNS to results. Enrichment failures are swallowed so they cannot fail a query.
+- BGP next-hop enrichment: new API fields `BGPRoute.next_hop_asn`, `BGPRoute.next_hop_org` and `BGPRoute.next_hop_country`, plus `BGPRouteTable.asn_organizations` and the async helpers `BGPRouteTable.enrich_with_ip_enrichment()` and `BGPRouteTable.enrich_as_path_organizations()`. The UI renders a `NextHop` field showing ASN, organisation and country on hover.
+- AS-path enrichment endpoint `POST /api/aspath/enrich`, which takes `{"as_path": [...]}` (numeric ASNs only, capped at 64) and returns `{"success": true, "asn_organizations": {...}}`. Errors return generic strings rather than internal detail. The AS-path modal calls it lazily when a response has no enrichment data attached.
+- AS-path tooltips: every ASN in an AS path renders as a tooltipped link to `https://bgp.tools/as/<asn>` labelled with the organisation name. The AS-path flow chart builds its graph from either BGP AS paths or traceroute hop ASNs, collapsing repeated ASNs and labelling IXP hops by IXP name.
+- **Pluggable external RPKI backends.** New config keys `structured.rpki.backend` (`cloudflare` or `routinator`) and `structured.rpki.rpki_server_url`. A validator requires the URL when the backend is `routinator`. Routinator is queried at `<url>/validity`; RPKI state names are normalised so `NotFound`, `not-found` and `unknown` all map correctly.
+- **Friendly BGP community names.** New `structured.communities.mode: name` and a `structured.communities.names` map of community to label. In `name` mode no communities are filtered and matched communities render as `<community> - <name>`.
+- **Filtered BGP routes are now shown rather than dropped.** New API field `BGPRoute.filtered` and new theme colour `web.theme.colors.filtered` (default `#c1c7cc`). Filtered rows are dimmed in the results table via a new `dimText` prop on `TableRow` and `TableCell`.
+- **Opt-in query-sample logging.** New config block `logging.samples` with `enable` (default `false`), `path`, `include_raw`, `include_parsed` and `max_size` (default 50MB). Writes one JSON object per line to `hyperglass_query_log.jsonl` under the logging directory, capturing device, query, runtime, error and optionally raw and parsed output, on both the success and failure paths. Appends are `O_APPEND` so multiple workers are safe, and the file is size-rotated with a single `.1` backup. Raw output can contain internal addressing, so this is off by default.
+- New documentation pages: `user-guide.mdx` (end-user guide to locations, query types and FQDN resolution), `configuration/examples/quick-start.mdx` (eight named recipe configurations) and `configuration/config/complete-config.mdx` (key-by-key reference for every configuration option). `structured-output.mdx` expanded to cover every new `structured.*` key with worked examples, and the README rewritten to describe the fork's capabilities.
+- Tests for the new parsers and utilities: `test_bgp_route_huawei.py`, `test_bgp_route_mikrotik.py`, `test_traceroute_frr.py`, `test_traceroute_huawei.py`, `test_traceroute_mikrotik.py`, `test_query_samples.py` and `test_system_workers.py`.
+
+### Changed
+
+- **Breaking:** `hyperglass.external.bgptools` is removed and replaced by `hyperglass.external.ip_enrichment`. The new module does real-time bulk WHOIS against `bgp.tools:43` off the event loop, with in-process caching, private and reserved address short-circuiting, and IXP detection. `network_info()` and `network_info_sync()` are kept as compatible shims; `lookup_ip()`, `lookup_asn_name()`, `lookup_asn_country()` and `lookup_asns_bulk()` are new. Anything importing `hyperglass.external.bgptools` directly must be updated.
+- **Breaking:** minimum Python raised from 3.11 to 3.13, and the Docker base image moved from `python:3.12.3-alpine` to `python:3.13-alpine`.
+- Dependencies modernised: httpx 0.28.1, netmiko 4.6.0, paramiko 4.0.0, pydantic 2.11.9+, pydantic-settings 2.11.0, litestar 2.22.0+, redis 6.4.0, uvicorn 0.37.0, psutil 7.1.0, Pillow 12.2.0+, xmltodict 1.0.2, distro 1.9.0. `poetry.lock` is dropped in favour of the uv lockfiles `requirements.lock` and `requirements-dev.lock`, and the Docker build installs from the lockfile with `--no-deps`.
+- Frontend upgraded to Next.js 15. The UI build no longer uses `next export` or `NODE_OPTIONS=--openssl-legacy-provider`; it runs `next build` and copies `out/` into `hyperglass/static/ui`. pnpm workspace configuration migrated to pnpm 11 `allowBuilds`.
+- **Default directive commands changed.** MikroTik BGP route queries now use `routing route print detail without-paging where {target} in dst-address bgp and dst-address !=0.0.0.0/0` (RouterOS 7 syntax) instead of `ip route print`; MikroTik traceroute uses `duration=30 count=3` instead of `duration=5 count=1` so loss and RTT statistics are produced; FRRouting traceroute adds `-I -n`; Huawei traceroute uses `tracert -w 500 -q 1 -f 1 -a {source} {target}` with a proper `tracert ipv6` variant.
+- netmiko sessions now run in a thread executor instead of inline in the coroutine, so a slow device no longer blocks every other concurrent query. Per-query reads switched from `send_command` to `send_command_timing`, because RouterOS prompt detection truncates output.
+- `MikrotikGarbageOutput` is no longer a `common` plugin applied to every device, its hard-coded directive list is gone, and it gained traceroute-aware cleaning that splits repeated RouterOS tables, strips paging prompts and command echoes, and aggregates per-hop rows by highest sent count.
+- New input plugin `mikrotik_normalize_input` rewrites a MikroTik BGP route target to its containing /24 or /48, so queries within one subnet share a cache entry.
+- The browser no longer calls CAIDA's `api.asrank.caida.org` for ASN organisation names; `useASNDetail` is stubbed and deprecated, and organisation names come from server-side enrichment instead. This removes the last third-party request made from the client.
+- Results table page size raised from 10 to 50, and the results accordion, copy and requery controls now track `isFetching` as well as `isLoading`.
+- `hyperglass/models/config/params.py` sub-models switched to `Field(default_factory=...)`, so the `cache`, `docs`, `logging`, `messages`, `structured` and `web` blocks no longer share mutable class-level instances.
+- The UI build timeout default was raised from 180 to 600 seconds, and `HYPERGLASS_UI_BUILD_TIMEOUT` is now always honoured rather than only when it exceeds the default.
+- The credit shown in the footer now identifies this deployment as a fork, giving the fork version, the upstream version it is based on, and a link to the fork repository.
+- The group filter row on the query form is hidden when there are no groups to filter by.
+- `HyperglassState.clear()` scans and deletes only keys under the `hyperglass.state` namespace instead of flushing the Redis database, so hyperglass no longer deletes keys belonging to anything else sharing that database. Two hyperglass instances sharing one database still share the namespace and will clear each other on start; give each its own `HYPERGLASS_REDIS_DB`.
+- The Docker Compose healthcheck queries `/api/info`, which reads Redis-backed state, rather than the UI root, which does not and so reported healthy through a total query outage. `start_period` is raised to 180s to cover the boot-time UI build. Note that Docker Compose does not restart a container for being unhealthy; the healthcheck reports the outage, the in-app rebuild resolves it.
+
+### Fixed
+
+- `HYPERGLASS_WORKERS` is now read. `HyperglassSettings` gained a real `workers` field and the old `workers` property was renamed `worker_count`, returning the explicit value (clamped to at least 1) when set, 1 in debug mode, and twice the CPU count otherwise. A 24-core host no longer unconditionally starts 48 workers.
+- Requests arriving before Redis-backed state is populated at startup no longer return 500. State lookups retry up to five times at half-second intervals, and only for retryable attributes, so a genuine attribute error still raises immediately.
+- **Configuration state lost from Redis while hyperglass is running is now rebuilt in place.** All runtime configuration was written to Redis once, by `run()` at startup, and never rewritten. Redis is deliberately cache-only, so anything that emptied it (a `FLUSHDB`, or a replaced Redis container, which Docker Compose recreates on its own whenever that image changes) left every state-touching request raising `StateError` until hyperglass was restarted. The `HyperglassState` properties now re-run `init_user_config()` and re-register the plugins under a Redis lock, so one process rebuilds and the others wait for it rather than all re-reading the configuration, with a cooldown so a configuration that cannot be loaded is not re-validated on every request. The recovery sits on the properties rather than on `use_state`, because `Query.device` and the query route read `state.devices` and `state.params` directly off a state instance on every request and never pass through `use_state`; that is the path that fails in production. The plugin registry lives in the same store and is restored with it, otherwise hyperglass comes back but silently stops parsing device output into structured results.
+- `init_user_config()` writes a `generation` UUID last, so its presence means state is complete, and a rebuilt store is distinguishable from the original. Exposed as `HyperglassState.generation` and logged at startup.
+- The Docker image builds again. The UI stage patched npm's bundled `glob` with `npm --prefix /usr/lib/node_modules/npm install glob@11.1.0`, which cannot succeed: installing into npm's own tree makes npm reconcile npm's `package.json`, whose devDependencies include the unpublished `@npmcli/docs`, so the install returns 404. The patch is also no longer needed, because the npm shipped by the Alpine base image bundles glob 13.x.
+- MikroTik RouterOS 7.21 BGP output parses correctly. Active and filtered status is derived from the `contribution` field with the legacy flag column as a RouterOS 6 fallback, terminal-wrapped community lists are de-wrapped before tokenising, `.ext-communities` is parsed, and the flags legend is matched precisely so commented route lines are no longer swallowed.
+- Empty MikroTik BGP tables are retried up to four times at ten-second intervals, guarded so that only MikroTik BGP queries with a zero-route structured result retry.
+- MikroTik queries no longer return empty. netmiko's `last_read` window is widened to 5 seconds for `mikrotik_routeros` and `mikrotik_switchos`, because RouterOS can take a couple of seconds to begin emitting output for large queries and the default 2-second window returned nothing. This adds roughly 5 seconds to every MikroTik query.
+- External RPKI validation no longer runs when `structured.rpki.mode` is `router`. The prefix parse and the external lookup were previously executed in both modes.
+- MikroTik traceroute output is aggregated per hop by highest sent count rather than deduplicated by IP, so repeated RouterOS tables no longer produce duplicate or partial hops.
+
+### Security
+
+- Device addressing is no longer leaked to end users. `ScrapeError`, `AuthError`, `RestError` and `DeviceTimeout` strip netmiko's `Device settings:` line, which contained the backend device host and port, from the error text returned by the API and shown in the UI, substituting a generic message when nothing is left.
+- Fixable HIGH CVEs flagged by the container scan are patched by floor and override constraints in a new `[tool.uv]` block: brotli 1.2.0+, cryptography 46.0.5+, lxml 6.1.0+, multipart 1.3.1+, Pillow 12.2.0+ (overriding the `pillow<11` cap declared by `favicons`) and psutil 7.1.0 (overriding the `psutil<7` cap declared by `taskipy`).
+- Frontend overrides pin `ua-parser-js` to 0.7.36+ for the ReDoS advisory and `@babel/runtime` and `@babel/helpers` to 7.26.10.
+
+### Inherited from upstream
+
+These landed on upstream `main` after 2.0.4 but were never released by upstream. They are present in this fork's code and ship as part of 3.0.0. Credit is upstream's.
+
+- [#280](https://github.com/thatmattlove/hyperglass/issues/280): Fixed `condition: None` causing an error in a directive - @Jimmy01240397
+- [#306](https://github.com/thatmattlove/hyperglass/issues/306): Allow integer values in the `ext_community_list_raw` field for Arista BGP - @cooperwinser
+- [#311](https://github.com/thatmattlove/hyperglass/issues/311): Fixed device and directive field validation errors
+- [#315](https://github.com/thatmattlove/hyperglass/issues/315) and [#187](https://github.com/thatmattlove/hyperglass/issues/187): Fixed the BGP Route query on Huawei NetEngine 8000, via the Huawei BGP route input plugin
+- [#325](https://github.com/thatmattlove/hyperglass/pull/325): Fixed code block padding in the documentation - @jagardaniel
+- [#332](https://github.com/thatmattlove/hyperglass/pull/332): Fixed custom proxy port support in SSH proxy tunnels - @jessiebryan
+- [#245](https://github.com/thatmattlove/hyperglass/issues/245): VyOS platforms moved to the latest LTS command set - @ServerForge
+- [#304](https://github.com/thatmattlove/hyperglass/pull/304): FRRouting structured output for BGP routes - @chriswiggins
+- [#292](https://github.com/thatmattlove/hyperglass/pull/292): MikroTik BGP route command updated so supernets are selected as well as exact matches - @GrandArcher. Superseded in this fork: the MikroTik BGP route directives were rewritten onto the RouterOS 7 `routing route print detail` syntax, which keeps the supernet behaviour through `{target} in dst-address`.
 
 ## 2.0.4 - 2024-06-30
 

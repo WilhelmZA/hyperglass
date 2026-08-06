@@ -1,8 +1,11 @@
 """Constant store for large default values."""
 
 CREDIT = """
-Powered by [**hyperglass**](https://hyperglass.dev) version {version}. \
+Powered by [**hyperglass**](https://hyperglass.dev). \
 Source code licensed [_BSD 3-Clause Clear_](https://hyperglass.dev/license/).
+
+Running [a fork of hyperglass]({fork_url}) version {version}, \
+based on [upstream]({upstream_url}) version {upstream_version}.
 """
 
 DEFAULT_TERMS = """
