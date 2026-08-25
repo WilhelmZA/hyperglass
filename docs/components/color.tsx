@@ -1,3 +1,5 @@
+"use client";
+
 type ColorProps = {
     hex: string;
     noText?: boolean;
