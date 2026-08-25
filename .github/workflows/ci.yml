@@ -64,6 +64,9 @@ jobs:
       - name: Install Python dependencies
         run: uv pip install --system -r requirements-dev.lock
 
+      - name: Prepare application directory
+        run: mkdir -p "$HYPERGLASS_APP_PATH"
+
       - name: Test Python
         run: pytest hyperglass --ignore hyperglass/plugins/external
 
