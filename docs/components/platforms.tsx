@@ -1,4 +1,4 @@
-import { Code, Table, Td, Th, Tr } from "nextra/components";
+import { Code, Table } from "nextra/components";
 import platforms from "~/platforms.json";
 import { NotSupported } from "./not-supported-icon";
 import { Supported } from "./supported-icon";
@@ -23,21 +23,21 @@ export const SupportedPlatforms = () => (
 export const PlatformTable = () => (
     <Table>
         <tbody>
-            <Tr>
-                <Th>Platform Keys</Th>
-                <Th>Natively Supported</Th>
-            </Tr>
+            <tr>
+                <th>Platform Keys</th>
+                <th>Natively Supported</th>
+            </tr>
             {platforms.map((spec) => (
-                <Tr key={spec.keys.join("--")}>
-                    <Td>
+                <tr key={spec.keys.join("--")}>
+                    <td>
                         {spec.keys.map((key) => (
                             <Code className="nx-mx-2" key={key}>
                                 {key}
                             </Code>
                         ))}
-                    </Td>
-                    <Td align="center">{spec.native ? <Supported /> : <NotSupported />}</Td>
-                </Tr>
+                    </td>
+                    <td align="center">{spec.native ? <Supported /> : <NotSupported />}</td>
+                </tr>
             ))}
         </tbody>
     </Table>

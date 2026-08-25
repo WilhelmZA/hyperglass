@@ -41,11 +41,11 @@ export function useASNDetail(asn: string): QueryObserverResult<ASNQuery> {
       data: {
         asn: {
           organization: null, // No external fetch - org data comes from IP enrichment
-        }
-      }
+        },
+      },
     }),
     refetchOnWindowFocus: false,
-    refetchInterval: false, 
+    refetchInterval: false,
     refetchOnMount: false,
     cacheTime: Infinity,
     enabled: false, // Disable the query entirely

@@ -8,6 +8,11 @@ export default {
     configuration: "Configuration",
     platforms: "Platforms",
     plugins: "Plugins",
+    demo: {
+        title: "Demo",
+        type: "page",
+        href: "https://demo.hyperglass.dev",
+    },
     documentation: {
         title: "Documentation",
         type: "menu",
@@ -33,11 +38,5 @@ export default {
                 href: "/license",
             },
         },
-    },
-    demo: {
-        title: "Demo",
-        type: "page",
-        href: "https://demo.hyperglass.dev",
-        newWindow: true,
     },
 };

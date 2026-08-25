@@ -39,7 +39,7 @@ click==8.1.7
     # via rich-click
     # via typer
     # via uvicorn
-cryptography==46.0.7
+cryptography==50.0.0
     # via -c (workspace)
     # via paramiko
 cssselect2==0.8.0
@@ -104,7 +104,7 @@ paramiko==4.0.0
     # via hyperglass
     # via netmiko
     # via scp
-pillow==12.2.0
+pillow==12.3.0
     # via --override (workspace)
     # via favicons
     # via hyperglass

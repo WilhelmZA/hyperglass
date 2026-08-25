@@ -28,7 +28,7 @@ export const TracerouteTable = (props: TracerouteTableProps): JSX.Element => {
   return (
     <Flex my={8} justify="center" maxW="100%" w="100%" {...rest}>
       <Table<TracerouteHop>
-        columns={tracerouteColumns as any}
+        columns={tracerouteColumns}
         bordersHorizontal
         data={data.hops}
         Cell={(d: TracerouteCellRenderProps) => <TracerouteCell data={d} rawData={data} />}

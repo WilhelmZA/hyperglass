@@ -44,7 +44,7 @@ function* buildElements(
   data: AllStructuredResponses,
 ): Generator<FlowElement<NodeData>> {
   let asPaths: string[][] = [];
-  let asnOrgs: Record<string, { name: string; country: string }> = {};
+  let asnOrgs: Record<string, { name?: string; country?: string }> = {};
   // For traceroute data we may have IXPs represented as asn === 'IXP' with
   // the IXP name stored per-hop in hop.org. Collect per-path org arrays so
   // nodes for IXPs can show the proper IXP name instead of the generic
@@ -62,10 +62,10 @@ function* buildElements(
         return uniqueAsns[0] === base.asn ? uniqueAsns.slice(1) : uniqueAsns;
       })
       .filter(path => path.length > 0); // Remove empty paths
-    
+
     // Get ASN organization mapping if available
-    asnOrgs = (data as any).asn_organizations || {};
-    
+    asnOrgs = data.asn_organizations || {};
+
     // Debug: Log BGP ASN organization data
     if (Object.keys(asnOrgs).length > 0) {
       console.debug('BGP ASN organizations loaded:', asnOrgs);
@@ -82,7 +82,7 @@ function* buildElements(
       if (hop.asn && hop.asn !== 'None' && hop.asn !== currentAsn) {
         currentAsn = hop.asn;
         hopAsns.push(hop.asn);
-  hopOrgs.push(hop.org ?? undefined);
+        hopOrgs.push(hop.org ?? undefined);
       }
     }
 
@@ -96,10 +96,10 @@ function* buildElements(
         pathGroupOrgs[0] = filteredOrgs;
       }
     }
-    
+
     // Get ASN organization mapping if available
-    asnOrgs = (data as any).asn_organizations || {};
-    
+    asnOrgs = data.asn_organizations || {};
+
     // Debug: Log traceroute ASN organization data
     if (Object.keys(asnOrgs).length > 0) {
       console.debug('Traceroute ASN organizations loaded:', asnOrgs);
@@ -174,11 +174,11 @@ function* buildElements(
     id: base.asn,
     type: 'ASNode',
     position: { x, y },
-    data: { 
-      asn: base.asn, 
-      name: asnOrgs[base.asn]?.name || base.name, 
-      hasChildren: true, 
-      hasParents: false 
+    data: {
+      asn: base.asn,
+      name: asnOrgs[base.asn]?.name || base.name,
+      hasChildren: true,
+      hasParents: false,
     },
   };
 

@@ -15,16 +15,16 @@ export const TracerouteCell = (props: TracerouteCellProps): JSX.Element => {
   const getIPValue = () => {
     if (cellId === 'ip_address') {
       const hop = data.row?.original as TracerouteHop | undefined;
-      if (hop && hop.display_ip) {
+      if (hop?.display_ip) {
         return hop.display_ip;
       }
-      if (hop && hop.ip_address) {
+      if (hop?.ip_address) {
         return hop.ip_address;
       }
     }
     return data.value;
   };
-  
+
   const component = {
     hop_number: <MonoField v={data.value} />,
     ip_address: <MonoField v={getIPValue()} />,
@@ -46,6 +46,6 @@ export const TracerouteCell = (props: TracerouteCellProps): JSX.Element => {
     rtt2: null, // Not displayed directly in table
     rtt3: null, // Not displayed directly in table
   };
-  
+
   return component[cellId] ?? <MonoField v={data.value} />;
 };

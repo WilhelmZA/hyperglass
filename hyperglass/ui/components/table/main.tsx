@@ -16,19 +16,19 @@ import { PageSelect } from './page-select';
 import type { TableOptions, PluginHook } from 'react-table';
 import type { Theme, TableColumn, CellRenderProps } from '~/types';
 
-interface TableProps<T = Route> {
+interface TableProps<T extends object = Route> {
   data: T[];
   striped?: boolean;
-  columns: TableColumn[] | any[]; // Allow more flexible column types
+  columns: TableColumn<T>[];
   heading?: React.ReactNode;
   bordersVertical?: boolean;
   bordersHorizontal?: boolean;
-  Cell?: React.FC<any>; // More flexible cell render props
+  Cell?: React.FC<CellRenderProps<T>>;
   rowHighlightProp?: keyof T;
   rowHighlightBg?: Theme.ColorNames;
 }
 
-export const Table = <T = Route>(props: TableProps<T>): JSX.Element => {
+export const Table = <T extends object = Route>(props: TableProps<T>): JSX.Element => {
   const {
     data,
     columns,
@@ -53,7 +53,7 @@ export const Table = <T = Route>(props: TableProps<T>): JSX.Element => {
 
   for (const col of columns) {
     if (col.hidden) {
-      hiddenColumns.push(col.accessor);
+      hiddenColumns.push(String(col.accessor));
     }
   }
 
@@ -61,9 +61,9 @@ export const Table = <T = Route>(props: TableProps<T>): JSX.Element => {
     columns,
     defaultColumn,
     data,
-    initialState: { 
+    initialState: {
       hiddenColumns,
-      pageSize: 50  // Default to 50 rows instead of default 10
+      pageSize: 50, // Default to 50 rows instead of default 10
     },
   } as TableOptions<T>;
 
@@ -132,12 +132,12 @@ export const Table = <T = Route>(props: TableProps<T>): JSX.Element => {
                 doStripe={striped}
                 highlightBg={rowHighlightBg}
                 doHorizontalBorders={bordersHorizontal}
-                highlight={row.values[rowHighlightProp ?? ''] ?? false}
+                highlight={rowHighlightProp ? Boolean(row.values[String(rowHighlightProp)]) : false}
                 dimText={dimText}
                 {...row.getRowProps()}
               >
                 {row.cells.map((cell, i) => {
-                  const { column, row, value } = cell as CellRenderProps;
+                  const { column, row, value } = cell as unknown as CellRenderProps<T>;
                   return (
                     <TableCell
                       align={cell.column.align}

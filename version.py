@@ -18,7 +18,7 @@ PYPROJECT_PATTERN = re.compile(r"^version\s\=\s\"(.+)\"$")
 CONSTANTS = Path(__file__).parent / "hyperglass" / "constants.py"
 CONSTANT_PATTERN = re.compile(r"^__version__\s\=\s\"(.+)\"$")
 
-UPGRADE_DOC = Path(__file__).parent / "docs" / "pages" / "installation" / "upgrading.mdx"
+UPGRADE_DOC = Path(__file__).parent / "docs" / "content" / "installation" / "upgrading.mdx"
 UPGRADE_DOC_PATTERN = re.compile(r"^git\scheckout\sv(.+)$")
 
 UPGRADE_GH_FEATURE = Path(__file__).parent / ".github" / "ISSUE_TEMPLATE" / "1-feature-request.yaml"
