@@ -2,11 +2,51 @@
 
 This is the changelog for [WilhelmZA/hyperglass](https://github.com/WilhelmZA/hyperglass), a **fork** of [thatmattlove/hyperglass](https://github.com/thatmattlove/hyperglass). It documents the fork's changes, not upstream's.
 
-The fork's own version line starts at **3.0.0**. It is based on **upstream hyperglass 2.0.4**, plus the upstream commits that had landed on upstream `main` after 2.0.4 but were never released by upstream. Upstream's version numbering is unrelated to this one; upstream's own history continues at [thatmattlove/hyperglass/blob/main/CHANGELOG.md](https://github.com/thatmattlove/hyperglass/blob/main/CHANGELOG.md).
+The fork's own version line starts at **3.0.0** and is currently at **3.1.0**. It is based on **upstream hyperglass 2.0.4**, plus the upstream commits that had landed on upstream `main` after 2.0.4 but were never released by upstream. Upstream's version numbering is unrelated to this one; upstream's own history continues at [thatmattlove/hyperglass/blob/main/CHANGELOG.md](https://github.com/thatmattlove/hyperglass/blob/main/CHANGELOG.md).
 
 Everything from [2.0.4](#204---2024-06-30) downward is inherited upstream history, kept verbatim for reference.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## 3.1.0 - 2026-08-25
+
+Security and platform hardening release covering the dependency estate, container build, documentation platform and frontend validation.
+
+### Added
+
+- Nextra 4 documentation application using Next.js 15, React 19, the App Router and the migrated `docs/content` route tree, exporting all 33 documentation routes.
+- A compatibility patch for `nextra-theme-docs@4.6.1` so the Nextra layout schema accepts the React 19 layout configuration.
+- Deterministic DNS-over-HTTPS UI tests that validate provider URLs, query types, headers and parsed IPv4 and IPv6 answers without depending on external network availability.
+
+### Changed
+
+- The Python package, runtime metadata, UI package, upgrade guide and issue templates now identify the release as `3.1.0`.
+- The version helper now targets the migrated `docs/content/installation/upgrading.mdx` path.
+- Structured-output TypeScript models now include optional BGP next-hop enrichment fields and correctly distinguish BGP and traceroute responses.
+- UI table components now use generic column and cell types instead of permissive `any` fallbacks.
+- The frontend timeout helper now uses the caller-provided `AbortController` signal.
+- The Docker build installs the pinned dependency closure with the patched npm and pnpm toolchain, then removes build-only package tooling from the final image.
+
+### Security
+
+- Raised vulnerable dependency floors and lockfile overrides for the fixable HIGH CVEs identified by the container scan, including Brotli, cryptography, lxml, multipart, Pillow and psutil.
+- Updated frontend dependency overrides for the affected `ua-parser-js`, `@babel/runtime` and `@babel/helpers` packages.
+- Final Trivy validation reports zero HIGH or CRITICAL vulnerabilities in the Alpine OS, Python packages, UI packages and docs package.
+
+### Fixed
+
+- Resolved strict UI type errors in route enrichment, structured-output narrowing, traceroute rendering and generic table usage.
+- Cleared all UI Biome lint and formatting diagnostics.
+- Removed live DNS test flakiness caused by external provider availability and cross-realm `AbortSignal` objects in jsdom.
+
+### Validation
+
+- Python test suite: 70 passed.
+- UI test suite: 39 passed.
+- UI TypeScript, lint and formatting checks: passed.
+- Documentation typecheck and production export: passed for 33 routes.
+- Docker image build: passed.
+- `/mnt/AppData` compose validation: application reached HTTP 200 after its runtime UI build.
 
 ## 3.0.0 - 2026-08-06
 
