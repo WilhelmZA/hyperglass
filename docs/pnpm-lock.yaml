@@ -14,6 +14,9 @@ overrides:
   nanoid: 3.3.18
   postcss: 8.5.18
 
+patchedDependencies:
+  nextra-theme-docs@4.6.1: 5e1f3c09c82663f461daba8ce038f5bd36b3f2d3e08e5edbe1a1fc301578fa80
+
 importers:
 
   .:
@@ -26,7 +29,7 @@ importers:
         version: 4.6.1(next@15.5.21(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(supports-color@4.5.0)(typescript@5.3.3)
       nextra-theme-docs:
         specifier: 4.6.1
-        version: 4.6.1(@types/react@19.2.18)(next@15.5.21(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(nextra@4.6.1(next@15.5.21(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(supports-color@4.5.0)(typescript@5.3.3))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(use-sync-external-store@1.6.0(react@19.1.0))
+        version: 4.6.1(patch_hash=5e1f3c09c82663f461daba8ce038f5bd36b3f2d3e08e5edbe1a1fc301578fa80)(@types/react@19.2.18)(next@15.5.21(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(nextra@4.6.1(next@15.5.21(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(supports-color@4.5.0)(typescript@5.3.3))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(use-sync-external-store@1.6.0(react@19.1.0))
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -3600,7 +3603,7 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  nextra-theme-docs@4.6.1(@types/react@19.2.18)(next@15.5.21(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(nextra@4.6.1(next@15.5.21(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(supports-color@4.5.0)(typescript@5.3.3))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(use-sync-external-store@1.6.0(react@19.1.0)):
+  nextra-theme-docs@4.6.1(patch_hash=5e1f3c09c82663f461daba8ce038f5bd36b3f2d3e08e5edbe1a1fc301578fa80)(@types/react@19.2.18)(next@15.5.21(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(nextra@4.6.1(next@15.5.21(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(supports-color@4.5.0)(typescript@5.3.3))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(use-sync-external-store@1.6.0(react@19.1.0)):
     dependencies:
       '@headlessui/react': 2.2.10(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       clsx: 2.1.0

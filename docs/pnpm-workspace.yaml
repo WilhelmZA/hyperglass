@@ -11,3 +11,5 @@ overrides:
   postcss: '8.5.18'
 packages:
   - .
+patchedDependencies:
+  nextra-theme-docs@4.6.1: patches/nextra-theme-docs@4.6.1.patch
