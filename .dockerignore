@@ -1,11 +1,16 @@
 hyperglass/hyperglass/static
-**/node_modules
-**/node_modules/.pnpm
+**/node_modules/
+**/node_modules/**
+**/.next/
+**/.next/**
+**/out/
+**/out/**
+**/tsconfig.tsbuildinfo
 .DS_Store
 hyperglass/ui/.env*
 hyperglass.json
 custom.*[js, html]
-.next
+.next/
 out/
 fonts/
 __pycache__
