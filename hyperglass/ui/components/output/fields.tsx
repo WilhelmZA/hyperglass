@@ -59,7 +59,7 @@ dayjs.extend(utcPlugin);
 
 export const MonoField = (props: MonoFieldProps): JSX.Element => {
   const { v, ...rest } = props;
-  
+
   // Handle empty or undefined values, but not zero values
   if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) {
     return (
@@ -68,7 +68,7 @@ export const MonoField = (props: MonoFieldProps): JSX.Element => {
       </Text>
     );
   }
-  
+
   return (
     <Text as="span" fontSize="sm" fontFamily="mono" {...rest}>
       {v}
@@ -93,12 +93,12 @@ export const Active = (props: ActiveProps): JSX.Element => {
 
 export const Age = (props: AgeProps): JSX.Element => {
   const { inSeconds, ...rest } = props;
-  
+
   // Handle case where age is not available (e.g., MikroTik) - hide the field entirely
   if (inSeconds === -1) {
     return <></>;
   }
-  
+
   const now = dayjs.utc();
   const then = now.subtract(inSeconds, 'second');
   return (
@@ -181,11 +181,11 @@ export const ASPath = (props: ASPathProps): JSX.Element => {
 
 export const NextHop = (props: NextHopProps): JSX.Element => {
   const { ip, asn, org, country, ...rest } = props;
-  
+
   // Build tooltip label with ASN - ORG format (strip AS prefix from asn to match AS path format)
   const hasEnrichment = asn || org;
   let tooltipLabel = '';
-  
+
   if (hasEnrichment) {
     const parts = [];
     if (asn) {
@@ -196,7 +196,7 @@ export const NextHop = (props: NextHopProps): JSX.Element => {
     if (org) parts.push(org);
     tooltipLabel = parts.join(' - ');
   }
-  
+
   if (!hasEnrichment) {
     // No enrichment data, just show the IP
     return (
@@ -205,7 +205,7 @@ export const NextHop = (props: NextHopProps): JSX.Element => {
       </Text>
     );
   }
-  
+
   // Show tooltip with ASN - ORG format
   return (
     <Tooltip hasArrow label={tooltipLabel} placement="top">
@@ -221,7 +221,7 @@ export const Communities = (props: CommunitiesProps): JSX.Element => {
   const { web } = useConfig();
   const bg = useColorValue('white', 'gray.900');
   const color = useOpposingColor(bg);
-  
+
   // Parse communities to separate code and name if present
   const parsedCommunities = communities.map(community => {
     if (community.includes(',')) {
@@ -230,7 +230,7 @@ export const Communities = (props: CommunitiesProps): JSX.Element => {
     }
     return { code: community, name: null, display: community };
   });
-  
+
   return (
     <If condition={communities.length === 0}>
       <Then>
@@ -257,8 +257,10 @@ export const Communities = (props: CommunitiesProps): JSX.Element => {
             fontWeight="normal"
             whiteSpace="pre-wrap"
           >
-            {parsedCommunities.map(({ display }, index) => (
-              <Text key={index} as="div">{display}</Text>
+            {parsedCommunities.map(({ code, display }) => (
+              <Text key={code} as="div">
+                {display}
+              </Text>
             ))}
           </MenuList>
         </Menu>
@@ -318,12 +320,12 @@ export const RPKIState = forwardRef<HTMLDivElement, RPKIStateProps>(_RPKIState);
 
 export const HideableField = (props: MonoFieldProps): JSX.Element => {
   const { v, ...rest } = props;
-  
+
   // Hide the field entirely if value is empty or undefined
   if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) {
     return <></>;
   }
-  
+
   return (
     <Text as="span" fontSize="sm" fontFamily="mono" {...rest}>
       {v}

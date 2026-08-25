@@ -28,7 +28,12 @@ import {
   useStrf,
   useTableToString,
 } from '~/hooks';
-import { isStringOutput, isStructuredOutput, isBGPStructuredOutput, isTracerouteStructuredOutput } from '~/types';
+import {
+  isStringOutput,
+  isStructuredOutput,
+  isBGPStructuredOutput,
+  isTracerouteStructuredOutput,
+} from '~/types';
 import { CopyButton } from './copy-button';
 import { FormattedError } from './formatted-error';
 import { isFetchError, isLGError, isLGOutputOrError, isStackError } from './guards';
@@ -253,7 +258,9 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
               <Then>
                 {isBGPStructuredOutput(data) && data.level === 'success' && tableComponent ? (
                   <BGPTable>{data.output}</BGPTable>
-                ) : isTracerouteStructuredOutput(data) && data.level === 'success' && tableComponent ? (
+                ) : isTracerouteStructuredOutput(data) &&
+                  data.level === 'success' &&
+                  tableComponent ? (
                   <TracerouteTable>{data.output}</TracerouteTable>
                 ) : isStringOutput(data) && data.level === 'success' && !tableComponent ? (
                   <TextOutput>{data.output}</TextOutput>

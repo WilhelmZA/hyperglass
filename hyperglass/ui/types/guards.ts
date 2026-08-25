@@ -1,4 +1,4 @@
-import type { FormData, StringTableData, StringQueryResponse } from './data';
+import type { FormData, StringQueryResponse } from './data';
 import type { DirectiveSelect, Directive, Link, Menu } from './config';
 
 export function isString(a: unknown): a is string {
@@ -15,16 +15,25 @@ export function isObject<T extends unknown = unknown>(
   return typeof obj === 'object' && obj !== null && !Array.isArray(obj);
 }
 
-export function isStructuredOutput(data: unknown): data is StringTableData {
-  return isObject(data) && 'output' in data;
+export function isStructuredOutput(
+  data: unknown,
+): data is QueryResponse & { output: AllStructuredResponses } {
+  if (!isObject(data) || !('output' in data) || !isObject(data.output)) {
+    return false;
+  }
+  return 'routes' in data.output || 'hops' in data.output;
 }
 
-export function isBGPStructuredOutput(data: unknown): data is StringTableData & { output: StructuredResponse } {
-  return isStructuredOutput(data) && isObject((data as StringTableData).output) && 'routes' in (data as StringTableData).output;
+export function isBGPStructuredOutput(
+  data: unknown,
+): data is QueryResponse & { output: StructuredResponse } {
+  return isStructuredOutput(data) && 'routes' in data.output;
 }
 
-export function isTracerouteStructuredOutput(data: unknown): data is StringTableData & { output: TracerouteResult } {
-  return isStructuredOutput(data) && isObject((data as StringTableData).output) && 'hops' in (data as StringTableData).output;
+export function isTracerouteStructuredOutput(
+  data: unknown,
+): data is QueryResponse & { output: TracerouteResult } {
+  return isStructuredOutput(data) && 'hops' in data.output;
 }
 
 export function isStringOutput(data: unknown): data is StringQueryResponse {

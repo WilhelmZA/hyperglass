@@ -36,18 +36,19 @@ export const Path = (props: PathProps): JSX.Element => {
           try {
             onOpen();
             if (!response) return;
-            const out = response.output as any;
-            const asnOrgs = out?.asn_organizations || {};
+            const out = response.output;
+            if (typeof out === 'string') return;
+            const asnOrgs = out.asn_organizations || {};
             if (Object.keys(asnOrgs).length > 0) return;
 
             // Collect unique ASNs from the output depending on type
             let asns: string[] = [];
-            if (out?.routes) {
-              const all = out.routes.flatMap((r: any) => r.as_path || []);
-              asns = Array.from(new Set(all.map((a: any) => String(a))));
-            } else if (out?.hops) {
-              const all = out.hops.map((h: any) => h.asn).filter(Boolean);
-              asns = Array.from(new Set(all.map((a: any) => String(a))));
+            if ('routes' in out) {
+              const all = out.routes.flatMap(route => route.as_path);
+              asns = Array.from(new Set(all.map(asn => String(asn))));
+            } else if ('hops' in out) {
+              const all = out.hops.map(hop => hop.asn).filter((asn): asn is string => Boolean(asn));
+              asns = Array.from(new Set(all.map(asn => String(asn))));
             }
 
             if (asns.length === 0) return;

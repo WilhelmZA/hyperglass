@@ -75,9 +75,7 @@ const ASNode = (props: NodeProps<NodeData>): JSX.Element => {
       {hasChildren && <Handle type="source" position={Position.Top} />}
       <Box py={2} px={3} bg={bg} minW={32} minH={8} color={color} boxShadow="md" borderRadius="md">
         <VStack spacing={2}>
-          <Flex fontSize="lg">
-            {name}
-          </Flex>
+          <Flex fontSize="lg">{name}</Flex>
           <Badge fontFamily="mono" fontWeight="normal" fontSize="sm" colorScheme="primary">
             {asn}
           </Badge>

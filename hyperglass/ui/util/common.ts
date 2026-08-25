@@ -44,7 +44,7 @@ export async function fetchWithTimeout(
    * Lets set up our `AbortController`, and create a request options object that includes the
    * controller's `signal` to pass to `fetch`.
    */
-  const { signal = new AbortController().signal, ...allOptions } = options;
+  const { signal = controller.signal, ...allOptions } = options;
   const config = { ...allOptions, signal };
   /**
    * Set a timeout limit for the request using `setTimeout`. If the body of this timeout is

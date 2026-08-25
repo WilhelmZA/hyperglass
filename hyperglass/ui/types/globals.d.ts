@@ -31,6 +31,9 @@ export declare global {
     peer_rid: string;
     rpki_state: RPKIState;
     filtered: boolean;
+    next_hop_asn?: string | null;
+    next_hop_org?: string | null;
+    next_hop_country?: string | null;
   };
 
   type TracerouteHop = {
@@ -65,7 +68,7 @@ export declare global {
   };
 
   type RouteField = { [K in keyof Route]: Route[K] };
-  
+
   type TracerouteHopField = { [K in keyof TracerouteHop]: TracerouteHop[K] };
 
   type StructuredResponse = {
@@ -98,7 +101,7 @@ export declare global {
     level: ResponseLevel;
     timestamp: string;
     keywords: string[];
-    output: string | StructuredResponse;
+    output: string | AllStructuredResponses;
     format: 'text/plain' | 'application/json';
   };
 

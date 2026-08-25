@@ -23,12 +23,17 @@ interface TableToStringFormatted {
 dayjs.extend(relativeTimePlugin);
 dayjs.extend(utcPlugin);
 
-function formatAsPath(path: number[], enrichments?: Record<string, { name?: string; country?: string }>): string {
-  return path.map(asn => {
-    const asnStr = String(asn);
-    const org = enrichments?.[asnStr]?.name;
-    return org ? `${asn} (${org})` : String(asn);
-  }).join(' → ');
+function formatAsPath(
+  path: number[],
+  enrichments?: Record<string, { name?: string; country?: string }>,
+): string {
+  return path
+    .map(asn => {
+      const asnStr = String(asn);
+      const org = enrichments?.[asnStr]?.name;
+      return org ? `${asn} (${org})` : String(asn);
+    })
+    .join(' → ');
 }
 
 function formatCommunities(comms: string[]): string {
@@ -97,44 +102,46 @@ export function useTableToString(
     let result = messages.noOutput;
     try {
       if (typeof data !== 'undefined' && isStructuredOutput(data)) {
-        
         // Handle BGP data
         if (isBGPStructuredOutput(data)) {
           // Check if this is BGP data with routes
           if (!('routes' in data.output) || !Array.isArray(data.output.routes)) {
             return messages.noOutput; // Not BGP data, return early
           }
-          
+
           const tableStringParts = [
             `Routes For: ${target.join(', ')}`,
             `Timestamp: ${data.timestamp} UTC`,
           ];
-          
+
           // Get enrichment data if available
-          const enrichments = (data.output as any).asn_organizations || {};
-          
+          const enrichments = data.output.asn_organizations || {};
+
           for (const route of data.output.routes) {
             for (const field of parsedDataFields) {
               const [header, accessor, align] = field;
               if (align !== null) {
                 let value = route[accessor];
-                
+
                 // Handle fields that should be hidden when empty/not available
-                if ((accessor === 'source_rid' || accessor === 'age') && 
-                    (value === null || value === undefined || 
-                     (typeof value === 'string' && value.trim() === '') ||
-                     (accessor === 'age' && value === -1))) {
+                if (
+                  (accessor === 'source_rid' || accessor === 'age') &&
+                  (value === null ||
+                    value === undefined ||
+                    (typeof value === 'string' && value.trim() === '') ||
+                    (accessor === 'age' && value === -1))
+                ) {
                   continue; // Skip this field entirely
                 }
-                
+
                 // Special handling for AS path with enrichment
                 if (accessor === 'as_path') {
                   value = formatAsPath(value as number[], enrichments);
                 }
                 // Special handling for next_hop with enrichment
                 else if (accessor === 'next_hop') {
-                  const nextHopOrg = (route as any).next_hop_org;
-                  const nextHopAsn = (route as any).next_hop_asn;
+                  const nextHopOrg = route.next_hop_org;
+                  const nextHopAsn = route.next_hop_asn;
                   if (nextHopOrg || nextHopAsn) {
                     const asnPart = nextHopAsn ? nextHopAsn.replace(/^AS/, '') : '';
                     const enrichmentPart = [asnPart, nextHopOrg].filter(Boolean).join(' ');
@@ -144,7 +151,7 @@ export function useTableToString(
                   const fmtFunc = getFmtFunc(accessor) as (v: typeof value) => string;
                   value = fmtFunc(value);
                 }
-                
+
                 if (accessor === 'prefix') {
                   let statusSuffix = '';
                   if (route.active) {
@@ -163,39 +170,40 @@ export function useTableToString(
           }
           result = tableStringParts.join('\n');
         }
-        
+
         // Handle Traceroute data
         else if (isTracerouteStructuredOutput(data)) {
           if (!('hops' in data.output) || !Array.isArray(data.output.hops)) {
             return messages.noOutput; // Not traceroute data, return early
           }
-          
+
           const formatRTT = (rtt: number | null | undefined): string => {
             if (rtt === null || rtt === undefined) return '*';
             return `${rtt.toFixed(1)}ms`;
           };
-          
-          const formatIP = (hop: any): string => {
+
+          const formatIP = (hop: TracerouteHop): string => {
             if (hop.display_ip) return hop.display_ip; // For truncated IPv6
             if (hop.ip_address) return hop.ip_address;
             return '*';
           };
-          
-          const formatASN = (hop: any): string => {
+
+          const formatASN = (hop: TracerouteHop): string => {
             if (hop.asn) return `AS${hop.asn}`;
             return '*';
           };
-          
-          const formatHostname = (hop: any): string => {
-            if (hop.hostname && hop.hostname !== 'None' && hop.hostname !== 'null') return hop.hostname;
+
+          const formatHostname = (hop: TracerouteHop): string => {
+            if (hop.hostname && hop.hostname !== 'None' && hop.hostname !== 'null')
+              return hop.hostname;
             return '*';
           };
-          
+
           // Create a nicely formatted text table with proper column alignment
           const header = `Traceroute to ${data.output.target} from ${data.output.source}`;
           const timestamp = `Timestamp: ${data.timestamp} UTC`;
-          const separator = '=' .repeat(header.length);
-          
+          const separator = '='.repeat(header.length);
+
           // Calculate optimal column widths by examining all data
           const columnWidths = {
             hop: Math.max(3, ...data.output.hops.map(h => h.hop_number.toString().length)),
@@ -209,7 +217,7 @@ export function useTableToString(
             best: Math.max(4, ...data.output.hops.map(h => formatRTT(h.best_rtt).length)),
             worst: Math.max(5, ...data.output.hops.map(h => formatRTT(h.worst_rtt).length)),
           };
-          
+
           // Create header row with proper spacing
           const headerRow = [
             'Hop'.padEnd(columnWidths.hop),
@@ -221,20 +229,13 @@ export function useTableToString(
             'Last'.padEnd(columnWidths.last),
             'AVG'.padEnd(columnWidths.avg),
             'Best'.padEnd(columnWidths.best),
-            'Worst'
+            'Worst',
           ].join('  ');
-          
+
           const totalWidth = headerRow.length;
-          
-          const tableLines = [
-            header,
-            timestamp,
-            separator,
-            '',
-            headerRow,
-            '-'.repeat(totalWidth),
-          ];
-          
+
+          const tableLines = [header, timestamp, separator, '', headerRow, '-'.repeat(totalWidth)];
+
           // Format data rows with consistent column widths
           for (const hop of data.output.hops) {
             const row = [
@@ -247,12 +248,12 @@ export function useTableToString(
               formatRTT(hop.last_rtt).padEnd(columnWidths.last),
               formatRTT(hop.avg_rtt).padEnd(columnWidths.avg),
               formatRTT(hop.best_rtt).padEnd(columnWidths.best),
-              formatRTT(hop.worst_rtt)
+              formatRTT(hop.worst_rtt),
             ].join('  ');
-            
+
             tableLines.push(row);
           }
-          
+
           result = tableLines.join('\n');
         }
       }
