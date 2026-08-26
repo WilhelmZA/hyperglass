@@ -4,6 +4,7 @@
 import re
 import sys
 import typing as t
+from pathlib import Path
 
 # Third Party
 import typer
@@ -21,21 +22,21 @@ def _version(value: bool) -> None:
         raise typer.Exit()
 
 
-cli = typer.Typer(name="hyperglass", help="hyperglass Command Line Interface", no_args_is_help=True)
+cli = typer.Typer(name="Ultraglass", help="Ultraglass command line interface", no_args_is_help=True)
 
 
 def run():
-    """Run the hyperglass CLI."""
+    """Run the Ultraglass CLI."""
     return typer.run(cli())
 
 
 @cli.callback(name="version")
 def _version(
     version: t.Optional[bool] = typer.Option(
-        None, "--version", help="hyperglass version", callback=_version
+        None, "--version", help="Ultraglass version", callback=_version
     ),
 ) -> None:
-    """hyperglass"""
+    """Ultraglass"""
     pass
 
 
@@ -114,6 +115,35 @@ def _system_info():
         )
     )
     echo.plain(table)
+
+
+@cli.command(name="support-bundle")
+def _support_bundle(
+    output: Path = typer.Option(
+        Path("ultraglass-support-bundle.json"), "--output", "-o", help="Output JSON file"
+    ),
+    log_directory: t.Optional[Path] = typer.Option(
+        None, "--log-directory", help="Directory containing Ultraglass log files"
+    ),
+    log_lines: int = typer.Option(
+        200, "--log-lines", min=1, max=5000, help="Maximum recent lines to inspect per log"
+    ),
+) -> None:
+    """Create a sanitized local bundle for manual bug-report attachment."""
+    # Standard Library
+    from tempfile import gettempdir
+
+    # Project
+    from hyperglass.settings import Settings
+    from hyperglass.util.support_bundle import write_support_bundle
+
+    directories = (
+        [log_directory]
+        if log_directory is not None
+        else [Path(gettempdir()), Path(Settings.app_path)]
+    )
+    bundle_path = write_support_bundle(output, directories, log_lines=log_lines)
+    echo.success("Wrote sanitized support bundle to {!s}", bundle_path)
 
 
 @cli.command(name="clear-cache")

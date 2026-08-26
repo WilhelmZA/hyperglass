@@ -1,4 +1,4 @@
-In cases where access to the devices is secured behind a "jump box" or other intermediary server/device, hyperglass can use SSH local port forwarding to SSH to an intermedary device first, and then to the device.
+When devices sit behind a jump box or other intermediary server, Ultraglass can use SSH local port forwarding to connect to the intermediary first and then to the device.
 
 ## SSH Proxy Configuration
 
@@ -27,4 +27,4 @@ devices:
               password: your proxy password
 ```
 
-In the above example, the credentials `your proxy username`/`your proxy password` will be used to authenticate from the hyperglass server to the SSH proxy, and the credentials `you`/`your password` will be used to authentiate from the SSH proxy to the device.
+In the example above, the proxy credentials authenticate the Ultraglass server to the SSH proxy. The device credentials then authenticate the proxy connection to the target device.

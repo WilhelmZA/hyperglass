@@ -1,6 +1,6 @@
 ---
-title: Manual Installation
-description: Installing hyperglass manually
+title: Manual installation
+description: Install Ultraglass directly on a host
 ---
 
 import { Steps, Callout } from "nextra/components";
@@ -9,22 +9,22 @@ import { Steps, Callout } from "nextra/components";
 
 ### Install Dependencies
 
-To install hyperglass manually, you'll need to install the following dependencies:
+To install Ultraglass manually, install the following dependencies:
 
-1. [Python 3.11, or 3.12](https://www.python.org/downloads/) and [`pip`](https://pip.pypa.io/en/stable/installation/)
-2. [NodeJS 20.14 or later](https://nodejs.org/en/download)
-3. [PNPM 9 or later](https://pnpm.io/installation)
-4. [Redis 7.2 or later](https://redis.io/download/)
+1. [Python 3.13 or later](https://www.python.org/downloads/) and [`pip`](https://pip.pypa.io/en/stable/installation/)
+2. [Node.js 22 or later](https://nodejs.org/en/download)
+3. [pnpm 11](https://pnpm.io/installation)
+4. [Redis 7 or later](https://redis.io/download/)
 
 <Callout type="warning">Make sure the Redis server is started.</Callout>
 
-### Install hyperglass
+### Install Ultraglass
 
-Once these dependencies are installed, install hyperglass via PyPI:
+Once these dependencies are installed, clone and install Ultraglass:
 
 ```shell copy
-git clone https://github.com/WilhelmZA/hyperglass --depth=1
-cd hyperglass
+git clone https://github.com/WilhelmZA/ultraglass --depth=1
+cd ultraglass
 # optional - switch to the latest stable release
 # git switch -c v3.0.0 v3.0.0
 pip3 install -e .
@@ -43,17 +43,17 @@ mkdir /etc/hyperglass
 
 ### Optional: Quickstart
 
-Do this if you just want to see the hyperglass page working with default settings and a fake device.
+Do this if you want to verify the Ultraglass page with default settings and a fake device.
 
 ```shell copy
-curl -o /etc/hyperglass/devices.yaml https://raw.githubusercontent.com/thatmattlove/hyperglass/main/.samples/sample_devices.yaml
+curl -o /etc/hyperglass/devices.yaml https://raw.githubusercontent.com/WilhelmZA/ultraglass/main/.samples/sample_devices.yaml
 hyperglass start
 ```
 
 ### Create a `systemd` service
 
 ```shell copy
-curl -o /etc/hyperglass/hyperglass.service https://raw.githubusercontent.com/thatmattlove/hyperglass/main/.samples/hyperglass-manual.service
+curl -o /etc/hyperglass/hyperglass.service https://raw.githubusercontent.com/WilhelmZA/ultraglass/main/.samples/hyperglass-manual.service
 ln -s /etc/hyperglass/hyperglass.service /etc/systemd/system/hyperglass.service
 systemctl daemon-reload
 systemctl enable hyperglass

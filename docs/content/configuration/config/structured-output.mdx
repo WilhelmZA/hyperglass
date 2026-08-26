@@ -2,7 +2,7 @@ import { Callout } from "nextra/components";
 
 ## Structured
 
-Devices that support responding to a query with structured or easily parsable data can have their response data placed into an easier to read table (or JSON, when using the REST API). Currently, the following platforms have structured data supported in hyperglass:
+Devices that return structured or easily parsed data can display their response in a table, or as JSON through the REST API. The following platforms currently have structured data support in Ultraglass:
 
 -   Arista EOS
 -   FRRouting
@@ -10,18 +10,18 @@ Devices that support responding to a query with structured or easily parsable da
 -   Juniper Junos
 -   Mikrotik RouterOS/SwitchOS
 
-When structured output is available, hyperglass checks the RPKI state of each BGP prefix returned using one of two methods:
+When structured output is available, Ultraglass can check the RPKI state of each returned BGP prefix using one of two methods:
 
 1. **From the router's perspective** - Uses the RPKI validation state as determined by the router itself
 2. **From an external RPKI validation service** - Queries an external service to determine RPKI state independently
 
-For external validation, hyperglass supports two backends:
+For external validation, Ultraglass supports two backends:
 - **Cloudflare**: Uses [Cloudflare's public RPKI service](https://rpki.cloudflare.com/) via GraphQL API
 - **Routinator**: Connects to your own [Routinator](https://github.com/NLnetLabs/routinator) RPKI validator instance
 
-Additionally, hyperglass provides the ability to control which BGP communities are shown to the end user.
+Ultraglass can also control which BGP communities are shown to the end user.
 
-For devices with structured traceroute support (FRRouting, Huawei VRP, and MikroTik RouterOS), hyperglass can enhance the output with IP enrichment data including ASN information, organization names, country codes, and IXP detection using real-time lookups from BGP.tools.
+For devices with structured traceroute support, Ultraglass can add ASN, organisation, country, reverse DNS, and IXP details using lookups from BGP.tools.
 
 | Parameter                         | Type            | Default Value | Description                                                                                                                            |
 | :-------------------------------- | :-------------- | :------------ | :------------------------------------------------------------------------------------------------------------------------------------- |
@@ -69,7 +69,7 @@ structured:
 <Callout type="info" emoji="ℹ️">
     **Routinator URL Format**
     
-    The `rpki_server_url` should be the base URL of your Routinator HTTP web API endpoint. This is typically different from the RTR port (3323). The URL should not include the `/validity` path as hyperglass will append this automatically.
+    The `rpki_server_url` should be the base URL of your Routinator HTTP web API endpoint. This is typically different from the RTR port (3323). Do not include the `/validity` path because Ultraglass appends it automatically.
 </Callout>
 
 ### Community Filtering Examples

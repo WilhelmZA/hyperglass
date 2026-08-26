@@ -14,7 +14,7 @@ __license__ = "BSD 3-Clause Clear License"
 # release the fork is based on.
 __upstream_version__ = "2.0.4"
 __upstream_url__ = "https://github.com/thatmattlove/hyperglass"
-__fork_url__ = "https://github.com/WilhelmZA/hyperglass"
+__fork_url__ = "https://github.com/WilhelmZA/ultraglass"
 
 METADATA = (__name__, __version__, __author__, __copyright__, __license__)
 

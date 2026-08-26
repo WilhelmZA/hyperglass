@@ -150,7 +150,7 @@ class Installer:
         if not compare_lists(
             compare_initial.left_list,
             compare_initial.right_list,
-            ignore=["hyperglass-opengraph.jpg"],
+            ignore=["ultraglass-opengraph.jpg"],
         ):
             shutil.rmtree(target_dir)
             shutil.copytree(
@@ -165,7 +165,7 @@ class Installer:
             compare_post = dircmp(ASSET_DIR, target_dir, ignore=IGNORED_FILES)
 
             if not compare_lists(
-                compare_post.left_list, compare_post.right_list, ignore=["hyperglass-opengraph.jpg"]
+                compare_post.left_list, compare_post.right_list, ignore=["ultraglass-opengraph.jpg"]
             ):
                 echo.error("Files in {!s} do not match files in {!s}", ASSET_DIR, target_dir)
                 raise typer.Exit(1)

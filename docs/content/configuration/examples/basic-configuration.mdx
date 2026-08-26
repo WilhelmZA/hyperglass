@@ -1,15 +1,15 @@
 ---
 title: Basic Configuration
-description: Get started with a basic hyperglass configuration
+description: Get started with a basic Ultraglass configuration
 ---
 
 import { Callout } from "nextra/components";
 
-To get started, hyperglass only needs to know about your devices.
+To get started, Ultraglass only needs to know about your devices.
 
 <Callout type="info">
     **Devices** are your routers, switches, or whatever else you want to call the endpoints
-    hyperglass will query for information.
+    Ultraglass will query for information.
 </Callout>
 
 ## Simple Device Configuration
@@ -17,10 +17,10 @@ To get started, hyperglass only needs to know about your devices.
 ```yaml filename="devices.yaml"
 devices:
     - name: NYC Router 1
-      address: <IP address hyperglass will use to log into the router>
+      address: <IP address Ultraglass will use to log into the router>
       credential:
-          username: <Username hyperglass will use to log into the router>
-          password: <Password hyperglass will use to log into the router>
+          username: <Username Ultraglass will use to log into the router>
+          password: <Password Ultraglass will use to log into the router>
       platform: cisco_ios
       attrs:
           source4: <IPv4 address from which to source ping & traceroute commands>

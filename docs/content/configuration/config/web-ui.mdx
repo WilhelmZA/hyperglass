@@ -3,7 +3,7 @@ import { Color } from "~/components/color";
 
 ## Web UI
 
-hyperglass provides extensive customization options for the look and feel of the web UI.
+Ultraglass provides extensive customisation options for the look and feel of the web UI.
 
 | Parameter                   | Type   | Default Value | Description                                                                                                                                |
 | :-------------------------- | :----- | :------------ | :----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -48,7 +48,7 @@ The greeting is an optional modal/popup window that will present itself to users
 
 -   A data privacy acknowledgement that must be acknowledged prior to proceeding
 -   Information about your company
--   Instructions on how to use hyperglass
+-   Instructions on how to use Ultraglass
 
 | Parameter               | Type    | Default Value | Description                                                                                          |
 | :---------------------- | :------ | :------------ | :--------------------------------------------------------------------------------------------------- |
@@ -72,7 +72,7 @@ web:
 
 ### OpenGraph
 
-[OpenGraph](https://ogp.me/) is the thing that generates the pretty pictures, titles, and descriptions for links when you post them to sites/tools such as Facebook, Twitter, Slack, etc. By default, [this Opengraph image](/opengraph.jpg) is used, but you can provide your own image. You don't need to worry about sizing or formatting it properly, hyperglass will handle this for you.
+[OpenGraph](https://ogp.me/) controls the image, title, and description shown when you share a link. Ultraglass uses [this OpenGraph image](/opengraph.jpg) by default, but you can provide your own image.
 
 | Parameter             | Type   | Default Value | Description                   |
 | :-------------------- | :----- | :------------ | :---------------------------- |
@@ -80,7 +80,7 @@ web:
 
 ### Highlighting
 
-hyperglass can highlight special values in your router output and provide users with additional information about the content. For example, your organization's BGP communities or IP address space can be visually highlighted, and a tooltip can be shown when a user hovers over the highlighted value.
+Ultraglass can highlight special values in router output and provide users with additional context. For example, an organisation's BGP communities or IP address space can be highlighted with a tooltip.
 
 Each value you wish to be highlighted is defined with the following schema:
 
@@ -105,7 +105,7 @@ web:
 
 ### Menus
 
-hyperglass can show completely-customizable menus in the footer. Each menu can be configured with the following schema:
+Ultraglass can show customisable menus in the footer. Each menu can be configured with the following schema:
 
 | Parameter | Type   | Default Value | Description                                                                                                                |
 | :-------- | :----- | :------------ | :------------------------------------------------------------------------------------------------------------------------- |
@@ -133,7 +133,7 @@ web:
 
 ### Links
 
-hyperglass can show customizable links to anything you think your users might find helpful. Each link can be configured with the following schema:
+Ultraglass can show links to resources that users may find helpful. Each link can be configured with the following schema:
 
 | Parameter   | Type    | Default Value | Description                                                                                                           |
 | :---------- | :------ | :------------ | :-------------------------------------------------------------------------------------------------------------------- |
@@ -164,7 +164,7 @@ web:
 
 | Parameter |  Type   | Default | Description                                                                              |
 | :-------- | :-----: | :-----: | :--------------------------------------------------------------------------------------- |
-| `enable`  | Boolean | `true`  | Enable or disable the display of developer credit & link to hyperglass GitHub repository |
+| `enable`  | Boolean | `true`  | Enable or disable the display of Ultraglass and upstream credit in the footer. |
 
 <Callout emoji="❤️" type="info">
     **Note from the Developer**
@@ -176,12 +176,12 @@ web:
 
 ### Text
 
-Most of the text in the hyperglass UI can be overridden to suit your needs.
+Most of the text in the Ultraglass UI can be overridden to suit your needs.
 
 | Parameter                    | Type   | Default Value                         | Description                                                                                                                                                             |
 | :--------------------------- | :----- | :------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `web.text.title_mode`        | String | logo_only                             | See [title mode section](#title-mode)                                                                                                                                   |
-| `web.text.title`             | String | hyperglass                            | Title text.                                                                                                                                                             |
+| `web.text.title`             | String | Ultraglass                            | Title text.                                                                                                                                                             |
 | `web.text.subtitle`          | String | Network Looking Glass                 | Subtitle text.                                                                                                                                                          |
 | `web.text.query_location`    | String | Location                              | Text used to label the query location (router) field.                                                                                                                   |
 | `web.text.query_type`        | String | Query Type                            | Text used to label the query type (directive) field.                                                                                                                    |
@@ -198,7 +198,7 @@ Most of the text in the hyperglass UI can be overridden to suit your needs.
 | `web.text.rpki_unknown`      | String | No ROAs Exist                         | Text used in table output when a route's RPKI status is unknown.                                                                                                        |
 | `web.text.rpki_unverified`   | String | Not Verified                          | Text used in table output when a route's RPKI status is unverified.                                                                                                     |
 | `web.text.no_communities`    | String | No Communities                        | Text used in table output when a route has no communities.                                                                                                              |
-| `web.text.ip_error`          | String | Unable to determine IP Address        | Error displayed if hyperglass is unable to determine the user's IP.                                                                                                     |
+| `web.text.ip_error`          | String | Unable to determine IP Address        | Error displayed if Ultraglass is unable to determine the user's IP.                                                                                                     |
 | `web.text.no_ip`             | String | No \{protocol\} Address               | Text displayed if the user doesn't have an IP address of \{protocol\} (IPv4 or IPv6).                                                                                   |
 | `web.text.ip_select`         | String | Select an IP Address                  | Text used to label the IP Address selection for the user's IP.                                                                                                          |
 | `web.text.ip_button`         | String | My IP                                 | Text used for the user IP button.                                                                                                                                       |
@@ -226,11 +226,11 @@ web:
 
 ### Theme
 
-hyperglass allows you to customize the colors and fonts used in the Web UI.
+Ultraglass allows you to customise the colours and fonts used in the web UI.
 
 | Parameter                      | Type   | Default Value | Description                                                                                                      |
 | :----------------------------- | :----- | :------------ | :--------------------------------------------------------------------------------------------------------------- |
-| `web.theme.default_color_mode` | String |               | Set hyperglass's default color mode. By default, the user's system preference is used. Must be `light` or `dark` |
+| `web.theme.default_color_mode` | String |               | Set Ultraglass's default colour mode. By default, the user's system preference is used. Must be `light` or `dark` |
 
 #### Colors
 
@@ -267,7 +267,7 @@ hyperglass allows you to customize the colors and fonts used in the Web UI.
 
 ###### Example
 
-To override hyperglass's primary color, it's recommended to override its mapped intrinsic color. For example, to override the default primary color to <Color hex="#00ffff" noText /> cyan:
+To override Ultraglass's primary colour, override its mapped intrinsic colour. For example, to override the default primary colour to <Color hex="#00ffff" noText /> cyan:
 
 ```yaml filename="config.yaml"
 web:
@@ -278,7 +278,7 @@ web:
 
 #### Fonts
 
-hyperglass's fonts are loaded from [Google Fonts](https://fonts.google.com/). Any Google font name may be specified to override the default fonts.
+Ultraglass's fonts are loaded from [Google Fonts](https://fonts.google.com/). Any Google font name may be specified to override the default fonts.
 
 | Parameter              | Type   | Default Value | Description                                                                              |
 | :--------------------- | :----- | :------------ | :--------------------------------------------------------------------------------------- |

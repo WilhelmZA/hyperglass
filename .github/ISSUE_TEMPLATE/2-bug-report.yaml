@@ -9,7 +9,7 @@ body:
       required: true
     attributes:
       label: Deployment Type
-      description: How are you running hyperglass?
+      description: How are you running Ultraglass?
       multiple: false
       options:
         - Docker
@@ -19,7 +19,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: What version of hyperglass are you currently running?
+      description: What version of Ultraglass are you currently running?
       placeholder: v3.1.0
     validations:
       required: true
@@ -32,7 +32,7 @@ body:
       description: >
         Describe in detail the exact steps one can take to reproduce this bug.
         If reporting a UI bug, be sure to include screenshots, browser version, and operating system and platform.
-        If you've deployed hyperglass manually, be sure to include Python and NodeJS versions.
+        If you've deployed Ultraglass manually, be sure to include Python and NodeJS versions.
       placeholder: |
         1. Click the thing
         2. Type the stuff
@@ -57,21 +57,21 @@ body:
     id: configuration
     attributes:
       label: Configuration
-      description: hyperglass [config](https://hyperglass.dev/configuration/config) file in YAML format.
+      description: Ultraglass [config](https://github.com/WilhelmZA/ultraglass/tree/main/docs/content/configuration/config) file in YAML format.
       placeholder: |
-        org_name: Beloved Hyperglass User
+        org_name: Beloved Ultraglass User
         plugins: []
         primary_asn: 65000
         request_timeout: 90
-        site_description: Beloved Hyperglass User Network Looking Glass
-        site_title: Beloved Hyperglass User
+        site_description: Beloved Ultraglass User Network Looking Glass
+        site_title: Ultraglass
       render: yaml
   - type: textarea
     id: devices
     attributes:
       label: Devices
       description: >
-        hyperglass [devices](https://hyperglass.dev/configuration/devices) file in YAML format
+        Ultraglass [devices](https://github.com/WilhelmZA/ultraglass/blob/main/docs/content/configuration/devices.mdx) file in YAML format
         **with passwords obfuscated or removed**.
       placeholder: |
         devices:
@@ -92,5 +92,5 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: Include any relevant log messages related to the bug.
+      description: Run `hyperglass support-bundle` on the Ultraglass host and attach the resulting JSON file. The bundle is sanitized locally and is not uploaded automatically. You may also include relevant log messages, but remove credentials, tokens, private addresses, and device output first.
       render: console

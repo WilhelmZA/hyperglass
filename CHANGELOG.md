@@ -1,6 +1,6 @@
 # Changelog
 
-This is the changelog for [WilhelmZA/hyperglass](https://github.com/WilhelmZA/hyperglass), a **fork** of [thatmattlove/hyperglass](https://github.com/thatmattlove/hyperglass). It documents the fork's changes, not upstream's.
+This is the changelog for [WilhelmZA/ultraglass](https://github.com/WilhelmZA/ultraglass), a **fork** of [thatmattlove/hyperglass](https://github.com/thatmattlove/hyperglass). It documents Ultraglass changes, not upstream's.
 
 The fork's own version line starts at **3.0.0** and is currently at **3.1.0**. It is based on **upstream hyperglass 2.0.4**, plus the upstream commits that had landed on upstream `main` after 2.0.4 but were never released by upstream. Upstream's version numbering is unrelated to this one; upstream's own history continues at [thatmattlove/hyperglass/blob/main/CHANGELOG.md](https://github.com/thatmattlove/hyperglass/blob/main/CHANGELOG.md).
 
@@ -178,7 +178,7 @@ _v2.0.0 is a major release of hyperglass. Many things have changed, and it is li
 
 ### Added
 
-- Commands are now defined as [directives](https://hyperglass.dev/configuration/directives), which is a configuration definition of one or more commands to run on a device. A directive defines:
+- Commands are now defined as [directives](https://github.com/WilhelmZA/ultraglass/blob/main/docs/content/configuration/directives.mdx), which is a configuration definition of one or more commands to run on a device. A directive defines:
   - What command (or commands) to run on the device
   - Type of UI field, text input or select
   - If the field can accept multiple values
@@ -186,12 +186,12 @@ _v2.0.0 is a major release of hyperglass. Many things have changed, and it is li
   - Validation rules
 - hyperglass now supports Docker, and using Docker is the default and recommended method for deployment.
 - The list of locations (devices) is displayed as a gallery when the number of devices is 5 or less. This is a default value and is configurable.
-- hyperglass now supports custom [input or output plugins](https://hyperglass.dev/plugins).
+- hyperglass now supports custom [input or output plugins](https://github.com/WilhelmZA/ultraglass/blob/main/docs/content/plugins.mdx).
   - Input Plugins: Apply custom validation logic or transform user input before the query is sent to a device.
   - Output Plugins: Interact with the output from a device before it's displayed to the user.
 - [#206](https://github.com/thatmattlove/hyperglass/issues/206): OpenBGPD is natively supported by hyperglass.
 - [#176](https://github.com/thatmattlove/hyperglass/issues/176): Custom javascript or HTML can be injected into the web page (for tracking applications such as Google Analytics).
-- [#173](https://github.com/thatmattlove/hyperglass/issues/173): Any output, such as BGP Communities, can be highlighted in the UI by defining [highlight patterns](https://hyperglass.dev/configuration/config/web-ui#highlighting).
+- [#173](https://github.com/thatmattlove/hyperglass/issues/173): Any output, such as BGP Communities, can be highlighted in the UI by defining [highlight patterns](https://github.com/WilhelmZA/ultraglass/blob/main/docs/content/configuration/config/web-ui.mdx#highlighting).
 - [#155](https://github.com/thatmattlove/hyperglass/issues/155): A user can now use the "My IP" button to insert their own IP into the query target field.
 - [#143](https://github.com/thatmattlove/hyperglass/issues/143): Any HTTP endpoint may be configured as device from which to collect output.
 
@@ -243,7 +243,7 @@ _1.0.3 is a cosmetic release to factor in code-level changes related to the repo
 ## 1.0.0-beta.82 - 2021-04-22
 
 ### BREAKING CHANGE
-**NodeJS 14.15 or later is required**. See [the docs](https://hyperglass.dev/docs/getting-started) for installation instructions.
+**NodeJS 14.15 or later is required**. See the [installation documentation](https://github.com/WilhelmZA/ultraglass/blob/main/docs/content/installation/manual.mdx) for installation instructions.
 
 ### Fixed
 - [#135](https://github.com/thatmattlove/hyperglass/issues/135): Fix an issue where Juniper indirect next-hops were empty.
@@ -313,7 +313,7 @@ Moving forward, the `name` field is only used to define the name of the VRF **as
 **NOTICE**: *[hyperglass-agent](https://github.com/thatmattlove/hyperglass-agent) will be deprecated soon. Use `frr_ssh` or `bird_ssh` for SSH connectivity in the meantime.*
 
 ### Added
-- FRR & BIRD may now be accessed via standard SSH using the `frr_ssh` and `bird_ssh` NOS. [See the docs](https://hyperglass.dev/docs/platforms#caveats) for important caveats.
+- FRR & BIRD may now be accessed via standard SSH using the `frr_ssh` and `bird_ssh` NOS. See the [platform documentation](https://github.com/WilhelmZA/ultraglass/blob/main/docs/content/platforms.mdx) for important caveats.
 
 ### Changed
 - `port` in `devices.yaml` now defaults to 22 if not specified.
@@ -423,7 +423,7 @@ Moving forward, the `name` field is only used to define the name of the VRF **as
 
 ### Added
 
-- [#87](https://github.com/thatmattlove/hyperglass/issues/87): [TNSR] Support. To add a TNSR device, use the `tnsr` [NOS key](https://hyperglass.dev/docs/adding-devices#all-device-parameters).
+- [#87](https://github.com/thatmattlove/hyperglass/issues/87): [TNSR] Support. To add a TNSR device, use the `tnsr` platform configuration described in the [platform documentation](https://github.com/WilhelmZA/ultraglass/blob/main/docs/content/platforms.mdx).
 
 ### Fixed
 
@@ -447,7 +447,7 @@ When hyperglass starts up, it will check to see if `~/hyperglass` or `/etc/hyper
 
 ### Added
 
-- [#81](https://github.com/thatmattlove/hyperglass/issues/81): Add support for SSH key authentication. See [the docs](https://hyperglass.dev/docs/adding-devices#credential) for more details.
+- [#81](https://github.com/thatmattlove/hyperglass/issues/81): Add support for SSH key authentication. See the [credential documentation](https://github.com/WilhelmZA/ultraglass/blob/main/docs/content/configuration/devices/credentials.mdx) for more details.
 
 ### 1.0.0-beta.60 - 2020-10-10
 
@@ -629,7 +629,7 @@ $ hyperglass-agent send-certificate
 
 ### Added
 
-- New NOS: **VyOS**. [See docs for important caveats](https://hyperglass.dev/docs/commands).
+- New NOS: **VyOS**. See the [platform documentation](https://github.com/WilhelmZA/ultraglass/blob/main/docs/content/platforms.mdx) for important caveats.
 
 ### Fixed
 
@@ -642,13 +642,13 @@ $ hyperglass-agent send-certificate
 ### Added
 
 - Opengraph images are now automatically generated in the correct format from any valid image file.
-- Better color mode toggle icons (they now match [hyperglass.dev](https://hyperglass.dev)).
+- Better colour mode toggle icons.
 
 ### Changed
 
 - Improved SEO & Accessibility for UI.
 - Default traceroute help link now points to new docs site.
-- Slightly different default black & white colors (they now match [hyperglass.dev](https://hyperglass.dev)).
+- Slightly different default black and white colours.
 - Various docs site improvements
 
 ### Fixed
@@ -699,4 +699,4 @@ $ hyperglass-agent send-certificate
 
 ### Changed
 
-- **BREAKING CHANGE**: The `logo` section now requires the full path for logo files. See [the docs](https://hyperglass.dev/docs/ui/logo) for details.
+- **BREAKING CHANGE**: The `logo` section now requires the full path for logo files. See the [web UI configuration documentation](https://github.com/WilhelmZA/ultraglass/blob/main/docs/content/configuration/config/web-ui.mdx) for details.

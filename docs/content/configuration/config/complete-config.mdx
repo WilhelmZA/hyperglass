@@ -8,7 +8,7 @@ import { DocsButton } from '~/components/docs-button'
 
 # Complete Configuration Reference
 
-This is a comprehensive reference for all available configuration options in hyperglass. The configuration is written in YAML format and saved as `config.yaml` in your hyperglass configuration directory.
+This is a comprehensive reference for all available configuration options in Ultraglass. The configuration is written in YAML format and saved as `config.yaml` in your hyperglass configuration directory.
 
 ## Top-Level Parameters
 
@@ -18,7 +18,7 @@ These parameters are configured at the root level of your `config.yaml` file.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
-| `site_title` | String | `hyperglass` | The name of your hyperglass site. Used in HTML `<title>` tags and API documentation. |
+| `site_title` | String | `Ultraglass` | The name of your Ultraglass site. Used in HTML `<title>` tags and API documentation. |
 | `org_name` | String | `Beloved Hyperglass User` | Your organization's name. Used in UI, API documentation, and HTML meta tags for SEO. |
 | `site_description` | String | `{org_name} Network Looking Glass` | Short description of your site. Used for HTML meta description tag. `{org_name}` is automatically replaced. |
 | `primary_asn` | String/Integer | `65001` | Your network's primary ASN. Used for defaults like subtitle and PeeringDB URL. |
@@ -55,7 +55,7 @@ plugins:
 
 ## Cache Configuration
 
-Controls how hyperglass caches query responses to improve performance.
+Controls how Ultraglass caches query responses to improve performance.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
@@ -244,7 +244,7 @@ messages:
 
 ## Structured Output Configuration
 
-Controls how hyperglass processes and displays structured data from network devices.
+Controls how Ultraglass processes and displays structured data from network devices.
 
 ### BGP Communities
 
@@ -297,7 +297,7 @@ Extensive customization options for the web interface appearance and behavior.
 Controls hostname resolution in the browser using DNS-over-HTTPS.
 
 <Callout type="info">
-When users enter hostnames (like `example.com`) instead of IP addresses, hyperglass uses DNS-over-HTTPS to resolve them to IP addresses directly in the user's browser. This provides privacy and security benefits over traditional DNS queries.
+When users enter hostnames such as `example.com` instead of IP addresses, Ultraglass uses DNS-over-HTTPS to resolve them to IP addresses directly in the user's browser. This avoids sending the lookup through the application server.
 </Callout>
 
 | Parameter | Type | Default | Description |
@@ -374,7 +374,7 @@ Customize almost all text displayed in the user interface.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
-| `web.text.title` | String | `hyperglass` | Main title text. |
+| `web.text.title` | String | `Ultraglass` | Main title text. |
 | `web.text.subtitle` | String | `Network Looking Glass` | Subtitle text. |
 | `web.text.query_location` | String | `Location` | Label for location/router selection field. |
 | `web.text.query_type` | String | `Query Type` | Label for query type selection field. |
@@ -649,7 +649,7 @@ web:
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
-| `web.credit.enable` | Boolean | `true` | Show hyperglass developer credit in footer. |
+| `web.credit.enable` | Boolean | `true` | Show the Ultraglass and upstream credit in the footer. |
 
 <Callout emoji="❤️" type="info">
 **Note from the Developer**

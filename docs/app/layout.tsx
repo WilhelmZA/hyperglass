@@ -1,22 +1,20 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Layout } from "nextra-theme-docs";
+import { Layout, Navbar } from "nextra-theme-docs";
 import { getPageMap } from "nextra/page-map";
 import "nextra-theme-docs/style.css";
 
 const noIndexFollow = process.env.CF_PAGES_BRANCH !== "main";
 
 export const metadata: Metadata = {
-    metadataBase: new URL("https://hyperglass.dev"),
     title: {
-        default: "hyperglass Documentation",
-        template: "%s | hyperglass",
+        default: "Ultraglass Documentation",
+        template: "%s | Ultraglass",
     },
-    description: "hyperglass Documentation",
+    description: "Documentation for Ultraglass, a network looking glass for operators.",
     openGraph: {
         type: "website",
-        siteName: "hyperglass",
-        images: ["/opengraph.jpg"],
+        siteName: "Ultraglass",
     },
     robots: {
         index: !noIndexFollow,
@@ -33,7 +31,18 @@ export default async function RootLayout({ children }: RootLayoutProps) {
         <html lang="en" dir="ltr" suppressHydrationWarning>
             <body>
                 <Layout
-                    docsRepositoryBase="https://github.com/thatmattlove/hyperglass/tree/main/docs"
+                    docsRepositoryBase="https://github.com/WilhelmZA/ultraglass/tree/main/docs"
+                    navbar={
+                        <Navbar
+                            logo={
+                                <picture>
+                                    <source media="(prefers-color-scheme: dark)" srcSet="/ultraglass-dark.svg" />
+                                    <img src="/ultraglass-light.svg" alt="Ultraglass" height="32" />
+                                </picture>
+                            }
+                            projectLink="https://github.com/WilhelmZA/ultraglass"
+                        />
+                    }
                     pageMap={pageMap}
                 >
                     {children}

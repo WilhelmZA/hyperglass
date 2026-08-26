@@ -1,18 +1,41 @@
-hyperglass is primarily maintained by me, [Matt Love](https://github.com/thatmattlove). This was my first ever open source application, and as such, it's kind of my "baby". When I first started writing hyperglass, I knew _nothing_ about development, Python, JavaScript/TypeScript, or GitHub. I was a network engineer trying to solve a problem and learn a few things while I was at it.
+# Contributing to Ultraglass
 
-Because I've been solo-maintaining and building hyperglass since around April 2019, I've become pretty particular about things that might seem trivial to someone just trying to help out. While I welcome development contributions, please don't be offended if pull requests are denied, if I request things to be done a certain way, or if I integrate something similar to your changes separately from your PR. To help understand why, here are some of the development design goals for hyperglass:
+Ultraglass is maintained as a fork of hyperglass. Contributions are welcome when they improve the application without making existing deployments harder to operate or breaking the compatibility namespace used by the Python package and CLI.
 
-- **Pristine code quality**
-  - [Black](https://github.com/python/black) formatting for Python.
-  - Strict adherence to ESLint/Prettier configs for frontend code.
-  - _ZERO_ linting errors.
-  - Linting exceptions only used when there is _no other way_, and should be accompanied with comments about why there is no other way.
-- **No hard-coding**
-  - Anything visible to the end-user _must_ be customizable by the administrator. If it's not, or can't be, leave code or PR comments as to why.
-  - This includes things like timeouts, error messages, etc.
-- **Mobile & Accessible**
-  - All UI element must be available on both desktop and mobile devices.
-  - UI must achieve a 100 Lighthouse/PageInsights score for accessibility.
-- **IPv6 Support**
-  - Any new device support must include IPv6 commands.
-  - All frontend and backend code must support IPv6, both for running the application and processing queries.
+## Before opening a pull request
+
+- Read the relevant documentation and tests before changing behaviour.
+- Explain the user-visible problem and the approach taken to solve it.
+- Add or update tests for behaviour that can be tested automatically.
+- Update the documentation when configuration, installation, or user-visible behaviour changes.
+- Remove credentials, tokens, private keys, and private network details from examples and issue reports.
+
+## Development standards
+
+- Format Python with Black and keep imports ordered with isort.
+- Keep Ruff and the frontend lint, formatting, type, and test checks clean.
+- Keep text visible to administrators and users configurable unless there is a clear reason not to.
+- Keep the UI usable on desktop and mobile and preserve accessible labels and controls.
+- Include IPv6 handling when adding or changing network device support.
+- Keep device queries non-blocking and avoid introducing work on the event loop that can wait on a network device.
+- Keep public documentation factual and include the exact commands needed to reproduce an installation or bug.
+
+## Local checks
+
+The backend tests require Redis on `localhost:6379`:
+
+```shell
+pytest hyperglass --ignore hyperglass/plugins/external
+```
+
+The UI checks run from `hyperglass/ui`:
+
+```shell
+pnpm install --frozen-lockfile
+pnpm run format:check
+pnpm run lint
+pnpm run typecheck
+pnpm run test
+```
+
+The internal Python package and CLI remain named `hyperglass`. Do not rename imports, environment variables, configuration paths, service names, or CLI commands as part of a documentation or public-brand change unless the change explicitly includes a migration plan.

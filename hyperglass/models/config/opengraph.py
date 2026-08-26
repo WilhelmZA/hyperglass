@@ -15,7 +15,7 @@ DEFAULT_IMAGES = Path(__file__).parent.parent.parent / "images"
 class OpenGraph(HyperglassModel):
     """Validation model for params.opengraph."""
 
-    image: FilePath = DEFAULT_IMAGES / "hyperglass-opengraph.jpg"
+    image: FilePath = DEFAULT_IMAGES / "ultraglass-opengraph.jpg"
 
     @field_validator("image")
     def validate_opengraph(cls, value):

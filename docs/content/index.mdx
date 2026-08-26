@@ -1,35 +1,38 @@
 ---
 title: Introduction
-description: Get started with hyperglass
+description: Run a public network looking glass with Ultraglass
 ---
 
 import { Cards } from "nextra/components";
 import { SupportedPlatforms } from "~/components/platforms";
 
-## What is hyperglass?
+## What is Ultraglass?
 
-<strong style={{ color: "#ff5e5b" }}>hyperglass</strong> is an open source network looking glass written
-by a network engineer for other network engineers. The purpose of a looking glass is to provide customers,
-peers, and complete strangers with unattended visibility into the an operator's network.
+Ultraglass is an open source network looking glass for network operators. It gives customers, peers, and other network engineers a controlled way to run diagnostics from selected points in your network without exposing device access.
 
-hyperglass was created with the lofty goal of benefiting the internet community at-large by providing a faster, easier, and more secure way for operators to provide looking glass services to their customers, peers, and other network operators.
+The administrator defines which devices, commands, targets, credentials, and result formats are available. Users get a web interface and REST API for the queries you choose to publish.
 
-## Features
+Ultraglass is a maintained fork of [hyperglass](https://github.com/thatmattlove/hyperglass). The public product uses the Ultraglass name, while the Python package, CLI, configuration paths, environment variables, and service names retain `hyperglass` for deployment compatibility.
 
--   BGP Route, BGP Community, BGP AS Path, Ping, & Traceroute
--   Full IPv6 support
--   Customizable everything: features, theme, UI/API text, error messages, commands
--   Built in support for:
-    <SupportedPlatforms />
--   Configurable support for any other [supported platform](platforms.mdx)
--   Optionally access devices via an SSH proxy/jump server
--   VRF support
--   Access List/prefix-list style query control to whitelist or blacklist query targets on a per-VRF basis
--   REST API with automatic, configurable OpenAPI documentation
--   Modern, responsive UI
--   Query multiple devices simultaneously
--   Browser-based DNS-over-HTTPS resolution of FQDN queries
+## What you can publish
+
+- BGP route, BGP community, BGP AS path, ping, and traceroute queries.
+- Structured BGP and traceroute results for supported platforms.
+- ASN, organisation, country, IXP, reverse DNS, and RPKI details when the relevant enrichment is enabled.
+- IPv4 and IPv6 queries, including browser-based DNS-over-HTTPS resolution for hostnames.
+- Multiple query locations, VRFs, SSH proxy servers, HTTP devices, and concurrent queries.
+- Prefix-list and access-list style controls for limiting query targets.
+- A responsive web UI and configurable OpenAPI documentation.
+
+## Start here
 
 <Cards>
-    <Cards.Card title="Get Started" href="installation/docker" arrow />
+    <Cards.Card title="Install with Docker" href="installation/docker" arrow />
+    <Cards.Card title="Install manually" href="installation/manual" arrow />
+    <Cards.Card title="Configure Ultraglass" href="configuration" arrow />
+    <Cards.Card title="Use the web interface" href="user-guide" arrow />
 </Cards>
+
+## Supported platforms
+
+<SupportedPlatforms />

@@ -1,12 +1,12 @@
 ---
 title: Using Docker
-description: Installing hyperglass with Docker
+description: Install Ultraglass with Docker
 ---
 
 import { Cards, Steps, Callout } from "nextra/components";
 // import { Callout } from "nextra-theme-docs";
 
-<Callout type="info">**Docker is the recommended method for running hyperglass.**</Callout>
+<Callout type="info">**Docker is the recommended method for running Ultraglass.**</Callout>
 
 <Steps>
 
@@ -21,22 +21,22 @@ import { Cards, Steps, Callout } from "nextra/components";
     />
 </Cards>
 
-### Download hyperglass
+### Download Ultraglass
 
 ```shell copy
 mkdir /etc/hyperglass
 cd /opt
-git clone https://github.com/thatmattlove/hyperglass.git --depth=1
-cd /opt/hyperglass
+git clone https://github.com/WilhelmZA/ultraglass.git --depth=1
+cd /opt/ultraglass
 ```
 
 ### Optional: Quickstart
 
-Do this if you just want to see the hyperglass page working with a fake device.
+Do this if you want to verify the Ultraglass page with a fake device before connecting real network devices.
 
 ```shell copy
-cp /opt/hyperglass/.samples/sample_devices.yaml /etc/hyperglass/devices.yaml
-cd /opt/hyperglass
+cp /opt/ultraglass/.samples/sample_devices.yaml /etc/hyperglass/devices.yaml
+cd /opt/ultraglass
 docker compose up
 ```
 
@@ -45,12 +45,12 @@ Navigate to http://localhost:8001
 ### Create a `systemd` service
 
 <Callout type="info">
-    Before you create and start the hyperglass service, you may want to verify whether or not you
-    intend to change any [environment variables](environment-variables.mdx) and change them first.
+    Before you create and start the Ultraglass service, verify whether you need to change any
+    [environment variables](environment-variables.mdx).
 </Callout>
 
 ```shell copy
-cp /opt/hyperglass/.samples/hyperglass-docker.service /etc/hyperglass/hyperglass.service
+cp /opt/ultraglass/.samples/hyperglass-docker.service /etc/hyperglass/hyperglass.service
 ln -s /etc/hyperglass/hyperglass.service /etc/systemd/system/hyperglass.service
 systemctl daemon-reload
 systemctl enable hyperglass

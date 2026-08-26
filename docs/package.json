@@ -1,7 +1,7 @@
 {
-  "name": "hyperglass-docs",
+  "name": "ultraglass-docs",
   "version": "2.0.0",
-  "description": "hyperglass documentation",
+  "description": "Ultraglass documentation",
   "private": true,
   "scripts": {
     "build": "next build",
@@ -9,7 +9,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
-  "author": "thatmattlove <matt@hyperglass.dev>",
+  "author": "Ultraglass maintainers",
   "license": "BSD-3-Clause-Clear",
   "dependencies": {
     "next": "15.5.21",

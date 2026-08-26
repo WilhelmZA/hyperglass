@@ -1,5 +1,5 @@
 name: Feature Request
-description: Suggest an idea for hyperglass
+description: Suggest an idea for Ultraglass
 labels:
   - feature
 body:
@@ -7,15 +7,15 @@ body:
     attributes:
       value: >
         If the answer to any of these questions is "no", your feature request will most likely be rejected (but may still be considered).
-          - Is the new feature _only_ applicable to one [platform](https://hyperglass.dev/platforms)?
+          - Is the new feature _only_ applicable to one [platform](https://github.com/WilhelmZA/ultraglass/tree/main/docs/content/platforms.mdx)?
           - Would the new feature work only on mobile, or only on desktop?
           - Would the new feature only support IPv4, or IPv6?
-          - Is the new feature something that can be reasonably customized by hyperglass users?
+          - Is the new feature something that can be reasonably customised by Ultraglass users?
   - type: input
     id: version
     attributes:
       label: Version
-      description: What version of hyperglass are you currently running?
+      description: What version of Ultraglass are you currently running?
       placeholder: v3.1.0
     validations:
       required: true

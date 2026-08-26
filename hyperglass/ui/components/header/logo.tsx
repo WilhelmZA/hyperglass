@@ -14,13 +14,13 @@ function useLogo(): [string, () => void] {
 
   const src = useColorValue(`/images/light${darkFormat}`, `/images/dark${lightFormat}`);
 
-  // Use the hyperglass logo if the user's logo can't be loaded for whatever reason.
+  // Use the Ultraglass logo if the user's logo cannot be loaded.
   const [fallback, setSource] = useState<string | null>(null);
 
   // If the user image cannot be loaded, log an error to the console and set the fallback image.
   const setFallback = useCallback(() => {
     console.warn(`Error loading image from '${src}'`);
-    setSource('https://res.cloudinary.com/hyperglass/image/upload/v1593916013/logo-light.svg');
+    setSource('/images/ultraglass-light.svg');
   }, [src]);
 
   // Only return the fallback image if it's been set.

@@ -93,8 +93,8 @@ def get_system_info() -> SystemData:
     disk_total, disk_usage = _disk()
 
     return {
-        "hyperglass Version": (__version__, "text"),
-        "hyperglass Path": (os.environ["hyperglass_directory"], "code"),
+        "Ultraglass Version": (__version__, "text"),
+        "Ultraglass Path": (os.environ["hyperglass_directory"], "code"),
         "Python Version": (platform.python_version(), "code"),
         "Node Version": (".".join(str(v) for v in get_node_version()), "code"),
         "Platform Info": (platform.platform(), "code"),

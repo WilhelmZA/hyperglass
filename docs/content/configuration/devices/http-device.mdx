@@ -1,10 +1,10 @@
-hyperglass supports collecting output from a generic HTTP endpoint.
+Ultraglass can collect output from a generic HTTP endpoint.
 
 ## HTTP Configuration
 
 | Parameter               | Type    | Default Value | Description                                                                                                            |
 | :---------------------- | :------ | :------------ | :--------------------------------------------------------------------------------------------------------------------- |
-| `http.attribute_map`    | Mapping |               | Mapping/dict of hyperglass query fields as keys, and hyperglass query field replacements as values.                    |
+| `http.attribute_map`    | Mapping |               | Mapping of Ultraglass query fields to the replacements sent to the HTTP endpoint.                    |
 | `http.basic_auth`       | Mapping |               | If basic authentication is required, provide a mapping/dict containing the basic authentication username and password. |
 | `http.body_format`      | String  | json          | Body format, options are `json` `yaml` `xml` `text`                                                                    |
 | `http.follow_redirects` | Boolean | `false`       | Follow HTTP redirects from server.                                                                                     |
@@ -39,7 +39,7 @@ devices:
               password: your password
 ```
 
-Given the following hyperglass query:
+Given the following Ultraglass query:
 
 | Field          | Value               |
 | :------------- | :------------------ |

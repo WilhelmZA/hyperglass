@@ -69,7 +69,7 @@ logging:
             password: super secret password
 ```
 
-In the above example, hyperglass will send a `POST` request to `https://httpbin.org?source=hyperglass` with Basic Authentication headers set.
+In the example above, Ultraglass sends a `POST` request to `https://httpbin.org?source=hyperglass` with Basic Authentication headers set. The `source` value is an example identifier and can be changed for your deployment.
 
 ##### Microsoft Teams Webhook
 
@@ -87,4 +87,20 @@ logging:
     http:
         provider: slack
         host: <Slack webhook URL>
+```
+
+### Local Support Bundles
+
+Use `hyperglass support-bundle` on the Ultraglass host to create a sanitized JSON file for manual attachment to a bug report. The command reads local log files only, makes no network request, and does not add a frontend endpoint or browser feature for reading source-system information.
+
+The bundle includes Ultraglass version, basic runtime information, recent error-level log records, and failure metadata from `logging.samples`. It excludes query targets, device names, raw device output, parsed results, credentials, tokens, and filesystem paths by default. Review the file before attaching it.
+
+```shell filename="terminal" copy
+hyperglass support-bundle --output ultraglass-support-bundle.json
+```
+
+If logs are stored outside `/tmp` or the application directory, provide the directory explicitly:
+
+```shell filename="terminal" copy
+hyperglass support-bundle --log-directory /var/log/ultraglass --output ultraglass-support-bundle.json
 ```

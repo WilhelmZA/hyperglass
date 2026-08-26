@@ -1,11 +1,19 @@
+---
+title: Installation
+description: Install Ultraglass with Docker or directly on a host
+---
+
 import { Cards } from "nextra/components";
+
+Ultraglass can run as a Docker Compose application or as a manually installed Python application. Docker is the simpler option for most deployments because it keeps the application, UI build, and Redis service together.
 
 <Cards>
     <Cards.Card href="installation/docker" title="Using Docker" />
-    <Cards.Card href="installation/manual" title="Manual Installation" />
+    <Cards.Card href="installation/manual" title="Manual installation" />
 </Cards>
 
 <Cards>
-    <Cards.Card href="installation/environment-variables" title="Environment Variables" />
-    <Cards.Card href="installation/reverse-proxy" title="Reverse Proxy" />
+    <Cards.Card href="installation/environment-variables" title="Environment variables" />
+    <Cards.Card href="installation/reverse-proxy" title="Reverse proxy" />
+    <Cards.Card href="installation/upgrading" title="Upgrading" />
 </Cards>

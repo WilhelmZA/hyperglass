@@ -3,5 +3,5 @@ export default {
     manual: "Manual Installation",
     "environment-variables": "Environment Variables",
     "reverse-proxy": "Reverse Proxy",
-    upgrading: "Upgrading hyperglass",
+    upgrading: "Upgrading Ultraglass",
 };

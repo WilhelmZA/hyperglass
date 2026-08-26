@@ -202,10 +202,10 @@ class InfoResponse(BaseModel):
             "description": "General information about this looking glass.",
             "examples": [
                 {
-                    "name": "hyperglass",
+                    "name": "Ultraglass",
                     "organization": "Company Name",
                     "primary_asn": 65000,
-                    "version": "hyperglass 1.0.0-beta.52",
+                    "version": "Ultraglass 3.1.0",
                 }
             ],
         }

@@ -47,19 +47,19 @@ class ParamsPublic(HyperglassModel):
         description="Your network's primary ASN. This field is used to set some useful defaults such as the subtitle and PeeringDB URL.",
     )
     org_name: str = Field(
-        "Beloved Hyperglass User",
+        "Beloved Ultraglass User",
         title="Organization Name",
         description="Your organization's name. This field is used in the UI & API documentation to set fields such as `<meta/>` HTML tags for SEO and the terms & conditions footer component.",
     )
     site_title: str = Field(
-        "hyperglass",
+        "Ultraglass",
         title="Site Title",
-        description="The name of your hyperglass site. This field is used in the UI & API documentation to set fields such as the `<title/>` HTML tag, and the terms & conditions footer component.",
+        description="The name of your Ultraglass site. This field is used in the UI & API documentation to set fields such as the `<title/>` HTML tag, and the terms & conditions footer component.",
     )
     site_description: str = Field(
         "{org_name} Network Looking Glass",
         title="Site Description",
-        description='A short description of your hyperglass site. This field is used in th UI & API documentation to set the `<meta name="description"/>` tag. `{org_name}` may be used to insert the value of the `org_name` field.',
+        description='A short description of your Ultraglass site. This field is used in th UI & API documentation to set the `<meta name="description"/>` tag. `{org_name}` may be used to insert the value of the `org_name` field.',
     )
 
 
@@ -73,7 +73,7 @@ class Params(ParamsPublic, HyperglassModel):
     fake_output: bool = Field(
         False,
         title="Fake Output",
-        description="If enabled, the hyperglass backend will return static fake output for development/testing purposes.",
+        description="If enabled, the Ultraglass backend will return static fake output for development/testing purposes.",
     )
     cors_origins: t.List[str] = Field(
         [],
@@ -131,8 +131,8 @@ class Params(ParamsPublic, HyperglassModel):
 
         for menu in web.menus:
             menu.content = menu.content.format(
-                site_title=info.data.get("site_title", "hyperglass"),
-                org_name=info.data.get("org_name", "hyperglass"),
+                site_title=info.data.get("site_title", "Ultraglass"),
+                org_name=info.data.get("org_name", "Ultraglass"),
                 version=__version__,
             )
         return web

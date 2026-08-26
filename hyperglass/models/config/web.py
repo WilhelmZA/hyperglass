@@ -83,9 +83,9 @@ class Greeting(HyperglassModel):
 class Logo(HyperglassModel):
     """Validation model for logo configuration."""
 
-    light: FilePath = DEFAULT_IMAGES / "hyperglass-light.svg"
-    dark: FilePath = DEFAULT_IMAGES / "hyperglass-dark.svg"
-    favicon: FilePath = DEFAULT_IMAGES / "hyperglass-icon.svg"
+    light: FilePath = DEFAULT_IMAGES / "ultraglass-light.svg"
+    dark: FilePath = DEFAULT_IMAGES / "ultraglass-dark.svg"
+    favicon: FilePath = DEFAULT_IMAGES / "ultraglass-icon.svg"
     width: str = Field(default="50%", pattern=PERCENTAGE_PATTERN)
     height: t.Optional[str] = Field(default=None, pattern=PERCENTAGE_PATTERN)
 
@@ -101,7 +101,7 @@ class Text(HyperglassModel):
     """Validation model for params.branding.text."""
 
     title_mode: TitleMode = "logo_only"
-    title: str = Field(default="hyperglass", max_length=32)
+    title: str = Field(default="Ultraglass", max_length=32)
     subtitle: str = Field(default="Network Looking Glass", max_length=32)
     query_location: str = "Location"
     query_type: str = "Query Type"

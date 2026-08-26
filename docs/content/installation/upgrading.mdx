@@ -1,10 +1,12 @@
 ## Using Docker
 
+The application keeps the `hyperglass` service and configuration names for compatibility. Pull the Ultraglass repository, then update the checked-out release before rebuilding the containers.
+
 ```shell copy
 cd /opt/hyperglass
 docker compose down
 docker compose rm -f
-git fetch
+git fetch --tags
 git checkout v3.1.0
 docker compose build
 docker compose up

@@ -13,8 +13,8 @@ from hyperglass.log import log
 # Local
 from .main import HyperglassModel
 
-_WEBHOOK_TITLE = "hyperglass received a valid query with the following data"
-_ICON_URL = "https://res.cloudinary.com/hyperglass/image/upload/v1593192484/icon.png"
+_WEBHOOK_TITLE = "Ultraglass received a valid query with the following data"
+_ICON_URL = "https://raw.githubusercontent.com/WilhelmZA/ultraglass/main/hyperglass/images/ultraglass-icon.svg"
 
 
 def to_snake_case(value: str) -> str:

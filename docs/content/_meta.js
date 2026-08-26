@@ -8,11 +8,6 @@ export default {
     configuration: "Configuration",
     platforms: "Platforms",
     plugins: "Plugins",
-    demo: {
-        title: "Demo",
-        type: "page",
-        href: "https://demo.hyperglass.dev",
-    },
     documentation: {
         title: "Documentation",
         type: "menu",

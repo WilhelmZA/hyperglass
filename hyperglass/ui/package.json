@@ -1,7 +1,7 @@
 {
   "version": "3.1.0",
   "name": "ui",
-  "description": "UI for hyperglass, the modern network looking glass",
+  "description": "UI for Ultraglass, a maintained fork of the modern network looking glass hyperglass",
   "author": "Matt Love",
   "license": "BSD-3-Clause-Clear",
   "private": true,

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">Ultraglass</title>
+  <desc id="description">Network looking glass for operators</desc>
+  <rect width="1200" height="630" fill="#13262F"/>
+  <g transform="translate(316 225)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M25 18v36c0 20 16 36 36 36s36-16 36-36V18" stroke="#62D2E5" stroke-width="10"/>
+    <path d="M23 67h23l14-18 15 17 21-28" stroke="#F6FBFC" stroke-width="6"/>
+    <circle cx="23" cy="67" r="6" fill="#62D2E5" stroke="none"/>
+    <circle cx="60" cy="49" r="6" fill="#F6FBFC" stroke="none"/>
+    <circle cx="75" cy="66" r="6" fill="#62D2E5" stroke="none"/>
+    <circle cx="96" cy="38" r="6" fill="#F6FBFC" stroke="none"/>
+  </g>
+  <text x="484" y="300" fill="#F6FBFC" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="92" font-weight="700" letter-spacing="-3">Ultraglass</text>
+  <text x="484" y="370" fill="#9FC2CB" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="30" letter-spacing="1">NETWORK LOOKING GLASS</text>
+</svg>

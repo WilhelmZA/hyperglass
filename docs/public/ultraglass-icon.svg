@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Ultraglass icon</title>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="#13262F"/>
+  <g transform="translate(0 7)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M31 25v31c0 18 15 33 33 33s33-15 33-33V25" stroke="#62D2E5" stroke-width="10"/>
+    <path d="M29 67h24l13-17 14 16 20-27" stroke="#F6FBFC" stroke-width="6"/>
+    <circle cx="29" cy="67" r="6" fill="#62D2E5" stroke="none"/>
+    <circle cx="66" cy="50" r="6" fill="#F6FBFC" stroke="none"/>
+    <circle cx="80" cy="66" r="6" fill="#62D2E5" stroke="none"/>
+    <circle cx="100" cy="39" r="6" fill="#F6FBFC" stroke="none"/>
+  </g>
+</svg>

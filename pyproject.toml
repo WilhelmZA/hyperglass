@@ -1,9 +1,9 @@
 [project]
 name = "hyperglass"
 version = "3.1.0"
-description = "hyperglass is the modern network looking glass that tries to make the internet better."
+description = "Ultraglass is a maintained fork of the modern network looking glass hyperglass."
 authors = [
-    { name = "thatmattlove", email = "matt@hyperglass.dev" }
+    { name = "Ultraglass maintainers" }
 ]
 dependencies = [
     "Pillow>=12.3.0",
