@@ -197,4 +197,4 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh api --method PUT /user/packages/container/ultraglass/visibility -f visibility=public
+        run: gh api --method PUT /users/WilhelmZA/packages/container/ultraglass/visibility -f visibility=public
