@@ -304,6 +304,23 @@ class Directive(HyperglassUniqueModel, unique_by=("id", "table_output")):
             continue
         raise InputValidationError(error="No matched validation rules", target=target)
 
+    def normalize_target(self, target: t.Union[t.List[str], str]) -> t.Union[t.List[str], str]:
+        """Canonicalize explicit IP prefixes before validation and execution."""
+        if not any(isinstance(rule, RuleWithIP) for rule in self.rules):
+            return target
+
+        def normalize(value: str) -> str:
+            if "/" not in value:
+                return value
+            try:
+                return ip_network(value, strict=False).with_prefixlen
+            except ValueError:
+                return value
+
+        if isinstance(target, list):
+            return [normalize(value) for value in target]
+        return normalize(target)
+
     @property
     def field_type(self) -> t.Literal["text", "select", None]:
         """Get the linked field type."""
@@ -339,7 +356,7 @@ class Directive(HyperglassUniqueModel, unique_by=("id", "table_output")):
             "name": self.name,
             "field_type": self.field_type,
             "groups": self.groups,
-            "description": self.field.description if self.field is not None else '',
+            "description": self.field.description if self.field is not None else "",
             "info": None,
         }
 

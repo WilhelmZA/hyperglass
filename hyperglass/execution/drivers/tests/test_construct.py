@@ -46,6 +46,7 @@ def directives():
             "juniper_bgp_route": {
                 "name": "BGP Route",
                 "field": {"description": "test"},
+                "rules": [{"condition": "0.0.0.0/0"}],
             }
         }
     ]
@@ -86,5 +87,17 @@ def test_construct(state):
         queryTarget="192.0.2.0/24",
         queryType="juniper_bgp_route",
     )
+    constructor = Construct(device=state.devices["test1"], query=query)
+    assert constructor.target == "192.0.2.0/24"
+
+
+def test_construct_normalizes_cidr_host_bits(state):
+    query = Query(
+        queryLocation="test1",
+        queryTarget="192.0.2.1/24",
+        queryType="juniper_bgp_route",
+    )
+
+    assert query.query_target == "192.0.2.0/24"
     constructor = Construct(device=state.devices["test1"], query=query)
     assert constructor.target == "192.0.2.0/24"
