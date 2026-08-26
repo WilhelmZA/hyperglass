@@ -30,7 +30,7 @@ def run():
     return typer.run(cli())
 
 
-@cli.callback(name="version")
+@cli.callback()
 def _version(
     version: t.Optional[bool] = typer.Option(
         None, "--version", help="Ultraglass version", callback=_version

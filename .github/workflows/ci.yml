@@ -114,6 +114,32 @@ jobs:
       - name: Test TypeScript
         run: pnpm run test
 
+  package:
+    name: Build Python distributions
+    needs:
+      - backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build wheel and source distribution
+        run: uv build --wheel --sdist
+
+      - name: Upload Python distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/*
+
   docker:
     name: Build and publish Docker image
     needs:

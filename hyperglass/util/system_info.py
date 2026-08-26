@@ -43,7 +43,7 @@ def _disk() -> SystemData:
     return (total_gb, usage_percent)
 
 
-def get_node_version() -> t.Tuple[int, int, int]:
+def get_node_version() -> t.Optional[t.Tuple[int, int, int]]:
     """Get the system's NodeJS version."""
 
     # Standard Library
@@ -51,6 +51,8 @@ def get_node_version() -> t.Tuple[int, int, int]:
     import subprocess
 
     node_path = shutil.which("node")
+    if node_path is None:
+        return None
 
     raw_version = subprocess.check_output([node_path, "--version"]).decode()  # noqa: S603
 
@@ -92,11 +94,16 @@ def get_system_info() -> SystemData:
     mem_total, mem_usage = _memory()
     disk_total, disk_usage = _disk()
 
+    node_version = get_node_version()
+    node_version_text = "not installed"
+    if node_version is not None:
+        node_version_text = ".".join(str(v) for v in node_version)
+
     return {
         "Ultraglass Version": (__version__, "text"),
         "Ultraglass Path": (os.environ["hyperglass_directory"], "code"),
         "Python Version": (platform.python_version(), "code"),
-        "Node Version": (".".join(str(v) for v in get_node_version()), "code"),
+        "Node Version": (node_version_text, "code"),
         "Platform Info": (platform.platform(), "code"),
         "CPU Info": (cpu_info, "text"),
         "Logical Cores": (cpu_logical, "code"),
