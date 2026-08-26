@@ -41,7 +41,9 @@ export default async function RootLayout({ children }: RootLayoutProps) {
                                 </picture>
                             }
                             projectLink="https://github.com/WilhelmZA/ultraglass"
-                        />
+                        >
+                            <a href="https://github.com/WilhelmZA/ultraglass/wiki">Wiki</a>
+                        </Navbar>
                     }
                     pageMap={pageMap}
                 >
