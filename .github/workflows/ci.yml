@@ -133,6 +133,27 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Ensure Docker Hub repository exists
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          token=$(curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -n --arg username "$DOCKERHUB_USERNAME" --arg password "$DOCKERHUB_TOKEN" '{username: $username, password: $password}')" \
+            https://hub.docker.com/v2/users/login/ | jq -r '.token')
+          status=$(curl --silent --show-error --output /tmp/dockerhub-create.json --write-out '%{http_code}' \
+            -X POST \
+            -H "Authorization: JWT $token" \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -n --arg namespace "$DOCKERHUB_USERNAME" '{namespace: $namespace, name: "ultraglass", is_private: false}')" \
+            https://hub.docker.com/v2/repositories/)
+          if [ "$status" != '201' ] && [ "$status" != '409' ]; then
+            cat /tmp/dockerhub-create.json
+            exit 1
+          fi
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
