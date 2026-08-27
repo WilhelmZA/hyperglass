@@ -21,7 +21,6 @@ from hyperglass.exceptions.private import InputValidationError
 # Local
 from ..config.devices import Device
 
-
 QueryLocation = Annotated[str, StringConstraints(strict=True, min_length=1, strip_whitespace=True)]
 QueryTarget = Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)]
 QueryType = Annotated[str, StringConstraints(strict=True, min_length=1, strip_whitespace=True)]
@@ -70,6 +69,7 @@ class Query(BaseModel):
         self.directive = query_directives[0]
 
         self._input_plugin_manager = InputPluginManager()
+        self.query_target = self.directive.normalize_target(self.query_target)
 
         try:
             self.validate_query_target()
@@ -152,8 +152,10 @@ class Query(BaseModel):
                     effective_structured = False
 
         class _DeviceProxy:
-            """Tiny proxy object that delegates to the real device but
-            overrides structured_output."""
+            """Tiny proxy object that delegates to the real device.
+
+            Overrides ``structured_output``.
+            """
 
             def __init__(self, real, structured_value: bool) -> None:
                 self._real = real

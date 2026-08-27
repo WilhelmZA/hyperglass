@@ -8,7 +8,6 @@ from .bgp_route_huawei import BGPRoutePluginHuawei
 from .bgp_routestr_huawei import BGPSTRRoutePluginHuawei
 from .bgp_route_juniper import BGPRoutePluginJuniper
 from .mikrotik_garbage_output import MikrotikGarbageOutput
-from .mikrotik_normalize_input import MikrotikTargetNormalizerInput
 from .bgp_routestr_mikrotik import BGPSTRRoutePluginMikrotik
 from .trace_route_frr import TraceroutePluginFrr
 from .trace_route_huawei import TraceroutePluginHuawei
@@ -23,7 +22,6 @@ __all__ = (
     "BGPRoutePluginHuawei",
     "BGPSTRRoutePluginHuawei",
     "MikrotikGarbageOutput",
-    "MikrotikTargetNormalizerInput",
     "BGPSTRRoutePluginMikrotik",
     "TraceroutePluginFrr",
     "TraceroutePluginHuawei",

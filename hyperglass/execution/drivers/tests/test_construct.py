@@ -6,6 +6,7 @@ import pytest
 
 # Project
 from hyperglass.state import use_state
+from hyperglass.state.hooks import _use_state
 from hyperglass.models.api import Query
 from hyperglass.configuration import init_ui_params
 from hyperglass.models.directive import Directives
@@ -46,6 +47,7 @@ def directives():
             "juniper_bgp_route": {
                 "name": "BGP Route",
                 "field": {"description": "test"},
+                "rules": [{"condition": "0.0.0.0/0"}],
             }
         }
     ]
@@ -59,6 +61,7 @@ def state(
     devices: t.Sequence[t.Dict[str, t.Any]],
 ) -> t.Generator["HyperglassState", None, None]:
     """Test fixture to initialize Redis store."""
+    _use_state.cache_clear()
     _state = use_state()
     _params = Params(**params)
     _directives = Directives.new(*directives)
@@ -86,5 +89,17 @@ def test_construct(state):
         queryTarget="192.0.2.0/24",
         queryType="juniper_bgp_route",
     )
+    constructor = Construct(device=state.devices["test1"], query=query)
+    assert constructor.target == "192.0.2.0/24"
+
+
+def test_construct_normalizes_cidr_host_bits(state):
+    query = Query(
+        queryLocation="test1",
+        queryTarget="192.0.2.1/24",
+        queryType="juniper_bgp_route",
+    )
+
+    assert query.query_target == "192.0.2.0/24"
     constructor = Construct(device=state.devices["test1"], query=query)
     assert constructor.target == "192.0.2.0/24"

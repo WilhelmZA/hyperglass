@@ -39,7 +39,7 @@ Mikrotik_BGPRoute = BuiltinDirective(
         ),
     ],
     field=Text(description="IP Address, Prefix, or Hostname"),
-    plugins=["mikrotik_normalize_input", "mikrotik_garbage_output", "bgp_routestr_mikrotik"],
+    plugins=["mikrotik_garbage_output", "bgp_routestr_mikrotik"],
     table_output="__hyperglass_mikrotik_bgp_route_table__",
     platforms=PLATFORMS,
 )
@@ -58,7 +58,7 @@ Mikrotik_BGPASPath = BuiltinDirective(
         )
     ],
     field=Text(description="AS Path Regular Expression"),
-    plugins=["mikrotik_normalize_input", "mikrotik_garbage_output", "bgp_routestr_mikrotik"],
+    plugins=["mikrotik_garbage_output", "bgp_routestr_mikrotik"],
     table_output="__hyperglass_mikrotik_bgp_aspath_table__",
     platforms=PLATFORMS,
 )
@@ -77,7 +77,7 @@ Mikrotik_BGPCommunity = BuiltinDirective(
         )
     ],
     field=Text(description="BGP Community String"),
-    plugins=["mikrotik_normalize_input", "mikrotik_garbage_output", "bgp_routestr_mikrotik"],
+    plugins=["mikrotik_garbage_output", "bgp_routestr_mikrotik"],
     table_output="__hyperglass_mikrotik_bgp_community_table__",
     platforms=PLATFORMS,
 )
