@@ -48,6 +48,12 @@ class ZBgpRouteEnrichment(OutputPlugin):
             from hyperglass.settings import Settings
 
             params = use_state("params")
+            if (
+                params.structured.ip_enrichment.mode == "async"
+                and params.structured.ip_enrichment.enrich_bgproute
+            ):
+                return output
+
             # If structured config missing or BGP route enrichment disabled, skip
             if (
                 not getattr(params, "structured", None)

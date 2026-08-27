@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 import { useConfig } from '~/context';
 import { fetchWithTimeout } from '~/util';
@@ -69,7 +69,8 @@ export function useLGQuery(
     [controller],
   );
 
-  return useQuery<QueryResponse, Response | QueryResponse | Error, QueryResponse, LGQueryKey>({
+  const queryClient = useQueryClient();
+  const result = useQuery<QueryResponse, Response | QueryResponse | Error, QueryResponse, LGQueryKey>({
     queryKey: ['/api/query', query],
     queryFn: runQuery,
     // Don't refetch when window refocuses.
@@ -80,4 +81,69 @@ export function useLGQuery(
     refetchOnMount: false,
     ...options,
   });
+
+  useEffect(() => {
+    const resultData = result.data;
+    const enrichmentId = resultData?.id;
+    if (!resultData || !enrichmentId || resultData.enrichment !== 'pending') {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let polling = false;
+    const poll = async (): Promise<void> => {
+      if (polling) {
+        return;
+      }
+      polling = true;
+      try {
+        const response = await fetch(
+          `/api/query/${encodeURIComponent(enrichmentId)}/enrichment`,
+          { signal: controller.signal, cache: 'no-store' },
+        );
+        if (!response.ok) {
+          return;
+        }
+
+        const update = (await response.json()) as {
+          status: QueryResponse['enrichment'] | 'not_found';
+          output?: QueryResponse['output'];
+        };
+        if (update.status === 'not_found') {
+          window.clearInterval(interval);
+          return;
+        }
+        if (update.status === 'pending') {
+          return;
+        }
+        const enrichment = update.status;
+
+        queryClient.setQueryData<QueryResponse>(['/api/query', query], current => {
+          if (!current) {
+            return current;
+          }
+          return {
+            ...current,
+            enrichment,
+            ...(update.output === undefined ? {} : { output: update.output }),
+          };
+        });
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error('Failed to poll query enrichment', error);
+        }
+      } finally {
+        polling = false;
+      }
+    };
+
+    const interval = window.setInterval(() => void poll(), 1000);
+    void poll();
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, [query, queryClient, result.data?.enrichment, result.data?.id]);
+
+  return result;
 }

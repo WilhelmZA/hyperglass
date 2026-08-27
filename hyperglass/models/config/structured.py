@@ -12,6 +12,7 @@ from ..main import HyperglassModel
 StructuredCommunityMode = t.Literal["permit", "deny", "name"]
 StructuredRPKIMode = t.Literal["router", "external"]
 StructuredRPKIBackend = t.Literal["cloudflare", "routinator"]
+StructuredIpEnrichmentMode = t.Literal["inline", "async"]
 
 
 class StructuredCommunities(HyperglassModel):
@@ -52,12 +53,15 @@ class StructuredRpki(HyperglassModel):
 class StructuredIpEnrichment(HyperglassModel):
     """Control IP enrichment for structured data responses using real-time BGP.tools lookups."""
 
+    mode: StructuredIpEnrichmentMode = "inline"
+    """Run enrichment before the response or asynchronously after it is returned."""
+
     enrich_traceroute: bool = False
     """Enable ASN/org/IP enrichment for traceroute hops using real-time BGP.tools data."""
 
     enrich_bgproute: bool = False
-    """Enable early ASN/org enrichment for BGP routes. When true, enrichment happens immediately
-    on query response. When false, enrichment is lazy-loaded when viewing the AS Path."""
+    """Enable ASN/org enrichment for BGP routes. Enrichment is inline by default and can be
+    deferred with ``mode: async``. When false, enrichment is lazy-loaded when viewing the AS Path."""
 
 
 class Structured(HyperglassModel):

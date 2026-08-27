@@ -26,7 +26,7 @@ from hyperglass.models.config.devices import Devices, APIDevice
 
 # Local
 from .state import get_state, get_params, get_devices
-from .tasks import send_webhook
+from .tasks import enrich_query_output, is_async_enrichment_enabled, send_webhook
 from .fake_output import fake_output
 
 __all__ = (
@@ -36,6 +36,7 @@ __all__ = (
     "info",
     "query",
     "aspath_enrich",
+    "query_enrichment",
 )
 
 # MikroTik occasionally answers a BGP query before its routing table has finished
@@ -118,6 +119,28 @@ async def aspath_enrich(data: dict) -> dict:
     return {"success": True, "asn_organizations": results}
 
 
+@get("/api/query/{query_id:str}/enrichment")
+async def query_enrichment(query_id: str) -> dict:
+    """Return the current output and enrichment status for a cached query."""
+    from hyperglass.state import use_state
+
+    cache = use_state("redis")
+    output = cache.get_map(query_id, "output")
+    if output is None:
+        return {"status": "not_found"}
+
+    if isinstance(output, str):
+        try:
+            output = json.loads(output)
+        except json.JSONDecodeError:
+            pass
+
+    return {
+        "status": cache.get_map(query_id, "enrichment_status") or "complete",
+        "output": output,
+    }
+
+
 @get("/api/devices/{id:str}", dependencies={"devices": Provide(get_devices)})
 async def device(devices: Devices, id: str) -> APIDevice:
     """Retrieve a device by ID."""
@@ -163,6 +186,8 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
     json_output = False
     cached = False
     runtime = 65535
+    enrichment_status = "complete"
+    enrichment_output = None
 
     if cache_response:
         _log.bind(cache_key=cache_key).debug("Cache hit")
@@ -173,6 +198,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         cached = True
         runtime = 0
         timestamp = cache.get_map(cache_key, "timestamp")
+        enrichment_status = cache.get_map(cache_key, "enrichment_status") or "complete"
 
     elif not cache_response:
         _log.bind(cache_key=cache_key).debug("Cache miss")
@@ -210,6 +236,10 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
 
         cache.set_map_item(cache_key, "output", raw_output)
         cache.set_map_item(cache_key, "timestamp", timestamp)
+        if is_async_enrichment_enabled(output, _state.params):
+            enrichment_status = "pending"
+            enrichment_output = output
+            cache.set_map_item(cache_key, "enrichment_status", enrichment_status)
         cache.expire(cache_key, expire_in=_state.params.cache.timeout)
 
         _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
@@ -233,6 +263,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         "runtime": runtime,
         "timestamp": timestamp,
         "format": response_format,
+        "enrichment": enrichment_status,
         "random": data.random(),
         "level": "success",
         "keywords": [],
@@ -241,10 +272,30 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
     return Response(
         response,
         background=BackgroundTask(
-            send_webhook,
+            _run_query_background_tasks,
+            enrichment_output=enrichment_output,
+            cache=cache,
+            cache_key=cache_key,
+            cache_timeout=_state.params.cache.timeout,
             params=_state.params,
             data=data,
             request=request,
             timestamp=timestamp,
         ),
     )
+
+
+async def _run_query_background_tasks(
+    enrichment_output: t.Any,
+    cache: t.Any,
+    cache_key: str,
+    cache_timeout: int,
+    params: Params,
+    data: Query,
+    request: Request,
+    timestamp: datetime,
+) -> None:
+    """Run optional enrichment and webhook work after sending the response."""
+    if enrichment_output is not None:
+        await enrich_query_output(enrichment_output, cache, cache_key, cache_timeout)
+    await send_webhook(params=params, data=data, request=request, timestamp=timestamp)

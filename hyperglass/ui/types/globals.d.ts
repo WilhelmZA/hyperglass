@@ -95,6 +95,7 @@ export declare global {
   type AllStructuredResponses = BGPStructuredOutput | TracerouteStructuredOutput;
 
   type QueryResponse = {
+    id: string;
     random: string;
     cached: boolean;
     runtime: number;
@@ -103,6 +104,7 @@ export declare global {
     keywords: string[];
     output: string | AllStructuredResponses;
     format: 'text/plain' | 'application/json';
+    enrichment: 'complete' | 'pending' | 'failed';
   };
 
   type RequiredProps<T> = { [P in keyof T]-?: Exclude<T[P], undefined> };

@@ -1,6 +1,7 @@
 """Tasks to be executed from web API."""
 
 # Standard Library
+import json
 import typing as t
 from datetime import datetime
 
@@ -17,7 +18,7 @@ if t.TYPE_CHECKING:
     # Project
     from hyperglass.models.config.params import Params
 
-__all__ = ("send_webhook",)
+__all__ = ("enrich_query_output", "is_async_enrichment_enabled", "send_webhook")
 
 
 async def process_headers(headers: Headers) -> t.Dict[str, t.Any]:
@@ -68,3 +69,54 @@ async def send_webhook(
         log.bind(destination=params.logging.http.provider, error=str(err)).error(
             "Failed to send webhook"
         )
+
+
+async def enrich_query_output(
+    output: t.Any, cache: t.Any, cache_key: str, cache_timeout: int = 0
+) -> None:
+    """Enrich a structured query result and update its cached representation."""
+    from hyperglass.models.data.bgp_route import BGPRouteTable
+    from hyperglass.models.data.traceroute import TracerouteResult
+
+    status = "complete"
+    try:
+        if isinstance(output, BGPRouteTable):
+            await output.enrich_as_path_organizations()
+            await output.enrich_with_ip_enrichment()
+        elif isinstance(output, TracerouteResult):
+            from hyperglass.plugins._builtin.traceroute_ip_enrichment import (
+                ZTracerouteIpEnrichment,
+            )
+
+            await ZTracerouteIpEnrichment().enrich(output)
+    except Exception:
+        status = "failed"
+        log.exception("Failed to asynchronously enrich query output")
+
+    try:
+        cache.set_map_item(cache_key, "output", json.loads(output.export_json()))
+        cache.set_map_item(cache_key, "enrichment_status", status)
+        if cache_timeout:
+            cache.expire(cache_key, expire_in=cache_timeout)
+    except Exception:
+        log.exception("Failed to update asynchronously enriched query output")
+
+
+def is_async_enrichment_enabled(output: t.Any, params: t.Any) -> bool:
+    """Return whether this output should be enriched after the initial response."""
+    config = params.structured.ip_enrichment
+    if config.mode != "async":
+        return False
+
+    from hyperglass.models.data.bgp_route import BGPRouteTable
+    from hyperglass.models.data.traceroute import TracerouteResult
+
+    return (
+        isinstance(output, BGPRouteTable)
+        and config.enrich_bgproute
+        and params.structured.enable_for_bgp_route is not False
+    ) or (
+        isinstance(output, TracerouteResult)
+        and config.enrich_traceroute
+        and params.structured.enable_for_traceroute is not False
+    )
