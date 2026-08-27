@@ -1,6 +1,7 @@
 """Tasks to be executed from web API."""
 
 # Standard Library
+import json
 import typing as t
 from datetime import datetime
 
@@ -17,7 +18,7 @@ if t.TYPE_CHECKING:
     # Project
     from hyperglass.models.config.params import Params
 
-__all__ = ("send_webhook",)
+__all__ = ("enrich_query_output", "send_webhook")
 
 
 async def process_headers(headers: Headers) -> t.Dict[str, t.Any]:
@@ -68,3 +69,39 @@ async def send_webhook(
         log.bind(destination=params.logging.http.provider, error=str(err)).error(
             "Failed to send webhook"
         )
+
+
+async def enrich_query_output(output: t.Any, cache: t.Any, cache_key: str, generation: str) -> None:
+    """Enrich a structured query result and update its cached representation."""
+    from hyperglass.models.data.bgp_route import BGPRouteTable
+    from hyperglass.models.data.traceroute import TracerouteResult
+
+    status = "complete"
+    try:
+        if isinstance(output, BGPRouteTable):
+            await output.enrich_as_path_organizations()
+            await output.enrich_with_ip_enrichment()
+        elif isinstance(output, TracerouteResult):
+            from hyperglass.plugins._builtin.traceroute_ip_enrichment import (
+                ZTracerouteIpEnrichment,
+            )
+
+            await ZTracerouteIpEnrichment().enrich(output)
+    except Exception:
+        status = "failed"
+        log.exception("Failed to asynchronously enrich query output")
+
+    try:
+        updated = cache.set_map_items_if(
+            cache_key,
+            expected_item="enrichment_generation",
+            expected_value=generation,
+            values={
+                "output": json.loads(output.export_json()),
+                "enrichment_status": status,
+            },
+        )
+        if not updated:
+            log.bind(cache_key=cache_key).debug("Discarded stale asynchronous enrichment result")
+    except Exception:
+        log.exception("Failed to update asynchronously enriched query output")

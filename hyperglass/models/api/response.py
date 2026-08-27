@@ -12,6 +12,7 @@ from hyperglass.state import use_state
 ErrorName = t.Literal["success", "warning", "error", "danger"]
 ResponseLevel = t.Literal["success"]
 ResponseFormat = t.Literal[r"text/plain", r"application/json"]
+EnrichmentStatus = t.Literal["complete", "pending", "failed"]
 
 schema_query_output = {
     "title": "Output",
@@ -142,6 +143,8 @@ class QueryResponse(BaseModel):
     )
 
     output: t.Union[t.Dict, StrictStr] = Field(json_schema_extra=schema_query_output)
+    id: StrictStr
+    enrichment: EnrichmentStatus = "complete"
     level: ResponseLevel = Field("success", json_schema_extra=schema_query_level)
     random: str = Field(json_schema_extra=schema_query_random)
     cached: bool = Field(json_schema_extra=schema_query_cached)

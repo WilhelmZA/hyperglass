@@ -12,6 +12,7 @@ from ..main import HyperglassModel
 StructuredCommunityMode = t.Literal["permit", "deny", "name"]
 StructuredRPKIMode = t.Literal["router", "external"]
 StructuredRPKIBackend = t.Literal["cloudflare", "routinator"]
+StructuredIpEnrichmentMode = t.Literal["inline", "async"]
 
 
 class StructuredCommunities(HyperglassModel):
@@ -52,12 +53,15 @@ class StructuredRpki(HyperglassModel):
 class StructuredIpEnrichment(HyperglassModel):
     """Control IP enrichment for structured data responses using real-time BGP.tools lookups."""
 
+    mode: StructuredIpEnrichmentMode = "inline"
+    """Run enrichment before the response or asynchronously after it is returned."""
+
     enrich_traceroute: bool = False
     """Enable ASN/org/IP enrichment for traceroute hops using real-time BGP.tools data."""
 
     enrich_bgproute: bool = False
-    """Enable early ASN/org enrichment for BGP routes. When true, enrichment happens immediately
-    on query response. When false, enrichment is lazy-loaded when viewing the AS Path."""
+    """Enable ASN/org enrichment for BGP routes. Enrichment is inline by default and can be
+    deferred with ``mode: async``. When false, enrichment is lazy-loaded when viewing the AS Path."""
 
 
 class Structured(HyperglassModel):
@@ -73,3 +77,27 @@ class Structured(HyperglassModel):
     # the structured table output even when a `structured:` block exists.
     enable_for_traceroute: t.Optional[bool] = None
     enable_for_bgp_route: t.Optional[bool] = None
+
+    def is_async_enrichment_enabled(self, output: t.Any) -> bool:
+        """Return whether an output should be enriched after the initial response."""
+        config = self.ip_enrichment
+        if config.mode != "async":
+            return False
+
+        from hyperglass.models.data.bgp_route import BGPRouteTable
+        from hyperglass.models.data.traceroute import TracerouteResult
+
+        is_bgp_output = isinstance(output, BGPRouteTable) or (
+            isinstance(output, dict) and isinstance(output.get("routes"), list)
+        )
+        is_traceroute_output = isinstance(output, TracerouteResult) or (
+            isinstance(output, dict) and isinstance(output.get("hops"), list)
+        )
+
+        return (
+            is_bgp_output and config.enrich_bgproute and self.enable_for_bgp_route is not False
+        ) or (
+            is_traceroute_output
+            and config.enrich_traceroute
+            and self.enable_for_traceroute is not False
+        )

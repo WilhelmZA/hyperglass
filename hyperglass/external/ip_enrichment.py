@@ -6,7 +6,7 @@ Provides lookup_ip, lookup_asn_name and network_info compatibility APIs.
 
 import asyncio
 import typing as t
-from ipaddress import ip_address, IPv4Address, IPv6Address
+from ipaddress import ip_address
 import socket
 
 from hyperglass.log import log
@@ -42,6 +42,24 @@ class IPEnrichmentService:
         # Runtime caches for performance
         self._ip_cache: t.Dict[str, t.Tuple[t.Optional[int], t.Optional[str], t.Optional[str]]] = {}
         self.asn_info: t.Dict[int, t.Dict[str, str]] = {}  # asn -> {name, country}
+
+    def _ip_info_from_lookup(
+        self,
+        ip: str,
+        asn: t.Optional[int],
+        asn_name: t.Optional[str],
+        prefix: t.Optional[str],
+    ) -> IPInfo:
+        """Convert a cached lookup tuple to the public result model."""
+        if asn is None and asn_name is not None:
+            return IPInfo(ip, is_ixp=True, ixp_name=asn_name)
+        if asn:
+            try:
+                self.asn_info[int(asn)] = {"name": asn_name or f"AS{asn}", "country": ""}
+            except Exception:
+                pass
+            return IPInfo(ip, asn=asn, asn_name=asn_name, prefix=prefix)
+        return IPInfo(ip, asn=0, asn_name="Unknown")
 
     async def _query_bgp_tools_for_ip(
         self, ip_str: str
@@ -266,6 +284,7 @@ class IPEnrichmentService:
 
         # Prepare list for query
         query_ips: t.List[str] = []
+        cached_ips: t.List[str] = []
         for ip in ips:
             try:
                 target_ip = ip_address(ip)
@@ -278,27 +297,21 @@ class IPEnrichmentService:
                 results[ip] = IPInfo(ip, asn=0, asn_name="Private", prefix="Private Network")
                 continue
 
-            query_ips.append(ip)
+            if ip in self._ip_cache:
+                cached_ips.append(ip)
+            else:
+                query_ips.append(ip)
 
         # Query BGP.TOOLS in bulk for all IPs
         if query_ips:
             bulk = await self._query_bgp_tools_bulk(query_ips)
             for ip in query_ips:
                 asn, asn_name, prefix = bulk.get(ip, (None, None, None))
+                self._ip_cache[ip] = (asn, asn_name, prefix)
 
-                # Check if this is an IXP (indicated by None ASN from our parsing)
-                is_ixp = asn is None and asn_name is not None
-
-                if is_ixp:
-                    results[ip] = IPInfo(ip, is_ixp=True, ixp_name=asn_name)
-                elif asn:
-                    try:
-                        self.asn_info[int(asn)] = {"name": asn_name or f"AS{asn}", "country": ""}
-                    except Exception:
-                        pass
-                    results[ip] = IPInfo(ip, asn=asn, asn_name=asn_name, prefix=prefix)
-                else:
-                    results[ip] = IPInfo(ip, asn=0, asn_name="Unknown")
+        for ip in [*query_ips, *cached_ips]:
+            asn, asn_name, prefix = self._ip_cache.get(ip, (None, None, None))
+            results[ip] = self._ip_info_from_lookup(ip, asn, asn_name, prefix)
 
         return results
 

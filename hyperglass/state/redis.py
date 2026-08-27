@@ -129,6 +129,36 @@ class RedisManager:
         name = self.key(key)
         self.instance.hset(name, item, pickle.dumps(value))
 
+    def set_map_items_if(
+        self,
+        key: str,
+        *,
+        expected_item: str,
+        expected_value: t.Any,
+        values: t.Mapping[str, t.Any],
+    ) -> bool:
+        """Atomically update a map when its generation marker still matches."""
+        # Third Party
+        from redis.exceptions import WatchError
+
+        name = self.key(key)
+        expected = pickle.dumps(expected_value)
+        encoded = {item: pickle.dumps(value) for item, value in values.items()}
+
+        while True:
+            with self.instance.pipeline() as pipeline:
+                try:
+                    pipeline.watch(name)
+                    if pipeline.hget(name, expected_item) != expected:
+                        pipeline.unwatch()
+                        return False
+                    pipeline.multi()
+                    pipeline.hset(name, mapping=encoded)
+                    pipeline.execute()
+                    return True
+                except WatchError:
+                    continue
+
     def pipeline(self):
         """Enter a Redis Pipeline, but expose all the custom interaction methods."""
         # Copy the base RedisManager and remove the pipeline method (this method).

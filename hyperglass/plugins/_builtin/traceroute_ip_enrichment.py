@@ -100,6 +100,10 @@ class ZTracerouteIpEnrichment(OutputPlugin):
                 else:
                     hop.hostname = res
 
+    async def enrich(self, output: TracerouteResult) -> None:
+        """Run asynchronous traceroute enrichment for a parsed result."""
+        await self._enrich_async(output)
+
     def process(self, *, output: "OutputDataModel", query: "Query") -> "OutputDataModel":
         """Enrich structured traceroute data with IP enrichment and reverse DNS information."""
 
@@ -118,6 +122,12 @@ class ZTracerouteIpEnrichment(OutputPlugin):
             from hyperglass.state import use_state
 
             params = use_state("params")
+            if (
+                params.structured.ip_enrichment.mode == "async"
+                and params.structured.ip_enrichment.enrich_traceroute
+            ):
+                return output
+
             # If structured config missing or traceroute enrichment disabled, skip
             # IP enrichment but still perform reverse DNS lookups.
             if (

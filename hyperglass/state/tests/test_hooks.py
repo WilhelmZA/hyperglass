@@ -100,3 +100,30 @@ def test_use_state_caching(state):
                 f"{instance!r} is not an instance of '{model.__name__}'"
             )
             assert instance == first, f"{instance!r} is not equal to {first!r}"
+
+
+def test_set_map_items_if_rejects_stale_generation(state):
+    """Only the worker for the current cache generation may update query output."""
+    cache = state.redis
+    key = "query.test-generation"
+    cache.set_map_item(key, "enrichment_generation", "current")
+    cache.set_map_item(key, "output", {"value": "initial"})
+    cache.expire(key, expire_in=60)
+    initial_ttl = cache.instance.ttl(cache.key(key))
+
+    assert cache.set_map_items_if(
+        key,
+        expected_item="enrichment_generation",
+        expected_value="current",
+        values={"output": {"value": "updated"}},
+    )
+    assert cache.get_map(key, "output") == {"value": "updated"}
+    assert 0 < cache.instance.ttl(cache.key(key)) <= initial_ttl
+
+    assert not cache.set_map_items_if(
+        key,
+        expected_item="enrichment_generation",
+        expected_value="stale",
+        values={"output": {"value": "stale"}},
+    )
+    assert cache.get_map(key, "output") == {"value": "updated"}
