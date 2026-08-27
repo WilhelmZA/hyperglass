@@ -27,7 +27,7 @@ from hyperglass.models.config.devices import Devices, APIDevice
 
 # Local
 from .state import get_state, get_params, get_devices
-from .tasks import enrich_query_output, is_async_enrichment_enabled, send_webhook
+from .tasks import enrich_query_output, send_webhook
 from .fake_output import fake_output
 
 __all__ = (
@@ -178,7 +178,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
     if (
         cache_response
         and cached_enrichment_status is None
-        and is_async_enrichment_enabled(cache_response, _state.params)
+        and _state.params.structured.is_async_enrichment_enabled(cache_response)
     ):
         _log.bind(cache_key=cache_key).debug(
             "Discarding legacy cache entry without enrichment state"
@@ -238,7 +238,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         else:
             raw_output = str(output)
 
-        if is_async_enrichment_enabled(output, _state.params):
+        if _state.params.structured.is_async_enrichment_enabled(output):
             enrichment_status = "pending"
             enrichment_output = output
             enrichment_generation = uuid4().hex

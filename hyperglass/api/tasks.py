@@ -18,7 +18,7 @@ if t.TYPE_CHECKING:
     # Project
     from hyperglass.models.config.params import Params
 
-__all__ = ("enrich_query_output", "is_async_enrichment_enabled", "send_webhook")
+__all__ = ("enrich_query_output", "send_webhook")
 
 
 async def process_headers(headers: Headers) -> t.Dict[str, t.Any]:
@@ -105,30 +105,3 @@ async def enrich_query_output(output: t.Any, cache: t.Any, cache_key: str, gener
             log.bind(cache_key=cache_key).debug("Discarded stale asynchronous enrichment result")
     except Exception:
         log.exception("Failed to update asynchronously enriched query output")
-
-
-def is_async_enrichment_enabled(output: t.Any, params: t.Any) -> bool:
-    """Return whether this output should be enriched after the initial response."""
-    config = params.structured.ip_enrichment
-    if config.mode != "async":
-        return False
-
-    from hyperglass.models.data.bgp_route import BGPRouteTable
-    from hyperglass.models.data.traceroute import TracerouteResult
-
-    is_bgp_output = isinstance(output, BGPRouteTable) or (
-        isinstance(output, dict) and isinstance(output.get("routes"), list)
-    )
-    is_traceroute_output = isinstance(output, TracerouteResult) or (
-        isinstance(output, dict) and isinstance(output.get("hops"), list)
-    )
-
-    return (
-        is_bgp_output
-        and config.enrich_bgproute
-        and params.structured.enable_for_bgp_route is not False
-    ) or (
-        is_traceroute_output
-        and config.enrich_traceroute
-        and params.structured.enable_for_traceroute is not False
-    )

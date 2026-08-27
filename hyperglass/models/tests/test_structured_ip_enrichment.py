@@ -1,11 +1,8 @@
 """Tests for structured IP enrichment configuration."""
 
-from types import SimpleNamespace
-
 import pytest
 
-from hyperglass.api.tasks import is_async_enrichment_enabled
-from hyperglass.models.config.structured import StructuredIpEnrichment
+from hyperglass.models.config.structured import Structured, StructuredIpEnrichment
 
 
 def test_ip_enrichment_defaults_to_inline() -> None:
@@ -26,16 +23,14 @@ def test_ip_enrichment_rejects_unknown_mode() -> None:
 
 def test_async_enrichment_recognizes_legacy_cached_output() -> None:
     """Treat structured cache dictionaries without status as enrichment candidates."""
-    params = SimpleNamespace(
-        structured=SimpleNamespace(
-            ip_enrichment=StructuredIpEnrichment(
-                mode="async", enrich_bgproute=True, enrich_traceroute=True
-            ),
-            enable_for_bgp_route=True,
-            enable_for_traceroute=True,
-        )
+    structured = Structured(
+        ip_enrichment=StructuredIpEnrichment(
+            mode="async", enrich_bgproute=True, enrich_traceroute=True
+        ),
+        enable_for_bgp_route=True,
+        enable_for_traceroute=True,
     )
 
-    assert is_async_enrichment_enabled({"routes": []}, params)
-    assert is_async_enrichment_enabled({"hops": []}, params)
-    assert not is_async_enrichment_enabled("123", params)
+    assert structured.is_async_enrichment_enabled({"routes": []})
+    assert structured.is_async_enrichment_enabled({"hops": []})
+    assert not structured.is_async_enrichment_enabled("123")
