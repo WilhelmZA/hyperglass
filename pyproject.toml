@@ -11,7 +11,6 @@ dependencies = [
     "PyYAML>=6.0.2",
     "aiofiles>=24.1.0",
     "distro==1.9.0",
-    "favicons==0.2.2",
     "httpx==0.28.1",
     "loguru>=0.7.3",
     "netmiko==4.6.0",
@@ -23,17 +22,24 @@ dependencies = [
     "rich<=14.0.0",
     "typer>=0.9.0",
     "uvicorn==0.37.0",
-    "uvloop>=0.21.0",
     "xmltodict==1.0.2",
     "toml>=0.10.2",
     "pydantic-settings==2.11.0",
     "pydantic-extra-types>=2.10.5",
-    "litestar[standard,brotli]>=2.22.0",
+    "litestar[brotli]>=2.22.0",
     "click<=8.1.7",
     "requests>=2.26.0",
 ]
 readme = "README.md"
-requires-python = ">= 3.13,<4.0"
+requires-python = ">= 3.11,<4.0"
+
+[project.optional-dependencies]
+ui = [
+    "CairoSVG>=2.7.1",
+]
+performance = [
+    "uvloop>=0.21.0; sys_platform != 'win32'",
+]
 
 [project.scripts]
 hyperglass = "hyperglass.console:run"
@@ -74,9 +80,6 @@ constraint-dependencies = [
 ]
 # Overrides for dependencies whose declared bounds conflict with a version we
 # need and have verified is safe:
-#   - favicons 0.2.2 (latest release) caps pillow<11.0.0, holding us on a Pillow
-#     line with HIGH CVEs (CVE-2026-25990 / -40192 / -42311). favicons is the
-#     only Pillow consumer and its favicon generation is verified on Pillow 12.x.
 #   - taskipy (dev only) caps psutil<7, but hyperglass pins psutil 7.1.0.
 override-dependencies = [
     "pillow>=12.3.0",
@@ -88,6 +91,24 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["hyperglass"]
+exclude = [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/out/**",
+    "hyperglass/ui/hyperglass.json",
+    "**/.env*",
+    "**/*.tsbuildinfo",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/out/**",
+    "hyperglass/ui/hyperglass.json",
+    "**/.env*",
+    "**/*.tsbuildinfo",
+]
 
 [tool.black]
 line-length = 100

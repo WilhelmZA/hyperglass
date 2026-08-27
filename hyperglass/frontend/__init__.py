@@ -18,6 +18,110 @@ if t.TYPE_CHECKING:
     from hyperglass.models.ui import UIParameters
 
 
+PACKAGE_UI_DIR = Path(__file__).parent.parent / "ui"
+UI_BUILD_DIR_NAME = ".ui"
+FAVICON_FORMATS = (
+    {"dimensions": (64, 64), "image_format": "ico", "prefix": "favicon", "rel": None},
+    {"dimensions": (16, 16), "image_format": "png", "prefix": "favicon", "rel": "icon"},
+    {"dimensions": (32, 32), "image_format": "png", "prefix": "favicon", "rel": "icon"},
+    {"dimensions": (64, 64), "image_format": "png", "prefix": "favicon", "rel": "icon"},
+    {"dimensions": (96, 96), "image_format": "png", "prefix": "favicon", "rel": "icon"},
+    {"dimensions": (180, 180), "image_format": "png", "prefix": "favicon", "rel": "icon"},
+    {
+        "dimensions": (57, 57),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (60, 60),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (72, 72),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (76, 76),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (114, 114),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (120, 120),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (144, 144),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (152, 152),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (167, 167),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (180, 180),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {"dimensions": (70, 70), "image_format": "png", "prefix": "mstile", "rel": None},
+    {"dimensions": (270, 270), "image_format": "png", "prefix": "mstile", "rel": None},
+    {"dimensions": (310, 310), "image_format": "png", "prefix": "mstile", "rel": None},
+    {"dimensions": (310, 150), "image_format": "png", "prefix": "mstile", "rel": None},
+    {"dimensions": (196, 196), "image_format": "png", "prefix": "favicon", "rel": "shortcut icon"},
+)
+
+
+def _prepare_ui_build_dir(app_path: Path) -> Path:
+    """Copy the packaged UI source into a writable application directory."""
+    ui_dir = app_path / UI_BUILD_DIR_NAME
+    shutil.copytree(
+        PACKAGE_UI_DIR,
+        ui_dir,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(
+            "node_modules",
+            ".next",
+            "out",
+            ".env*",
+            "hyperglass.json",
+            "*.tsbuildinfo",
+        ),
+    )
+    package_node_modules = PACKAGE_UI_DIR / "node_modules"
+    ui_node_modules = ui_dir / "node_modules"
+    if package_node_modules.is_dir():
+        if ui_node_modules.is_symlink() or ui_node_modules.is_file():
+            ui_node_modules.unlink()
+        elif ui_node_modules.exists():
+            shutil.rmtree(ui_node_modules)
+        ui_node_modules.symlink_to(package_node_modules, target_is_directory=True)
+    return ui_dir
+
+
 def get_ui_build_timeout() -> t.Optional[int]:
     """Read the UI build timeout from environment variables or set a default."""
     timeout = None
@@ -29,10 +133,10 @@ def get_ui_build_timeout() -> t.Optional[int]:
     return timeout
 
 
-async def check_node_modules() -> bool:
+async def check_node_modules(ui_path: t.Optional[Path] = None) -> bool:
     """Check if node_modules exists and has contents."""
 
-    ui_path = Path(__file__).parent.parent / "ui"
+    ui_path = ui_path or PACKAGE_UI_DIR
     node_modules = ui_path / "node_modules"
 
     exists = node_modules.exists()
@@ -44,10 +148,10 @@ async def check_node_modules() -> bool:
     return valid
 
 
-async def read_package_json() -> t.Dict[str, t.Any]:
+async def read_package_json(ui_path: t.Optional[Path] = None) -> t.Dict[str, t.Any]:
     """Import package.json as a python dict."""
 
-    package_json_file = Path(__file__).parent.parent / "ui" / "package.json"
+    package_json_file = (ui_path or PACKAGE_UI_DIR) / "package.json"
 
     try:
         with package_json_file.open("r") as file:
@@ -59,10 +163,12 @@ async def read_package_json() -> t.Dict[str, t.Any]:
     return package_json
 
 
-async def node_initial(timeout: int = 600, dev_mode: bool = False) -> str:
+async def node_initial(
+    timeout: int = 600, dev_mode: bool = False, ui_path: t.Optional[Path] = None
+) -> str:
     """Initialize node_modules."""
 
-    ui_path = Path(__file__).parent.parent / "ui"
+    ui_path = ui_path or PACKAGE_UI_DIR
 
     env_timeout = get_ui_build_timeout()
 
@@ -88,7 +194,7 @@ async def node_initial(timeout: int = 600, dev_mode: bool = False) -> str:
     return "\n".join(messages)
 
 
-async def build_ui(app_path: Path):
+async def build_ui(app_path: Path, ui_path: t.Optional[Path] = None):
     """Execute `next build` & `next export` from UI directory.
 
     ### Raises
@@ -97,7 +203,7 @@ async def build_ui(app_path: Path):
     """
     timeout = get_ui_build_timeout()
 
-    ui_dir = Path(__file__).parent.parent / "ui"
+    ui_dir = ui_path or PACKAGE_UI_DIR
     build_dir = app_path / "static" / "ui"
     out_dir = ui_dir / "out"
 
@@ -211,7 +317,9 @@ def migrate_images(app_path: Path, params: "UIParameters"):
     return copyfiles(src_files, dst_files)
 
 
-def write_favicon_formats(formats: t.Tuple[t.Dict[str, t.Any]]) -> None:
+def write_favicon_formats(
+    formats: t.Tuple[t.Dict[str, t.Any]], ui_path: t.Optional[Path] = None
+) -> None:
     """Create a TypeScript file in the `ui` directory containing favicon formats.
 
     This file should stay the same, unless the favicons library updates
@@ -220,7 +328,7 @@ def write_favicon_formats(formats: t.Tuple[t.Dict[str, t.Any]]) -> None:
     # Standard Library
     from collections import OrderedDict
 
-    file = Path(__file__).parent.parent / "ui" / "favicon-formats.ts"
+    file = (ui_path or PACKAGE_UI_DIR) / "favicon-formats.ts"
 
     # Sort each favicon definition to ensure the result stays the same
     # time the UI build runs.
@@ -231,10 +339,55 @@ def write_favicon_formats(formats: t.Tuple[t.Dict[str, t.Any]]) -> None:
     file.write_text(data)
 
 
-def write_custom_files(params: "UIParameters") -> None:
+def generate_favicons(source: Path, output_directory: Path) -> t.Tuple[t.Dict[str, t.Any], ...]:
+    """Generate the favicon files used by the frontend."""
+    # Third Party
+    from PIL import Image
+
+    output_directory.mkdir(parents=True, exist_ok=True)
+    source_is_svg = source.suffix.lower() == ".svg"
+    source_image = None
+
+    if source_is_svg:
+        # Third Party
+        import cairosvg
+        from io import BytesIO
+    else:
+        source_image = Image.open(source).convert("RGBA")
+
+    try:
+        for favicon in FAVICON_FORMATS:
+            width, height = favicon["dimensions"]
+            target = output_directory / (
+                f"{favicon['prefix']}-{width}x{height}.{favicon['image_format']}"
+            )
+
+            if source_is_svg:
+                rendered = cairosvg.svg2png(
+                    url=str(source), output_width=width, output_height=height
+                )
+                resized = Image.open(BytesIO(rendered)).convert("RGBA")
+            else:
+                resized = source_image.resize((width, height), Image.Resampling.LANCZOS)
+
+            if favicon["image_format"] == "ico":
+                resized.save(target, format="ICO", sizes=[(width, height)])
+            else:
+                resized.save(target, format="PNG")
+
+            resized.close()
+    finally:
+        if source_image is not None:
+            source_image.close()
+
+    return FAVICON_FORMATS
+
+
+def write_custom_files(params: "UIParameters", ui_path: t.Optional[Path] = None) -> None:
     """Write custom files to the `ui` directory so they can be imported and rendered."""
-    js = Path(__file__).parent.parent / "ui" / "custom.js"
-    html = Path(__file__).parent.parent / "ui" / "custom.html"
+    ui_path = ui_path or PACKAGE_UI_DIR
+    js = ui_path / "custom.js"
+    html = ui_path / "custom.html"
 
     # Handle Custom JS.
     if params.web.custom_javascript is not None:
@@ -264,22 +417,20 @@ async def build_frontend(  # noqa: C901
     # Standard Library
     import hashlib
 
-    # Third Party
-    from favicons import Favicons  # type:ignore
-
     # Project
     from hyperglass.constants import __version__
 
     # Create temporary file. json file extension is added for easy
     # webpack JSON parsing.
-    dot_env_file = Path(__file__).parent.parent / "ui" / ".env"
+    ui_dir = _prepare_ui_build_dir(app_path)
+    dot_env_file = ui_dir / ".env"
     env_config = {}
 
-    ui_config_file = Path(__file__).parent.parent / "ui" / "hyperglass.json"
+    ui_config_file = ui_dir / "hyperglass.json"
 
     ui_config_file.write_text(params.export_json(by_alias=True))
 
-    package_json = await read_package_json()
+    package_json = await read_package_json(ui_dir)
 
     # Set NextJS production/development mode and base URL based on
     # developer_mode setting.
@@ -289,18 +440,12 @@ async def build_frontend(  # noqa: C901
     else:
         env_config.update({"HYPERGLASS_URL": prod_url, "NODE_ENV": "production"})
 
-    # Check if hyperglass/ui/node_modules has been initialized. If not,
-    # initialize it.
-    initialized = await check_node_modules()
-
-    if initialized:
-        log.debug("node_modules is already initialized")
-
-    elif not initialized:
+    # Development mode does not run the production build below, so initialize
+    # its dependencies here when needed.
+    initialized = await check_node_modules(ui_dir)
+    if dev_mode and not initialized:
         log.debug("node_modules has not been initialized. Starting initialization...")
-
-        node_setup = await node_initial(timeout, dev_mode)
-
+        node_setup = await node_initial(timeout, dev_mode, ui_dir)
         if node_setup == "":
             log.debug("Re-initialized node_modules")
 
@@ -310,14 +455,9 @@ async def build_frontend(  # noqa: C901
     if not favicon_dir.exists():
         favicon_dir.mkdir()
 
-    async with Favicons(
-        source=params.web.logo.favicon,
-        output_directory=favicon_dir,
-        base_url="/images/favicons/",
-    ) as favicons:
-        await favicons.generate()
-        log.bind(count=favicons.completed).debug("Generated favicons")
-        write_favicon_formats(favicons.formats())
+    favicon_formats = generate_favicons(params.web.logo.favicon, favicon_dir)
+    log.bind(count=len(favicon_formats)).debug("Generated favicons")
+    write_favicon_formats(favicon_formats, ui_dir)
 
     build_data = {
         "params": params.export_dict(),
@@ -338,7 +478,7 @@ async def build_frontend(  # noqa: C901
         env_build_id = env_data.get("HYPERGLASS_BUILD_ID", "None")
         log.bind(id=env_build_id).debug("Previous build detected")
 
-        if env_build_id == build_id:
+        if env_build_id == build_id and (app_path / "static" / "ui").is_dir():
             log.debug("UI parameters unchanged since last build, skipping UI build...")
             return True
 
@@ -350,8 +490,10 @@ async def build_frontend(  # noqa: C901
     # Initiate Next.JS export process.
     if any((not dev_mode, force, full)):
         log.info("Starting UI build")
-        initialize_result = await node_initial(timeout, dev_mode)
-        build_result = await build_ui(app_path=app_path)
+        initialize_result = ""
+        if not (ui_dir / "node_modules").is_symlink():
+            initialize_result = await node_initial(timeout, dev_mode, ui_dir)
+        build_result = await build_ui(app_path=app_path, ui_path=ui_dir)
 
         if initialize_result:
             log.debug(initialize_result)
@@ -365,7 +507,7 @@ async def build_frontend(  # noqa: C901
 
     migrate_images(app_path, params)
 
-    write_custom_files(params)
+    write_custom_files(params, ui_dir)
 
     generate_opengraph(
         params.web.opengraph.image,

@@ -28,16 +28,14 @@ RUN apk add --no-cache build-base pkgconfig cairo-dev nodejs npm \
     tar@7.5.21 brace-expansion@5.0.9 ip-address@10.3.1 \
   && cp -a /tmp/tar-patch/node_modules/. /usr/local/lib/node_modules/npm/node_modules/ \
   && rm -rf /tmp/tar-patch \
-  && pnpm install -P \
+  && pnpm install --frozen-lockfile \
   && apk del npm
 
 FROM ui AS hyperglass
 WORKDIR /opt/hyperglass
 # Install the pinned dependency set from the lockfile (the single source of
-# truth), then the package itself without re-resolving deps. --no-deps is
-# required: the lock is a complete closure and pins pillow past favicons'
-# declared cap (resolved via [tool.uv] override-dependencies), so letting pip
-# re-resolve would fail on favicons' pillow<11 metadata.
+# truth), then the package itself without re-resolving dependencies. The lock
+# includes the UI extra required by this full application image.
 RUN pip3 install --no-cache-dir --no-deps -r requirements.lock \
   && pip3 install --no-cache-dir -e . --no-deps \
   && rm -rf /root/.cache/pip \

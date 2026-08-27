@@ -18,7 +18,7 @@ __fork_url__ = "https://github.com/WilhelmZA/ultraglass"
 
 METADATA = (__name__, __version__, __author__, __copyright__, __license__)
 
-MIN_PYTHON_VERSION = (3, 8)
+MIN_PYTHON_VERSION = (3, 11)
 
 MIN_NODE_VERSION = 18
 

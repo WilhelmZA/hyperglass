@@ -36,13 +36,17 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 """
 
-# Third Party
-import uvloop
-
 # Project
 from hyperglass.constants import METADATA
 
-# Use Uvloop for performance.
-uvloop.install()
+# Use uvloop when the optional performance dependency is installed. The default
+# runtime stays portable across supported Unix platforms and architectures.
+try:
+    # Third Party
+    import uvloop
+except ImportError:
+    pass
+else:
+    uvloop.install()
 
 __name__, __version__, __author__, __copyright__, __license__ = METADATA

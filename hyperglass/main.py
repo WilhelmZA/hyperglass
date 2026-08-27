@@ -12,6 +12,7 @@ import uvicorn
 # Local
 from .log import LibInterceptHandler, init_logger, enable_file_logging, enable_syslog_logging
 from .util import get_node_version
+from .settings import Settings
 from .constants import MIN_NODE_VERSION, MIN_PYTHON_VERSION, __version__
 
 # Ensure the Python version meets the minimum requirements.
@@ -19,17 +20,21 @@ pretty_version = ".".join(tuple(str(v) for v in MIN_PYTHON_VERSION))
 if sys.version_info < MIN_PYTHON_VERSION:
     raise RuntimeError(f"Python {pretty_version}+ is required.")
 
-# Ensure the NodeJS version meets the minimum requirements.
-node_major, node_minor, node_patch = get_node_version()
-
-if node_major < MIN_NODE_VERSION:
-    installed = ".".join(str(v) for v in (node_major, node_minor, node_patch))
-    raise RuntimeError(f"NodeJS {MIN_NODE_VERSION!s}+ is required (version {installed} installed)")
+# Ensure the NodeJS version meets the minimum requirements when the UI is enabled.
+if not Settings.disable_ui:
+    node_version = get_node_version()
+    if node_version is None:
+        raise RuntimeError(f"NodeJS {MIN_NODE_VERSION!s}+ is required (NodeJS is not installed)")
+    node_major, node_minor, node_patch = node_version
+    if node_major < MIN_NODE_VERSION:
+        installed = ".".join(str(v) for v in (node_major, node_minor, node_patch))
+        raise RuntimeError(
+            f"NodeJS {MIN_NODE_VERSION!s}+ is required (version {installed} installed)"
+        )
 
 
 # Local
 from .state import use_state
-from .settings import Settings
 
 LOG_LEVEL = logging.INFO if Settings.debug is False else logging.DEBUG
 logging.basicConfig(handlers=[LibInterceptHandler()], level=0, force=True)
