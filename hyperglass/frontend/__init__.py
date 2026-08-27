@@ -490,7 +490,9 @@ async def build_frontend(  # noqa: C901
     # Initiate Next.JS export process.
     if any((not dev_mode, force, full)):
         log.info("Starting UI build")
-        initialize_result = await node_initial(timeout, dev_mode, ui_dir)
+        initialize_result = ""
+        if not (ui_dir / "node_modules").is_symlink():
+            initialize_result = await node_initial(timeout, dev_mode, ui_dir)
         build_result = await build_ui(app_path=app_path, ui_path=ui_dir)
 
         if initialize_result:
