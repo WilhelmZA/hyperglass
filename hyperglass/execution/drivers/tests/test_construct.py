@@ -81,7 +81,6 @@ def state(
 
     yield _state
     _state.clear()
-    _use_state.cache_clear()
 
 
 def test_construct(state):
