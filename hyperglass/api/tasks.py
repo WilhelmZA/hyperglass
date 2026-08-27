@@ -71,9 +71,7 @@ async def send_webhook(
         )
 
 
-async def enrich_query_output(
-    output: t.Any, cache: t.Any, cache_key: str, cache_timeout: int = 0
-) -> None:
+async def enrich_query_output(output: t.Any, cache: t.Any, cache_key: str, generation: str) -> None:
     """Enrich a structured query result and update its cached representation."""
     from hyperglass.models.data.bgp_route import BGPRouteTable
     from hyperglass.models.data.traceroute import TracerouteResult
@@ -94,10 +92,17 @@ async def enrich_query_output(
         log.exception("Failed to asynchronously enrich query output")
 
     try:
-        cache.set_map_item(cache_key, "output", json.loads(output.export_json()))
-        cache.set_map_item(cache_key, "enrichment_status", status)
-        if cache_timeout:
-            cache.expire(cache_key, expire_in=cache_timeout)
+        updated = cache.set_map_items_if(
+            cache_key,
+            expected_item="enrichment_generation",
+            expected_value=generation,
+            values={
+                "output": json.loads(output.export_json()),
+                "enrichment_status": status,
+            },
+        )
+        if not updated:
+            log.bind(cache_key=cache_key).debug("Discarded stale asynchronous enrichment result")
     except Exception:
         log.exception("Failed to update asynchronously enriched query output")
 
@@ -111,12 +116,19 @@ def is_async_enrichment_enabled(output: t.Any, params: t.Any) -> bool:
     from hyperglass.models.data.bgp_route import BGPRouteTable
     from hyperglass.models.data.traceroute import TracerouteResult
 
+    is_bgp_output = isinstance(output, BGPRouteTable) or (
+        isinstance(output, dict) and isinstance(output.get("routes"), list)
+    )
+    is_traceroute_output = isinstance(output, TracerouteResult) or (
+        isinstance(output, dict) and isinstance(output.get("hops"), list)
+    )
+
     return (
-        isinstance(output, BGPRouteTable)
+        is_bgp_output
         and config.enrich_bgproute
         and params.structured.enable_for_bgp_route is not False
     ) or (
-        isinstance(output, TracerouteResult)
+        is_traceroute_output
         and config.enrich_traceroute
         and params.structured.enable_for_traceroute is not False
     )

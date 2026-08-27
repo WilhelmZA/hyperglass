@@ -5,6 +5,7 @@ import json
 import time
 import asyncio
 import typing as t
+from uuid import uuid4
 from datetime import UTC, datetime
 
 # Third Party
@@ -48,18 +49,14 @@ _MIKROTIK_BGP_RETRY_DELAY = 10  # seconds
 
 
 def _is_empty_bgp_table(output: t.Any) -> bool:
-    """True if output is a structured BGP table containing no routes."""
+    """Return whether output is a structured BGP table containing no routes."""
     if not is_type(output, OutputDataModel):
         return False
     try:
         raw = json.loads(output.export_json())
     except Exception:
         return False
-    return (
-        isinstance(raw, dict)
-        and raw.get("count", None) == 0
-        and not raw.get("routes")
-    )
+    return isinstance(raw, dict) and raw.get("count", None) == 0 and not raw.get("routes")
 
 
 async def _execute_query(data: "Query") -> t.Any:
@@ -129,12 +126,6 @@ async def query_enrichment(query_id: str) -> dict:
     if output is None:
         return {"status": "not_found"}
 
-    if isinstance(output, str):
-        try:
-            output = json.loads(output)
-        except json.JSONDecodeError:
-            pass
-
     return {
         "status": cache.get_map(query_id, "enrichment_status") or "complete",
         "output": output,
@@ -183,11 +174,24 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
     _log.info("Starting query execution")
 
     cache_response = cache.get_map(cache_key, "output")
+    cached_enrichment_status = cache.get_map(cache_key, "enrichment_status")
+    if (
+        cache_response
+        and cached_enrichment_status is None
+        and is_async_enrichment_enabled(cache_response, _state.params)
+    ):
+        _log.bind(cache_key=cache_key).debug(
+            "Discarding legacy cache entry without enrichment state"
+        )
+        cache.delete(cache_key)
+        cache_response = None
+
     json_output = False
     cached = False
     runtime = 65535
     enrichment_status = "complete"
     enrichment_output = None
+    enrichment_generation = None
 
     if cache_response:
         _log.bind(cache_key=cache_key).debug("Cache hit")
@@ -198,7 +202,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         cached = True
         runtime = 0
         timestamp = cache.get_map(cache_key, "timestamp")
-        enrichment_status = cache.get_map(cache_key, "enrichment_status") or "complete"
+        enrichment_status = cached_enrichment_status or "complete"
 
     elif not cache_response:
         _log.bind(cache_key=cache_key).debug("Cache miss")
@@ -234,13 +238,18 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         else:
             raw_output = str(output)
 
-        cache.set_map_item(cache_key, "output", raw_output)
-        cache.set_map_item(cache_key, "timestamp", timestamp)
         if is_async_enrichment_enabled(output, _state.params):
             enrichment_status = "pending"
             enrichment_output = output
-            cache.set_map_item(cache_key, "enrichment_status", enrichment_status)
-        cache.expire(cache_key, expire_in=_state.params.cache.timeout)
+            enrichment_generation = uuid4().hex
+
+        with cache.pipeline() as pipeline:
+            pipeline.set_map_item(cache_key, "output", raw_output)
+            pipeline.set_map_item(cache_key, "timestamp", timestamp)
+            pipeline.set_map_item(cache_key, "enrichment_status", enrichment_status)
+            if enrichment_generation is not None:
+                pipeline.set_map_item(cache_key, "enrichment_generation", enrichment_generation)
+            pipeline.expire(cache_key, expire_in=_state.params.cache.timeout)
 
         _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
 
@@ -274,9 +283,9 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         background=BackgroundTask(
             _run_query_background_tasks,
             enrichment_output=enrichment_output,
+            enrichment_generation=enrichment_generation,
             cache=cache,
             cache_key=cache_key,
-            cache_timeout=_state.params.cache.timeout,
             params=_state.params,
             data=data,
             request=request,
@@ -287,15 +296,15 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
 
 async def _run_query_background_tasks(
     enrichment_output: t.Any,
+    enrichment_generation: t.Optional[str],
     cache: t.Any,
     cache_key: str,
-    cache_timeout: int,
     params: Params,
     data: Query,
     request: Request,
     timestamp: datetime,
 ) -> None:
     """Run optional enrichment and webhook work after sending the response."""
-    if enrichment_output is not None:
-        await enrich_query_output(enrichment_output, cache, cache_key, cache_timeout)
+    if enrichment_output is not None and enrichment_generation is not None:
+        await enrich_query_output(enrichment_output, cache, cache_key, enrichment_generation)
     await send_webhook(params=params, data=data, request=request, timestamp=timestamp)

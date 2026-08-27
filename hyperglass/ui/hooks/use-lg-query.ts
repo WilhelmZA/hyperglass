@@ -3,6 +3,8 @@ import { useEffect, useMemo } from 'react';
 import { useConfig } from '~/context';
 import { fetchWithTimeout } from '~/util';
 
+import { useFormState } from './use-form-state';
+
 import type {
   QueryFunction,
   QueryFunctionContext,
@@ -118,16 +120,18 @@ export function useLGQuery(
         }
         const enrichment = update.status;
 
-        queryClient.setQueryData<QueryResponse>(['/api/query', query], current => {
-          if (!current) {
-            return current;
-          }
-          return {
-            ...current,
-            enrichment,
-            ...(update.output === undefined ? {} : { output: update.output }),
-          };
-        });
+        const queryKey: LGQueryKey = ['/api/query', query];
+        const current = queryClient.getQueryData<QueryResponse>(queryKey);
+        if (!current) {
+          return;
+        }
+        const updated = {
+          ...current,
+          enrichment,
+          ...(update.output === undefined ? {} : { output: update.output }),
+        };
+        queryClient.setQueryData<QueryResponse>(queryKey, updated);
+        useFormState.getState().addResponse(query.queryLocation, updated);
       } catch (error) {
         if (!controller.signal.aborted) {
           console.error('Failed to poll query enrichment', error);
