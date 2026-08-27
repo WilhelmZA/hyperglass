@@ -28,7 +28,7 @@ RUN apk add --no-cache build-base pkgconfig cairo-dev nodejs npm \
     tar@7.5.21 brace-expansion@5.0.9 ip-address@10.3.1 \
   && cp -a /tmp/tar-patch/node_modules/. /usr/local/lib/node_modules/npm/node_modules/ \
   && rm -rf /tmp/tar-patch \
-  && pnpm install -P \
+  && pnpm install --frozen-lockfile \
   && apk del npm
 
 FROM ui AS hyperglass
