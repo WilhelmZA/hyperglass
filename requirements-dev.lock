@@ -3,7 +3,7 @@
 #
 # last locked with the following flags:
 #   pre: false
-#   features: []
+#   features: ["ui"]
 #   all-features: false
 #   with-sources: false
 #   generate-hashes: false
@@ -24,11 +24,16 @@ black==26.5.1
 brotli==1.2.0
     # via -c (workspace)
     # via litestar
+cairocffi==1.7.1
+    # via cairosvg
+cairosvg==2.9.0
+    # via hyperglass
 certifi==2025.8.3
     # via httpcore
     # via httpx
     # via requests
 cffi==2.0.0
+    # via cairocffi
     # via cryptography
     # via pynacl
 cfgv==3.5.0
@@ -47,6 +52,10 @@ colorama==0.4.6
 cryptography==50.0.0
     # via -c (workspace)
     # via paramiko
+cssselect2==0.9.0
+    # via cairosvg
+defusedxml==0.7.1
+    # via cairosvg
 distlib==0.4.3
     # via virtualenv
 distro==1.9.0
@@ -116,6 +125,7 @@ pathspec==1.1.1
 pep8-naming==0.15.1
 pillow==12.3.0
     # via --override (workspace)
+    # via cairosvg
     # via hyperglass
 platformdirs==4.10.0
     # via black
@@ -205,6 +215,9 @@ taskipy==1.14.1
 textfsm==2.1.0
     # via netmiko
     # via ntc-templates
+tinycss2==1.5.1
+    # via cairosvg
+    # via cssselect2
 toml==0.10.2
     # via hyperglass
 tomli==2.4.1
@@ -232,5 +245,8 @@ uvicorn==0.37.0
     # via hyperglass
 virtualenv==21.5.0
     # via pre-commit
+webencodings==0.6.1
+    # via cssselect2
+    # via tinycss2
 xmltodict==1.0.2
     # via hyperglass

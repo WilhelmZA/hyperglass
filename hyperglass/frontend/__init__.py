@@ -111,6 +111,14 @@ def _prepare_ui_build_dir(app_path: Path) -> Path:
             "*.tsbuildinfo",
         ),
     )
+    package_node_modules = PACKAGE_UI_DIR / "node_modules"
+    ui_node_modules = ui_dir / "node_modules"
+    if package_node_modules.is_dir():
+        if ui_node_modules.is_symlink() or ui_node_modules.is_file():
+            ui_node_modules.unlink()
+        elif ui_node_modules.exists():
+            shutil.rmtree(ui_node_modules)
+        ui_node_modules.symlink_to(package_node_modules, target_is_directory=True)
     return ui_dir
 
 
@@ -432,18 +440,12 @@ async def build_frontend(  # noqa: C901
     else:
         env_config.update({"HYPERGLASS_URL": prod_url, "NODE_ENV": "production"})
 
-    # Check if hyperglass/ui/node_modules has been initialized. If not,
-    # initialize it.
+    # Development mode does not run the production build below, so initialize
+    # its dependencies here when needed.
     initialized = await check_node_modules(ui_dir)
-
-    if initialized:
-        log.debug("node_modules is already initialized")
-
-    elif not initialized:
+    if dev_mode and not initialized:
         log.debug("node_modules has not been initialized. Starting initialization...")
-
         node_setup = await node_initial(timeout, dev_mode, ui_dir)
-
         if node_setup == "":
             log.debug("Re-initialized node_modules")
 

@@ -134,6 +134,12 @@ jobs:
       - name: Build wheel and source distribution
         run: uv build --wheel --sdist
 
+      - name: Verify wheel installation
+        run: |
+          uv venv /tmp/hyperglass-wheel-test
+          uv pip install --python /tmp/hyperglass-wheel-test/bin/python dist/*.whl
+          /tmp/hyperglass-wheel-test/bin/hyperglass --help
+
       - name: Upload Python distributions
         uses: actions/upload-artifact@v4
         with:
