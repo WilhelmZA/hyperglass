@@ -1,6 +1,6 @@
 [project]
 name = "hyperglass"
-version = "3.1.0"
+version = "3.2.0"
 description = "Ultraglass is a maintained fork of the modern network looking glass hyperglass."
 authors = [
     { name = "Ultraglass maintainers" }
