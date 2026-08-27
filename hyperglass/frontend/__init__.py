@@ -478,7 +478,7 @@ async def build_frontend(  # noqa: C901
         env_build_id = env_data.get("HYPERGLASS_BUILD_ID", "None")
         log.bind(id=env_build_id).debug("Previous build detected")
 
-        if env_build_id == build_id:
+        if env_build_id == build_id and (app_path / "static" / "ui").is_dir():
             log.debug("UI parameters unchanged since last build, skipping UI build...")
             return True
 
