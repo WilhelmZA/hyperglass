@@ -28,7 +28,9 @@ def test_async_enrichment_recognizes_legacy_cached_output() -> None:
     """Treat structured cache dictionaries without status as enrichment candidates."""
     params = SimpleNamespace(
         structured=SimpleNamespace(
-            ip_enrichment=StructuredIpEnrichment(mode="async"),
+            ip_enrichment=StructuredIpEnrichment(
+                mode="async", enrich_bgproute=True, enrich_traceroute=True
+            ),
             enable_for_bgp_route=True,
             enable_for_traceroute=True,
         )

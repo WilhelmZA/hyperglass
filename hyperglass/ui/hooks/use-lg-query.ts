@@ -72,7 +72,12 @@ export function useLGQuery(
   );
 
   const queryClient = useQueryClient();
-  const result = useQuery<QueryResponse, Response | QueryResponse | Error, QueryResponse, LGQueryKey>({
+  const result = useQuery<
+    QueryResponse,
+    Response | QueryResponse | Error,
+    QueryResponse,
+    LGQueryKey
+  >({
     queryKey: ['/api/query', query],
     queryFn: runQuery,
     // Don't refetch when window refocuses.
@@ -99,10 +104,10 @@ export function useLGQuery(
       }
       polling = true;
       try {
-        const response = await fetch(
-          `/api/query/${encodeURIComponent(enrichmentId)}/enrichment`,
-          { signal: controller.signal, cache: 'no-store' },
-        );
+        const response = await fetch(`/api/query/${encodeURIComponent(enrichmentId)}/enrichment`, {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
         if (!response.ok) {
           return;
         }
