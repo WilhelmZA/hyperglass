@@ -6,6 +6,7 @@ import pytest
 
 # Project
 from hyperglass.state import use_state
+from hyperglass.state.hooks import _use_state
 from hyperglass.models.api import Query
 from hyperglass.configuration import init_ui_params
 from hyperglass.models.directive import Directives
@@ -60,6 +61,7 @@ def state(
     devices: t.Sequence[t.Dict[str, t.Any]],
 ) -> t.Generator["HyperglassState", None, None]:
     """Test fixture to initialize Redis store."""
+    _use_state.cache_clear()
     _state = use_state()
     _params = Params(**params)
     _directives = Directives.new(*directives)
@@ -79,6 +81,7 @@ def state(
 
     yield _state
     _state.clear()
+    _use_state.cache_clear()
 
 
 def test_construct(state):
