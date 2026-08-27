@@ -2,11 +2,52 @@
 
 This is the changelog for [WilhelmZA/ultraglass](https://github.com/WilhelmZA/ultraglass), a **fork** of [thatmattlove/hyperglass](https://github.com/thatmattlove/hyperglass). It documents Ultraglass changes, not upstream's.
 
-The fork's own version line starts at **3.0.0** and is currently at **3.1.0**. It is based on **upstream hyperglass 2.0.4**, plus the upstream commits that had landed on upstream `main` after 2.0.4 but were never released by upstream. Upstream's version numbering is unrelated to this one; upstream's own history continues at [thatmattlove/hyperglass/blob/main/CHANGELOG.md](https://github.com/thatmattlove/hyperglass/blob/main/CHANGELOG.md).
+The fork's own version line starts at **3.0.0** and is currently at **3.2.0**. It is based on **upstream hyperglass 2.0.4**, plus the upstream commits that had landed on upstream `main` after 2.0.4 but were never released by upstream. Upstream's version numbering is unrelated to this one; upstream's own history continues at [thatmattlove/hyperglass/blob/main/CHANGELOG.md](https://github.com/thatmattlove/hyperglass/blob/main/CHANGELOG.md).
 
 Everything from [2.0.4](#204---2024-06-30) downward is inherited upstream history, kept verbatim for reference.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## 3.2.0 - 2026-08-27
+
+This release adds opt-in asynchronous IP enrichment, normalises explicit CIDR targets, and makes packaged installations and container UI builds more reliable.
+
+### Added
+
+- Asynchronous structured IP enrichment through `structured.ip_enrichment.mode: async`, with `inline` retained as the default.
+- A query enrichment polling endpoint and UI polling that update completed BGP and traceroute results without delaying the initial response.
+- Generation-safe Redis cache updates so a stale enrichment worker cannot overwrite a newer query, while preserving the original cache TTL.
+- Cached successful and negative bulk IP lookups to avoid repeating external enrichment requests.
+- Python wheel and source distribution validation in CI.
+- Container publishing to both Docker Hub and GitHub Container Registry.
+- Ultraglass support bundles containing sanitised runtime, configuration and diagnostic information.
+
+### Changed
+
+- Rebranded the fork and its documentation, UI assets, metadata and support output as Ultraglass.
+- Linked the application documentation entry point to the project wiki.
+- Split optional UI and performance dependencies from the API-only Python installation.
+- Built the frontend from an application-local writable workspace while reusing the dependencies packaged in the container image.
+- Updated the Python package, runtime metadata, UI package, upgrade guide and issue templates to `3.2.0`.
+
+### Fixed
+
+- Normalised IPv4 and IPv6 prefixes before directive validation so validation, caching, command construction and responses use the canonical network address.
+- Kept host-only query targets unchanged while removing an unused MikroTik normaliser that could widen them to fixed network sizes.
+- Prevented legacy asynchronous cache entries and stale enrichment workers from returning or storing incorrect output.
+- Preserved plain string query output without attempting to decode it as JSON.
+- Retried incomplete runtime UI builds and reused packaged frontend dependencies without creating a second `node_modules` tree under application data.
+- Restored SVG favicon generation and included its required runtime dependencies in the container image.
+- Fixed API-only wheel installation, current Typer compatibility and the Docker UI-disable environment variable.
+
+### Validation
+
+- Combined Python test suite: 85 passed.
+- UI test suite: 39 passed.
+- UI formatting, lint and TypeScript checks: passed.
+- Wheel build, clean wheel installation and CLI smoke test: passed.
+- Docker image build and fresh application-data startup: passed.
+- Live validation confirmed canonical CIDR cache identities, asynchronous enrichment completion, stable cache TTLs and legacy cache recovery.
 
 ## 3.1.0 - 2026-08-25
 
