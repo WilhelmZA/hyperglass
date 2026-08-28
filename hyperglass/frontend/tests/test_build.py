@@ -45,7 +45,7 @@ def test_prepare_ui_build_dir_reuses_packaged_dependencies(
 def test_ui_subprocess_env_pins_pnpm_store() -> None:
     """UI subprocesses must use the packaged pnpm store, not app_path."""
     env = _ui_subprocess_env()
-    assert env["npm_config_store_dir"] == str(PACKAGE_PNPM_STORE)
+    assert env["PNPM_CONFIG_STORE_DIR"] == str(PACKAGE_PNPM_STORE)
 
 
 def test_read_ui_export_version_from_index_html(tmp_path: Path) -> None:
@@ -71,6 +71,19 @@ def test_ui_export_matches_version_rejects_stale_export(tmp_path: Path) -> None:
 
     assert _ui_export_matches_version(tmp_path, "3.2.0") is False
     assert _ui_export_matches_version(tmp_path, "3.1.0") is True
+
+
+@pytest.mark.parametrize("index_html", (None, "<html></html>"))
+def test_ui_export_matches_version_rejects_incomplete_export(
+    tmp_path: Path, index_html: str | None
+) -> None:
+    """An incomplete export must not suppress a required rebuild."""
+    ui_dir = tmp_path / "static" / "ui"
+    ui_dir.mkdir(parents=True)
+    if index_html is not None:
+        (ui_dir / "index.html").write_text(index_html, encoding="utf-8")
+
+    assert _ui_export_matches_version(tmp_path, "3.2.0") is False
 
 
 def test_generate_favicons_from_svg(tmp_path: Path) -> None:

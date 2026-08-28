@@ -27,7 +27,7 @@ UI_BUILD_DIR_NAME = ".ui"
 def _ui_subprocess_env() -> t.Dict[str, str]:
     """Return environment variables for pnpm/Next.js UI subprocesses."""
     env = os.environ.copy()
-    env["npm_config_store_dir"] = str(PACKAGE_PNPM_STORE)
+    env["PNPM_CONFIG_STORE_DIR"] = str(PACKAGE_PNPM_STORE)
     return env
 
 
@@ -46,7 +46,8 @@ def _ui_export_matches_version(app_path: Path, expected_version: str) -> bool:
     """Return whether the exported UI matches the running backend version."""
     exported_version = _read_ui_export_version(app_path)
     if exported_version is None:
-        return True
+        log.warning("UI export version is missing; forcing rebuild")
+        return False
 
     if exported_version != expected_version:
         log.warning(
