@@ -20,7 +20,7 @@ body:
     attributes:
       label: Version
       description: What version of Ultraglass are you currently running?
-      placeholder: v3.2.0
+      placeholder: v3.2.1
     validations:
       required: true
   - type: textarea

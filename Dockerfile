@@ -12,6 +12,9 @@ COPY . .
 
 FROM base AS ui
 WORKDIR /opt/hyperglass/hyperglass/ui
+# hyperglass/ui/.npmrc pins store-dir to /opt/hyperglass/.pnpm-store so image
+# node_modules and the packaged store stay aligned through runtime UI builds.
+ENV PNPM_CONFIG_STORE_DIR=/opt/hyperglass/.pnpm-store
 # The glob patch that used to sit here is gone. It ran `npm --prefix
 # /usr/lib/node_modules/npm install glob@11.1.0`, which fails the build: installing
 # into npm's own tree makes npm reconcile npm's package.json, whose devDependencies
@@ -29,6 +32,7 @@ RUN apk add --no-cache build-base pkgconfig cairo-dev nodejs npm \
   && cp -a /tmp/tar-patch/node_modules/. /usr/local/lib/node_modules/npm/node_modules/ \
   && rm -rf /tmp/tar-patch \
   && pnpm install --frozen-lockfile \
+  && test -d /opt/hyperglass/.pnpm-store \
   && apk del npm
 
 FROM ui AS hyperglass
