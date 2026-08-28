@@ -2,6 +2,7 @@
 
 # Standard Library
 import os
+import re
 import json
 import math
 import shutil
@@ -19,7 +20,45 @@ if t.TYPE_CHECKING:
 
 
 PACKAGE_UI_DIR = Path(__file__).parent.parent / "ui"
+PACKAGE_PNPM_STORE = Path(__file__).parent.parent.parent / ".pnpm-store"
 UI_BUILD_DIR_NAME = ".ui"
+
+
+def _ui_subprocess_env() -> t.Dict[str, str]:
+    """Return environment variables for pnpm/Next.js UI subprocesses."""
+    env = os.environ.copy()
+    env["npm_config_store_dir"] = str(PACKAGE_PNPM_STORE)
+    return env
+
+
+def _read_ui_export_version(app_path: Path) -> t.Optional[str]:
+    """Read the hyperglass-version meta tag from the exported UI, if present."""
+    index_html = app_path / "static" / "ui" / "index.html"
+    if not index_html.is_file():
+        return None
+
+    contents = index_html.read_text(encoding="utf-8", errors="ignore")
+    match = re.search(r'<meta name="hyperglass-version" content="([^"]+)"', contents)
+    return match.group(1) if match else None
+
+
+def _ui_export_matches_version(app_path: Path, expected_version: str) -> bool:
+    """Return whether the exported UI matches the running backend version."""
+    exported_version = _read_ui_export_version(app_path)
+    if exported_version is None:
+        return True
+
+    if exported_version != expected_version:
+        log.warning(
+            "UI export version {} does not match backend {}; forcing rebuild",
+            exported_version,
+            expected_version,
+        )
+        return False
+
+    return True
+
+
 FAVICON_FORMATS = (
     {"dimensions": (64, 64), "image_format": "ico", "prefix": "favicon", "rel": None},
     {"dimensions": (16, 16), "image_format": "png", "prefix": "favicon", "rel": "icon"},
@@ -119,6 +158,7 @@ def _prepare_ui_build_dir(app_path: Path) -> Path:
         elif ui_node_modules.exists():
             shutil.rmtree(ui_node_modules)
         ui_node_modules.symlink_to(package_node_modules, target_is_directory=True)
+    (ui_dir / ".npmrc").write_text(f"store-dir={PACKAGE_PNPM_STORE}\n")
     return ui_dir
 
 
@@ -180,6 +220,7 @@ async def node_initial(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=ui_path,
+        env=_ui_subprocess_env(),
     )
 
     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -216,6 +257,7 @@ async def build_ui(app_path: Path, ui_path: t.Optional[Path] = None):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=ui_dir,
+            env=_ui_subprocess_env(),
         )
 
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -478,11 +520,13 @@ async def build_frontend(  # noqa: C901
         env_build_id = env_data.get("HYPERGLASS_BUILD_ID", "None")
         log.bind(id=env_build_id).debug("Previous build detected")
 
-        if env_build_id == build_id and (app_path / "static" / "ui").is_dir():
+        if (
+            env_build_id == build_id
+            and (app_path / "static" / "ui").is_dir()
+            and _ui_export_matches_version(app_path, __version__)
+        ):
             log.debug("UI parameters unchanged since last build, skipping UI build...")
             return True
-
-    env_config.update({"HYPERGLASS_BUILD_ID": build_id})
 
     dot_env_file.write_text("\n".join(f"{k}={v}" for k, v in env_config.items()))
     log.bind(path=str(dot_env_file)).debug("Wrote UI environment file")
@@ -491,9 +535,16 @@ async def build_frontend(  # noqa: C901
     if any((not dev_mode, force, full)):
         log.info("Starting UI build")
         initialize_result = ""
-        if not (ui_dir / "node_modules").is_symlink():
-            initialize_result = await node_initial(timeout, dev_mode, ui_dir)
-        build_result = await build_ui(app_path=app_path, ui_path=ui_dir)
+        try:
+            if not (ui_dir / "node_modules").is_symlink():
+                initialize_result = await node_initial(timeout, dev_mode, ui_dir)
+            build_result = await build_ui(app_path=app_path, ui_path=ui_dir)
+        except Exception as err:
+            dot_env_file.write_text("\n".join(f"{k}={v}" for k, v in env_config.items()))
+            log.error(
+                "UI build failed; HYPERGLASS_BUILD_ID was not updated and the next start will retry"
+            )
+            raise err
 
         if initialize_result:
             log.debug(initialize_result)
@@ -516,5 +567,9 @@ async def build_frontend(  # noqa: C901
         images_dir,
         params.web.theme.colors.black,
     )
+
+    env_config.update({"HYPERGLASS_BUILD_ID": build_id})
+    dot_env_file.write_text("\n".join(f"{k}={v}" for k, v in env_config.items()))
+    log.bind(path=str(dot_env_file)).debug("Recorded successful UI build")
 
     return True

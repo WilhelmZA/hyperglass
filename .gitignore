@@ -1,4 +1,5 @@
 # Project
+.pnpm-store
 hyperglass/hyperglass/static
 TODO*
 .env
