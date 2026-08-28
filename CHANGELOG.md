@@ -2,11 +2,27 @@
 
 This is the changelog for [WilhelmZA/ultraglass](https://github.com/WilhelmZA/ultraglass), a **fork** of [thatmattlove/hyperglass](https://github.com/thatmattlove/hyperglass). It documents Ultraglass changes, not upstream's.
 
-The fork's own version line starts at **3.0.0** and is currently at **3.2.0**. It is based on **upstream hyperglass 2.0.4**, plus the upstream commits that had landed on upstream `main` after 2.0.4 but were never released by upstream. Upstream's version numbering is unrelated to this one; upstream's own history continues at [thatmattlove/hyperglass/blob/main/CHANGELOG.md](https://github.com/thatmattlove/hyperglass/blob/main/CHANGELOG.md).
+The fork's own version line starts at **3.0.0** and is currently at **3.2.1**. It is based on **upstream hyperglass 2.0.4**, plus the upstream commits that had landed on upstream `main` after 2.0.4 but were never released by upstream. Upstream's version numbering is unrelated to this one; upstream's own history continues at [thatmattlove/hyperglass/blob/main/CHANGELOG.md](https://github.com/thatmattlove/hyperglass/blob/main/CHANGELOG.md).
 
 Everything from [2.0.4](#204---2024-06-30) downward is inherited upstream history, kept verbatim for reference.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## 3.2.1 - 2026-08-28
+
+This patch release fixes container UI build failures after upgrades and prevents a failed export from being treated as current on the next start.
+
+### Fixed
+
+- Pinned the packaged pnpm store so runtime UI builds in a bind-mounted `app_path` no longer fail with `ERR_PNPM_UNEXPECTED_STORE`.
+- Moved `typescript` into production UI dependencies and skipped ESLint during production Next.js builds so container startup no longer triggers runtime `pnpm add`.
+- Recorded `HYPERGLASS_BUILD_ID` only after a successful UI export, clearing the marker and logging loudly when a build fails.
+- Rejected build skips when `static/ui` is missing a `hyperglass-version` meta tag or still carries an older release version.
+
+### Changed
+
+- Built the Docker image in pull-request CI to validate store layout changes before release.
+- Updated the Python package, runtime metadata, UI package, upgrade guide and issue templates to `3.2.1`.
 
 ## 3.2.0 - 2026-08-27
 

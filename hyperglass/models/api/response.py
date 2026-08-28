@@ -208,7 +208,7 @@ class InfoResponse(BaseModel):
                     "name": "Ultraglass",
                     "organization": "Company Name",
                     "primary_asn": 65000,
-                    "version": "Ultraglass 3.2.0",
+                    "version": "Ultraglass 3.2.1",
                 }
             ],
         }

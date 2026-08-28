@@ -69,7 +69,7 @@ def test_ui_export_matches_version_rejects_stale_export(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    assert _ui_export_matches_version(tmp_path, "3.2.0") is False
+    assert _ui_export_matches_version(tmp_path, "3.2.1") is False
     assert _ui_export_matches_version(tmp_path, "3.1.0") is True
 
 
@@ -83,7 +83,7 @@ def test_ui_export_matches_version_rejects_incomplete_export(
     if index_html is not None:
         (ui_dir / "index.html").write_text(index_html, encoding="utf-8")
 
-    assert _ui_export_matches_version(tmp_path, "3.2.0") is False
+    assert _ui_export_matches_version(tmp_path, "3.2.1") is False
 
 
 def test_generate_favicons_from_svg(tmp_path: Path) -> None:
